@@ -6,4 +6,5 @@
 .env.local
 .idea/
 .vscode/
+/target
 Thumbs.db
