@@ -1,0 +1,9 @@
+*.swo
+*.swp
+*~
+.DS_Store
+.env
+.env.local
+.idea/
+.vscode/
+Thumbs.db
