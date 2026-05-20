@@ -20,7 +20,7 @@ check:
 [group: 'check']
 ci: test clippy forbid
   cargo fmt --all -- --check
-  cargo update --locked --package shan
+  cargo update --locked --package kotomori
 
 [group: 'check']
 clippy:
@@ -40,7 +40,7 @@ forbid:
 
 [group: 'misc']
 install:
-  cargo install -f shan
+  cargo install -f kotomori
 
 [group: 'dev']
 install-dev-deps:

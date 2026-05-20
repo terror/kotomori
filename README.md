@@ -1,3 +1,3 @@
-## shan
+## kotomori
 
-**shan** is a pi-like coding agent in Rust.
+**kotomori** is a pi-like coding agent in Rust.

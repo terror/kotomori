@@ -1,6 +1,29 @@
 [package]
-name = "shan"
+name = "kotomori"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = [".", "crates/*"]
+resolver = "2"
+
+[workspace.lints.rust]
+unreachable_pub = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+arbitrary-source-item-ordering = "deny"
+wildcard_imports = "allow"
+
+[lints]
+workspace = true
+
+[profile.release]
+lto = true
+codegen-units = 1
+
 [dependencies]
+anyhow = "1.0.102"
+clap = { version = "4.6.1", features = ["derive"] }
+ratatui = "0.30.0"
