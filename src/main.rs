@@ -9,6 +9,7 @@ use {
     DefaultTerminal, Frame,
     crossterm::event::{
       self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind,
+      KeyModifiers,
     },
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},

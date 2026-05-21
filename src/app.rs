@@ -23,6 +23,9 @@ impl App {
 
   fn handle_key(&mut self, key: &KeyEvent) {
     match key.code {
+      KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+        self.should_quit = true;
+      }
       KeyCode::Char('q') if self.input.is_empty() => self.should_quit = true,
       KeyCode::Esc => self.should_quit = true,
       KeyCode::Enter => self.submit(),
@@ -179,5 +182,26 @@ impl App {
         u16::try_from(len.div_ceil(width).max(1)).unwrap_or(u16::MAX)
       })
       .fold(0u16, u16::saturating_add)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn control_c_quits() {
+    let mut app = App::new(Options {
+      model: "foo".to_string(),
+      prompt: Some("bar".to_string()),
+    });
+
+    app.handle_crossterm_event(&CrosstermEvent::Key(KeyEvent::new(
+      KeyCode::Char('c'),
+      KeyModifiers::CONTROL,
+    )));
+
+    assert!(app.should_quit);
+    assert_eq!(app.input, "bar");
   }
 }
