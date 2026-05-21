@@ -1,4 +1,5 @@
 use {
+  action::Action,
   anyhow::{Context, Error},
   app::App,
   arguments::Arguments,
@@ -21,6 +22,7 @@ use {
   terminal::Terminal,
 };
 
+mod action;
 mod app;
 mod arguments;
 mod messages;
