@@ -2,25 +2,10 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct App {
-  input: String,
-  messages: Vec<Message>,
-  options: Options,
-  should_quit: bool,
+  state: State,
 }
 
 impl App {
-  fn handle_action(&mut self, action: Action) {
-    match action {
-      Action::Backspace => {
-        self.input.pop();
-      }
-      Action::Input(c) => self.input.push(c),
-      Action::None => {}
-      Action::Quit => self.should_quit = true,
-      Action::Submit => self.submit(),
-    }
-  }
-
   fn handle_crossterm_event(&mut self, event: &CrosstermEvent) {
     let CrosstermEvent::Key(key) = event else {
       return;
@@ -30,17 +15,12 @@ impl App {
       return;
     }
 
-    self.handle_action(Action::from(key));
+    self.state.handle_action(Action::from(key));
   }
 
   pub(crate) fn new(options: Options) -> Self {
-    let input = options.prompt.clone().unwrap_or_default();
-
     Self {
-      input,
-      messages: Vec::new(),
-      options,
-      should_quit: false,
+      state: State::new(options),
     }
   }
 
@@ -48,6 +28,7 @@ impl App {
     let area = frame.area();
 
     let transcript_height = self
+      .state
       .transcript_height(area.width)
       .min(area.height.saturating_sub(6));
 
@@ -103,7 +84,8 @@ impl App {
     frame.render_widget(hint, hint_area);
 
     let lines = self
-      .messages
+      .state
+      .messages()
       .iter()
       .flat_map(Message::lines)
       .collect::<Vec<_>>();
@@ -120,12 +102,12 @@ impl App {
           .fg(Color::Cyan)
           .add_modifier(Modifier::BOLD),
       ),
-      Span::raw(self.input.as_str()),
+      Span::raw(self.state.input()),
     ]));
 
     frame.render_widget(input, composer);
 
-    let input_len = u16::try_from(self.input.len()).unwrap_or(u16::MAX);
+    let input_len = u16::try_from(self.state.input().len()).unwrap_or(u16::MAX);
 
     frame.set_cursor_position((
       composer.x.saturating_add(input_len).saturating_add(4),
@@ -136,7 +118,7 @@ impl App {
   pub(crate) fn run(mut self) -> Result {
     let mut terminal = Terminal::new()?;
 
-    while !self.should_quit {
+    while !self.state.should_quit() {
       terminal.draw(|frame| self.render(frame))?;
 
       if event::poll(Duration::from_millis(250))? {
@@ -145,38 +127,5 @@ impl App {
     }
 
     Ok(())
-  }
-
-  fn submit(&mut self) {
-    let input = self.input.trim();
-
-    if input.is_empty() {
-      return;
-    }
-
-    let input = input.to_string();
-
-    self.messages.push(Message::new(Role::User, input.clone()));
-
-    self.messages.push(Message::new(
-      Role::Agent,
-      format!("queued for {}: {input}", self.options.model),
-    ));
-
-    self.input.clear();
-  }
-
-  fn transcript_height(&self, width: u16) -> u16 {
-    let width = usize::from(width.max(1));
-
-    self
-      .messages
-      .iter()
-      .map(|message| {
-        let len = message.width();
-
-        u16::try_from(len.div_ceil(width).max(1)).unwrap_or(u16::MAX)
-      })
-      .fold(0u16, u16::saturating_add)
   }
 }

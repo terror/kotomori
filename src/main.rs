@@ -18,6 +18,7 @@ use {
     widgets::{Paragraph, Wrap},
   },
   role::Role,
+  state::State,
   std::{backtrace::BacktraceStatus, process, time::Duration},
   terminal::Terminal,
 };
@@ -28,6 +29,7 @@ mod arguments;
 mod messages;
 mod options;
 mod role;
+mod state;
 mod terminal;
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
