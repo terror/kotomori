@@ -9,6 +9,6 @@ pub(crate) struct Arguments {
 
 impl Arguments {
   pub(crate) fn run(self) -> Result {
-    App::new(self.options).run()
+    App::new(self.options)?.run()
   }
 }

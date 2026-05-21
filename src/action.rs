@@ -2,6 +2,8 @@ use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Action {
+  AgentDone,
+  AgentOutput(char),
   Backspace,
   Input(char),
   None,

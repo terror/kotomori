@@ -2,10 +2,19 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct App {
+  runtime: Runtime,
   state: State,
+  stream: UnboundedReceiver<Action>,
+  stream_sender: UnboundedSender<Action>,
 }
 
 impl App {
+  fn handle_action(&mut self, action: Action) {
+    if let Some(request) = self.state.handle_action(action) {
+      self.spawn_agent(request);
+    }
+  }
+
   fn handle_crossterm_event(&mut self, event: &CrosstermEvent) {
     let CrosstermEvent::Key(key) = event else {
       return;
@@ -15,12 +24,23 @@ impl App {
       return;
     }
 
-    self.state.handle_action(Action::from(key));
+    self.handle_action(Action::from(key));
   }
 
-  pub(crate) fn new(options: Options) -> Self {
-    Self {
+  pub(crate) fn new(options: Options) -> Result<Self> {
+    let (stream_sender, stream) = mpsc::unbounded_channel();
+
+    Ok(Self {
+      runtime: Runtime::new().context("failed to initialize async runtime")?,
       state: State::new(options),
+      stream,
+      stream_sender,
+    })
+  }
+
+  fn receive_stream(&mut self) {
+    while let Ok(action) = self.stream.try_recv() {
+      self.handle_action(action);
     }
   }
 
@@ -119,13 +139,39 @@ impl App {
     let mut terminal = Terminal::new()?;
 
     while !self.state.should_quit() {
+      self.receive_stream();
+
       terminal.draw(|frame| self.render(frame))?;
 
-      if event::poll(Duration::from_millis(250))? {
+      let timeout = if self.state.is_agent_active() {
+        Duration::from_millis(16)
+      } else {
+        Duration::from_millis(250)
+      };
+
+      if event::poll(timeout)? {
         self.handle_crossterm_event(&event::read()?);
       }
     }
 
     Ok(())
+  }
+
+  fn spawn_agent(&self, request: AgentRequest) {
+    let sender = self.stream_sender.clone();
+
+    self.runtime.spawn(async move {
+      let response = format!("queued for {}: {}", request.model, request.input);
+
+      for c in response.chars() {
+        if sender.send(Action::AgentOutput(c)).is_err() {
+          return;
+        }
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+      }
+
+      let _ = sender.send(Action::AgentDone);
+    });
   }
 }

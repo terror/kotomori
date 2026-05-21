@@ -18,9 +18,13 @@ use {
     widgets::{Paragraph, Wrap},
   },
   role::Role,
-  state::State,
+  state::{AgentRequest, State},
   std::{backtrace::BacktraceStatus, process, time::Duration},
   terminal::Terminal,
+  tokio::{
+    runtime::Runtime,
+    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+  },
 };
 
 mod action;
