@@ -23,6 +23,38 @@ impl App {
     }
   }
 
+  fn listen(&self) {
+    let sender = self.event_sender.clone();
+
+    thread::spawn(move || {
+      loop {
+        let event = match ratatui::crossterm::event::read() {
+          Ok(event) => event,
+          Err(error) => {
+            let _ = sender.send(Event::Error(error.to_string()));
+            return;
+          }
+        };
+
+        let CrosstermEvent::Key(key) = event else {
+          continue;
+        };
+
+        if key.kind != KeyEventKind::Press {
+          continue;
+        }
+
+        let Some(action) = Action::from_key(&key) else {
+          continue;
+        };
+
+        if sender.send(Event::Action(action)).is_err() {
+          return;
+        }
+      }
+    });
+  }
+
   pub(crate) fn new(options: Options) -> Self {
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
 
@@ -128,7 +160,7 @@ impl App {
   pub(crate) async fn run(mut self) -> Result {
     let mut terminal = Terminal::new()?;
 
-    self.spawn_terminal_events();
+    self.listen();
 
     while !self.state.should_quit() {
       terminal.draw(|frame| self.render(frame))?;
@@ -145,37 +177,5 @@ impl App {
     }
 
     Ok(())
-  }
-
-  fn spawn_terminal_events(&self) {
-    let sender = self.event_sender.clone();
-
-    thread::spawn(move || {
-      loop {
-        let event = match ratatui::crossterm::event::read() {
-          Ok(event) => event,
-          Err(error) => {
-            let _ = sender.send(Event::Error(error.to_string()));
-            return;
-          }
-        };
-
-        let CrosstermEvent::Key(key) = event else {
-          continue;
-        };
-
-        if key.kind != KeyEventKind::Press {
-          continue;
-        }
-
-        let Some(action) = Action::from_key(&key) else {
-          continue;
-        };
-
-        if sender.send(Event::Action(action)).is_err() {
-          return;
-        }
-      }
-    });
   }
 }
