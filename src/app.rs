@@ -18,7 +18,7 @@ impl App {
   }
 
   fn handle_event(&mut self, event: Event) {
-    if let Some(effect) = self.state.handle_event(event) {
+    for effect in self.state.handle_event(event) {
       self.handle_effect(effect);
     }
   }

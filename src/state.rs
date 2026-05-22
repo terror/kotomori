@@ -9,7 +9,7 @@ pub(crate) struct State {
 }
 
 impl State {
-  fn handle_action(&mut self, action: Action) -> Option<Effect> {
+  fn handle_action(&mut self, action: Action) -> Vec<Effect> {
     match action {
       Action::Backspace => {
         self.input.pop();
@@ -19,10 +19,10 @@ impl State {
       Action::Submit => return self.submit(),
     }
 
-    None
+    Vec::new()
   }
 
-  pub(crate) fn handle_event(&mut self, event: Event) -> Option<Effect> {
+  pub(crate) fn handle_event(&mut self, event: Event) -> Vec<Effect> {
     match event {
       Event::Action(action) => return self.handle_action(action),
       Event::AgentDelta(delta) => {
@@ -40,7 +40,7 @@ impl State {
       }
     }
 
-    None
+    Vec::new()
   }
 
   pub(crate) fn input(&self) -> &str {
@@ -64,15 +64,15 @@ impl State {
     self.should_quit
   }
 
-  fn submit(&mut self) -> Option<Effect> {
+  fn submit(&mut self) -> Vec<Effect> {
     if self.agent_message.is_some() {
-      return None;
+      return Vec::new();
     }
 
     let input = self.input.trim();
 
     if input.is_empty() {
-      return None;
+      return Vec::new();
     }
 
     let input = input.to_string();
@@ -84,7 +84,7 @@ impl State {
 
     self.input.clear();
 
-    Some(Effect::RunAgent { input })
+    vec![Effect::RunAgent { input }]
   }
 
   pub(crate) fn transcript_height(&self, width: u16) -> u16 {
@@ -112,9 +112,9 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      Some(Effect::RunAgent {
+      vec![Effect::RunAgent {
         input: "foo".into()
-      })
+      }]
     );
 
     state.handle_event(Event::Error("bar".into()));
@@ -127,9 +127,9 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      Some(Effect::RunAgent {
+      vec![Effect::RunAgent {
         input: "baz".into()
-      })
+      }]
     );
   }
 }
