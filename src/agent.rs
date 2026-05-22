@@ -2,34 +2,41 @@ use super::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Agent {
+  event_sender: UnboundedSender<Event>,
   model: String,
 }
 
 impl Agent {
-  pub(crate) fn new(model: String) -> Self {
-    Self { model }
+  pub(crate) fn new(
+    event_sender: UnboundedSender<Event>,
+    model: String,
+  ) -> Self {
+    Self {
+      event_sender,
+      model,
+    }
   }
 
-  pub(crate) fn spawn(
-    &self,
-    input: String,
-    runtime: &Runtime,
-    sender: UnboundedSender<AppEvent>,
-  ) {
-    let model = self.model.clone();
+  pub(crate) fn spawn(&self, input: String) {
+    let agent = self.clone();
 
-    runtime.spawn(async move {
-      let response = format!("queued for {model}: {input}");
-
-      for c in response.chars() {
-        if sender.send(Ok(Action::AgentDelta(c.to_string()))).is_err() {
-          return;
-        }
-
-        tokio::time::sleep(Duration::from_millis(20)).await;
+    tokio::spawn(async move {
+      if let Err(error) = agent.stream(input).await {
+        let _ = agent.event_sender.send(Event::Error(error.to_string()));
       }
-
-      let _ = sender.send(Ok(Action::AgentDone));
     });
+  }
+
+  async fn stream(&self, input: String) -> Result {
+    let response = format!("queued for {}: {input}", self.model);
+
+    for c in response.chars() {
+      self.event_sender.send(Event::AgentDelta(c.to_string()))?;
+      sleep(Duration::from_millis(20)).await;
+    }
+
+    self.event_sender.send(Event::AgentDone)?;
+
+    Ok(())
   }
 }

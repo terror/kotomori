@@ -6,13 +6,13 @@ use {
   arguments::Arguments,
   clap::{Args, Parser},
   effect::Effect,
+  event::Event,
   messages::Message,
   options::Options,
   ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{
-      self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind,
-      KeyModifiers,
+      Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
     },
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
@@ -21,11 +21,11 @@ use {
   },
   role::Role,
   state::State,
-  std::{backtrace::BacktraceStatus, io, process, thread, time::Duration},
+  std::{backtrace::BacktraceStatus, process, thread, time::Duration},
   terminal::Terminal,
   tokio::{
-    runtime::Runtime,
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    time::sleep,
   },
 };
 
@@ -34,6 +34,7 @@ mod agent;
 mod app;
 mod arguments;
 mod effect;
+mod event;
 mod messages;
 mod options;
 mod role;
@@ -42,10 +43,9 @@ mod terminal;
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 
-type AppEvent = std::result::Result<Action, io::Error>;
-
-fn main() {
-  if let Err(error) = Arguments::parse().run() {
+#[tokio::main]
+async fn main() {
+  if let Err(error) = Arguments::parse().run().await {
     eprintln!("error: {error}");
 
     for (i, error) in error.chain().skip(1).enumerate() {

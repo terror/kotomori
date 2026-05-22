@@ -3,39 +3,35 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct App {
   agent: Agent,
-  event_receiver: UnboundedReceiver<AppEvent>,
-  event_sender: UnboundedSender<AppEvent>,
-  runtime: Runtime,
+  event_receiver: UnboundedReceiver<Event>,
+  event_sender: UnboundedSender<Event>,
   state: State,
 }
 
 impl App {
-  fn handle_action(&mut self, action: Action) {
-    if let Some(effect) = self.state.handle_action(action) {
-      self.handle_effect(effect);
-    }
-  }
-
   fn handle_effect(&self, effect: Effect) {
     match effect {
       Effect::RunAgent { input } => {
-        self
-          .agent
-          .spawn(input, &self.runtime, self.event_sender.clone());
+        self.agent.spawn(input);
       }
     }
   }
 
-  pub(crate) fn new(options: Options) -> Result<Self> {
+  fn handle_event(&mut self, event: Event) {
+    if let Some(effect) = self.state.handle_event(event) {
+      self.handle_effect(effect);
+    }
+  }
+
+  pub(crate) fn new(options: Options) -> Self {
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
 
-    Ok(Self {
-      agent: Agent::new(options.model),
+    Self {
+      agent: Agent::new(event_sender.clone(), options.model),
       event_receiver,
       event_sender,
-      runtime: Runtime::new().context("failed to initialize async runtime")?,
       state: State::new(options.prompt.unwrap_or_default()),
-    })
+    }
   }
 
   fn render(&self, frame: &mut Frame) {
@@ -129,7 +125,7 @@ impl App {
     ));
   }
 
-  pub(crate) fn run(mut self) -> Result {
+  pub(crate) async fn run(mut self) -> Result {
     let mut terminal = Terminal::new()?;
 
     self.spawn_terminal_events();
@@ -137,14 +133,14 @@ impl App {
     while !self.state.should_quit() {
       terminal.draw(|frame| self.render(frame))?;
 
-      let Some(event) = self.event_receiver.blocking_recv() else {
+      let Some(event) = self.event_receiver.recv().await else {
         break;
       };
 
-      self.handle_action(event?);
+      self.handle_event(event);
 
       while let Ok(event) = self.event_receiver.try_recv() {
-        self.handle_action(event?);
+        self.handle_event(event);
       }
     }
 
@@ -156,10 +152,10 @@ impl App {
 
     thread::spawn(move || {
       loop {
-        let event = match event::read() {
+        let event = match ratatui::crossterm::event::read() {
           Ok(event) => event,
           Err(error) => {
-            let _ = sender.send(Err(error));
+            let _ = sender.send(Event::Error(error.to_string()));
             return;
           }
         };
@@ -176,7 +172,7 @@ impl App {
           continue;
         };
 
-        if sender.send(Ok(action)).is_err() {
+        if sender.send(Event::Action(action)).is_err() {
           return;
         }
       }

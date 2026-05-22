@@ -8,7 +8,7 @@ pub(crate) struct Arguments {
 }
 
 impl Arguments {
-  pub(crate) fn run(self) -> Result {
-    App::new(self.options)?.run()
+  pub(crate) async fn run(self) -> Result {
+    App::new(self.options).run().await
   }
 }

@@ -9,20 +9,35 @@ pub(crate) struct State {
 }
 
 impl State {
-  pub(crate) fn handle_action(&mut self, action: Action) -> Option<Effect> {
+  fn handle_action(&mut self, action: Action) -> Option<Effect> {
     match action {
-      Action::AgentDelta(delta) => {
-        if let Some(index) = self.agent_message {
-          self.messages[index].content.push_str(&delta);
-        }
-      }
-      Action::AgentDone => self.agent_message = None,
       Action::Backspace => {
         self.input.pop();
       }
       Action::Input(c) => self.input.push(c),
       Action::Quit => self.should_quit = true,
       Action::Submit => return self.submit(),
+    }
+
+    None
+  }
+
+  pub(crate) fn handle_event(&mut self, event: Event) -> Option<Effect> {
+    match event {
+      Event::Action(action) => return self.handle_action(action),
+      Event::AgentDelta(delta) => {
+        if let Some(index) = self.agent_message {
+          self.messages[index].content.push_str(&delta);
+        }
+      }
+      Event::AgentDone => self.agent_message = None,
+      Event::Error(error) => {
+        if let Some(index) = self.agent_message.take() {
+          self.messages[index].content = error;
+        } else {
+          self.messages.push(Message::new(Role::Agent, error));
+        }
+      }
     }
 
     None
@@ -84,5 +99,37 @@ impl State {
         u16::try_from(len.div_ceil(width).max(1)).unwrap_or(u16::MAX)
       })
       .fold(0u16, u16::saturating_add)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn error_clears_active_message() {
+    let mut state = State::new("foo".into());
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Some(Effect::RunAgent {
+        input: "foo".into()
+      })
+    );
+
+    state.handle_event(Event::Error("bar".into()));
+
+    assert_eq!(state.messages()[1], Message::new(Role::Agent, "bar"));
+
+    for c in "baz".chars() {
+      state.handle_event(Event::Action(Action::Input(c)));
+    }
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Some(Effect::RunAgent {
+        input: "baz".into()
+      })
+    );
   }
 }
