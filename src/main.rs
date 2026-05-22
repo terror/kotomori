@@ -1,5 +1,6 @@
 use {
   action::Action,
+  agent::Agent,
   anyhow::{Context, Error},
   app::App,
   arguments::Arguments,
@@ -29,6 +30,7 @@ use {
 };
 
 mod action;
+mod agent;
 mod app;
 mod arguments;
 mod effect;

@@ -2,9 +2,9 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct App {
+  agent: Agent,
   event_receiver: UnboundedReceiver<AppEvent>,
   event_sender: UnboundedSender<AppEvent>,
-  model: String,
   runtime: Runtime,
   state: State,
 }
@@ -18,7 +18,11 @@ impl App {
 
   fn handle_effect(&self, effect: Effect) {
     match effect {
-      Effect::RunAgent { input } => self.spawn_agent(input),
+      Effect::RunAgent { input } => {
+        self
+          .agent
+          .spawn(input, &self.runtime, self.event_sender.clone());
+      }
     }
   }
 
@@ -26,9 +30,9 @@ impl App {
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
 
     Ok(Self {
+      agent: Agent::new(options.model),
       event_receiver,
       event_sender,
-      model: options.model,
       runtime: Runtime::new().context("failed to initialize async runtime")?,
       state: State::new(options.prompt.unwrap_or_default()),
     })
@@ -145,26 +149,6 @@ impl App {
     }
 
     Ok(())
-  }
-
-  fn spawn_agent(&self, input: String) {
-    let model = self.model.clone();
-
-    let sender = self.event_sender.clone();
-
-    self.runtime.spawn(async move {
-      let response = format!("queued for {model}: {input}");
-
-      for c in response.chars() {
-        if sender.send(Ok(Action::AgentOutput(c))).is_err() {
-          return;
-        }
-
-        tokio::time::sleep(Duration::from_millis(20)).await;
-      }
-
-      let _ = sender.send(Ok(Action::AgentDone));
-    });
   }
 
   fn spawn_terminal_events(&self) {
