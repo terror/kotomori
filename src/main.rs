@@ -5,19 +5,23 @@ use {
   app::App,
   arguments::Arguments,
   clap::{Args, Parser},
+  composer::Composer,
   effect::Effect,
   event::Event,
+  header::Header,
+  hint::Hint,
   messages::Message,
   options::Options,
   ratatui::{
     DefaultTerminal, Frame,
+    buffer::Buffer,
     crossterm::event::{
       Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
     },
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Paragraph, Wrap},
+    widgets::{Paragraph, Widget, Wrap},
   },
   role::Role,
   state::State,
@@ -27,19 +31,26 @@ use {
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     time::sleep,
   },
+  transcript::Transcript,
+  view::View,
 };
 
 mod action;
 mod agent;
 mod app;
 mod arguments;
+mod composer;
 mod effect;
 mod event;
+mod header;
+mod hint;
 mod messages;
 mod options;
 mod role;
 mod state;
 mod terminal;
+mod transcript;
+mod view;
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 
