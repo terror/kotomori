@@ -22,8 +22,8 @@ impl State {
       Action::CompleteCommand => self.composer.complete_command(),
       Action::Input(c) => self.composer.push(c),
       Action::Quit => self.quit(),
-      Action::SelectNextCommand => self.select_next_command(),
-      Action::SelectPreviousCommand => self.select_previous_command(),
+      Action::SelectNextCommand => self.composer.select_next_command(),
+      Action::SelectPreviousCommand => self.composer.select_previous_command(),
       Action::Submit => return self.submit(),
     }
 
@@ -70,14 +70,6 @@ impl State {
     self.reset_input();
 
     Vec::new()
-  }
-
-  fn select_next_command(&mut self) {
-    self.composer.select_next_command();
-  }
-
-  fn select_previous_command(&mut self) {
-    self.composer.select_previous_command();
   }
 
   pub(crate) fn should_quit(&self) -> bool {
