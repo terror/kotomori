@@ -11,12 +11,12 @@ pub(crate) struct State {
 impl State {
   pub(crate) fn handle_action(&mut self, action: Action) -> Option<Effect> {
     match action {
-      Action::AgentDone => self.agent_message = None,
-      Action::AgentOutput(c) => {
+      Action::AgentDelta(delta) => {
         if let Some(index) = self.agent_message {
-          self.messages[index].content.push(c);
+          self.messages[index].content.push_str(&delta);
         }
       }
+      Action::AgentDone => self.agent_message = None,
       Action::Backspace => {
         self.input.pop();
       }

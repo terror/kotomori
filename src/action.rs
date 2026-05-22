@@ -1,9 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Action {
+  AgentDelta(String),
   AgentDone,
-  AgentOutput(char),
   Backspace,
   Input(char),
   Quit,

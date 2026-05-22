@@ -22,7 +22,7 @@ impl Agent {
       let response = format!("queued for {model}: {input}");
 
       for c in response.chars() {
-        if sender.send(Ok(Action::AgentOutput(c))).is_err() {
+        if sender.send(Ok(Action::AgentDelta(c.to_string()))).is_err() {
           return;
         }
 
