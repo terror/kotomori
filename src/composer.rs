@@ -21,7 +21,7 @@ impl Widget for Composer<'_> {
           .fg(Color::Cyan)
           .add_modifier(Modifier::BOLD),
       ),
-      Span::raw(self.state.input().to_string()),
+      Span::raw(self.state.input_text().to_string()),
     ]))
     .render(area, buf);
   }

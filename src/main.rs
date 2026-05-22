@@ -5,6 +5,8 @@ use {
   app::App,
   arguments::Arguments,
   clap::{Args, Parser},
+  command::Command,
+  commands::Commands,
   composer::Composer,
   effect::Effect,
   event::Event,
@@ -26,6 +28,7 @@ use {
   role::Role,
   state::State,
   std::{backtrace::BacktraceStatus, process, thread, time::Duration},
+  strum::{EnumIter, IntoEnumIterator},
   terminal::Terminal,
   tokio::{
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
@@ -39,6 +42,8 @@ mod action;
 mod agent;
 mod app;
 mod arguments;
+mod command;
+mod commands;
 mod composer;
 mod effect;
 mod event;
