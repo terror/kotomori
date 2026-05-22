@@ -13,12 +13,12 @@ impl<'a> View<'a> {
   pub(crate) fn render(&self, frame: &mut Frame) {
     let area = frame.area();
 
-    let command_height = self.state.command_height();
+    let composer_height = self.state.composer_height();
 
     let transcript_height = self.state.transcript_height(area.width).min(
       area
         .height
-        .saturating_sub(6u16.saturating_add(command_height)),
+        .saturating_sub(5u16.saturating_add(composer_height)),
     );
 
     let [
@@ -29,7 +29,6 @@ impl<'a> View<'a> {
       _,
       transcript_area,
       composer_area,
-      command_area,
       _,
     ] = Layout::default()
       .direction(Direction::Vertical)
@@ -40,17 +39,15 @@ impl<'a> View<'a> {
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(transcript_height),
-        Constraint::Length(1),
-        Constraint::Length(command_height),
+        Constraint::Length(composer_height),
         Constraint::Min(0),
       ])
       .areas(area);
 
     frame.render_widget(Header, header_area);
     frame.render_widget(Hint, hint_area);
-    frame.render_widget(Transcript::new(self.state), transcript_area);
-    frame.render_widget(Composer::new(self.state), composer_area);
-    frame.render_widget(CommandMenu::new(self.state), command_area);
+    frame.render_widget(self.state.transcript(), transcript_area);
+    frame.render_widget(self.state.composer(), composer_area);
 
     let input_len =
       u16::try_from(self.state.input_text().len()).unwrap_or(u16::MAX);
