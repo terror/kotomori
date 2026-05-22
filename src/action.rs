@@ -6,21 +6,20 @@ pub(crate) enum Action {
   AgentOutput(char),
   Backspace,
   Input(char),
-  None,
   Quit,
   Submit,
 }
 
-impl From<&KeyEvent> for Action {
-  fn from(key: &KeyEvent) -> Self {
+impl Action {
+  pub(crate) fn from_key(key: &KeyEvent) -> Option<Self> {
     match key.code {
       KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-        Self::Quit
+        Some(Self::Quit)
       }
-      KeyCode::Enter => Self::Submit,
-      KeyCode::Backspace => Self::Backspace,
-      KeyCode::Char(c) => Self::Input(c),
-      _ => Self::None,
+      KeyCode::Enter => Some(Self::Submit),
+      KeyCode::Backspace => Some(Self::Backspace),
+      KeyCode::Char(c) => Some(Self::Input(c)),
+      _ => None,
     }
   }
 }

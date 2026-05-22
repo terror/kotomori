@@ -4,6 +4,7 @@ use {
   app::App,
   arguments::Arguments,
   clap::{Args, Parser},
+  effect::Effect,
   messages::Message,
   options::Options,
   ratatui::{
@@ -18,8 +19,8 @@ use {
     widgets::{Paragraph, Wrap},
   },
   role::Role,
-  state::{AgentRequest, State},
-  std::{backtrace::BacktraceStatus, process, time::Duration},
+  state::State,
+  std::{backtrace::BacktraceStatus, io, process, thread, time::Duration},
   terminal::Terminal,
   tokio::{
     runtime::Runtime,
@@ -30,6 +31,7 @@ use {
 mod action;
 mod app;
 mod arguments;
+mod effect;
 mod messages;
 mod options;
 mod role;
@@ -37,6 +39,8 @@ mod state;
 mod terminal;
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
+
+type AppEvent = std::result::Result<Action, io::Error>;
 
 fn main() {
   if let Err(error) = Arguments::parse().run() {

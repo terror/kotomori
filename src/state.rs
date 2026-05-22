@@ -1,25 +1,15 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct AgentRequest {
-  pub(crate) input: String,
-  pub(crate) model: String,
-}
-
-#[derive(Debug)]
 pub(crate) struct State {
   agent_message: Option<usize>,
   input: String,
   messages: Vec<Message>,
-  options: Options,
   should_quit: bool,
 }
 
 impl State {
-  pub(crate) fn handle_action(
-    &mut self,
-    action: Action,
-  ) -> Option<AgentRequest> {
+  pub(crate) fn handle_action(&mut self, action: Action) -> Option<Effect> {
     match action {
       Action::AgentDone => self.agent_message = None,
       Action::AgentOutput(c) => {
@@ -31,7 +21,6 @@ impl State {
         self.input.pop();
       }
       Action::Input(c) => self.input.push(c),
-      Action::None => {}
       Action::Quit => self.should_quit = true,
       Action::Submit => return self.submit(),
     }
@@ -43,22 +32,15 @@ impl State {
     &self.input
   }
 
-  pub(crate) fn is_agent_active(&self) -> bool {
-    self.agent_message.is_some()
-  }
-
   pub(crate) fn messages(&self) -> &[Message] {
     &self.messages
   }
 
-  pub(crate) fn new(options: Options) -> Self {
-    let input = options.prompt.clone().unwrap_or_default();
-
+  pub(crate) fn new(input: String) -> Self {
     Self {
       agent_message: None,
       input,
       messages: Vec::new(),
-      options,
       should_quit: false,
     }
   }
@@ -67,7 +49,7 @@ impl State {
     self.should_quit
   }
 
-  fn submit(&mut self) -> Option<AgentRequest> {
+  fn submit(&mut self) -> Option<Effect> {
     if self.agent_message.is_some() {
       return None;
     }
@@ -87,10 +69,7 @@ impl State {
 
     self.input.clear();
 
-    Some(AgentRequest {
-      input,
-      model: self.options.model.clone(),
-    })
+    Some(Effect::RunAgent { input })
   }
 
   pub(crate) fn transcript_height(&self, width: u16) -> u16 {
