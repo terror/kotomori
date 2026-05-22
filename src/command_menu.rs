@@ -1,17 +1,17 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct Commands<'a> {
+pub(crate) struct CommandMenu<'a> {
   state: &'a State,
 }
 
-impl<'a> Commands<'a> {
+impl<'a> CommandMenu<'a> {
   pub(crate) fn new(state: &'a State) -> Self {
     Self { state }
   }
 }
 
-impl Widget for Commands<'_> {
+impl Widget for CommandMenu<'_> {
   fn render(self, area: Rect, buf: &mut Buffer) {
     let selected = self.state.selected_command_index();
 

@@ -50,7 +50,7 @@ impl<'a> View<'a> {
     frame.render_widget(Hint, hint_area);
     frame.render_widget(Transcript::new(self.state), transcript_area);
     frame.render_widget(Composer::new(self.state), composer_area);
-    frame.render_widget(Commands::new(self.state), command_area);
+    frame.render_widget(CommandMenu::new(self.state), command_area);
 
     let input_len =
       u16::try_from(self.state.input_text().len()).unwrap_or(u16::MAX);

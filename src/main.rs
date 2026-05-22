@@ -6,7 +6,7 @@ use {
   arguments::Arguments,
   clap::{Args, Parser},
   command::Command,
-  commands::Commands,
+  command_menu::CommandMenu,
   composer::Composer,
   effect::Effect,
   event::Event,
@@ -43,7 +43,7 @@ mod agent;
 mod app;
 mod arguments;
 mod command;
-mod commands;
+mod command_menu;
 mod composer;
 mod effect;
 mod event;
