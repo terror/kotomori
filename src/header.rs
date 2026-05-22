@@ -8,7 +8,7 @@ impl Widget for Header {
     Paragraph::new(Line::from(vec![
       Span::raw("  "),
       Span::styled(
-        "kotomori",
+        env!("CARGO_PKG_NAME"),
         Style::default()
           .fg(Color::Cyan)
           .add_modifier(Modifier::BOLD),
