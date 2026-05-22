@@ -61,13 +61,15 @@ impl State {
     self.composer.clear();
   }
 
-  fn run_command(&mut self, command: Command) {
+  fn run_command(&mut self, command: Command) -> Vec<Effect> {
     match command {
       Command::Clear => self.transcript.clear(),
       Command::Quit => self.quit(),
     }
 
     self.reset_input();
+
+    Vec::new()
   }
 
   fn select_next_command(&mut self) {
@@ -86,8 +88,7 @@ impl State {
     let input = self.composer.input_text().trim();
 
     if let Some(command) = Command::from_input(input) {
-      self.run_command(command);
-      return Vec::new();
+      return self.run_command(command);
     }
 
     if input.starts_with('/') {
