@@ -11,7 +11,7 @@ use {
   event::Event,
   header::Header,
   hint::Hint,
-  messages::Message,
+  message::Message,
   options::Options,
   ratatui::{
     DefaultTerminal, Frame,
@@ -47,7 +47,7 @@ mod effect;
 mod event;
 mod header;
 mod hint;
-mod messages;
+mod message;
 mod options;
 mod role;
 mod state;
