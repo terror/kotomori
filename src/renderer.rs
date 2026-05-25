@@ -204,68 +204,64 @@ mod tests {
 
     subject.append_lines(&mut stdout, &["bar".into()]).unwrap();
 
-    assert!(String::from_utf8(stdout).unwrap().starts_with("\r\n"));
+    assert_eq!(String::from_utf8(stdout).unwrap(), "\r\n\x1b[1G\x1b[2Kbar");
   }
 
   #[test]
-  fn refreshing() {
-    #[track_caller]
-    fn case(
-      previous: &[&str],
-      previous_width: u16,
-      next: &[&str],
-      width: u16,
-      height: u16,
-      expected: Refresh,
-    ) {
-      let previous =
-        previous.iter().map(ToString::to_string).collect::<Vec<_>>();
+  fn initially_refreshes_with_initial() {
+    let subject = Renderer {
+      previous: Vec::new(),
+      previous_width: 0,
+    };
 
-      let subject = Renderer {
-        previous,
-        previous_width,
-      };
+    assert_eq!(subject.refresh(&["foo".into()], 80, 24), Refresh::Initial);
+  }
 
-      let next = next.iter().map(ToString::to_string).collect::<Vec<_>>();
+  #[test]
+  fn refreshes_with_append_when_render_extends_previous() {
+    let subject = Renderer {
+      previous: vec!["foo".into()],
+      previous_width: 80,
+    };
 
-      assert_eq!(subject.refresh(&next, width, height), expected);
-    }
-
-    case(&[], 0, &["foo"], 80, 24, Refresh::Initial);
-
-    case(
-      &["foo"],
-      80,
-      &["foo", "bar"],
-      80,
-      24,
+    assert_eq!(
+      subject.refresh(&["foo".into(), "bar".into()], 80, 24),
       Refresh::Append { from: 1 },
     );
+  }
 
-    case(
-      &["foo", "bar"],
-      80,
-      &["foo", "baz"],
-      80,
-      24,
+  #[test]
+  fn refreshes_with_redraw_tail_when_line_changes() {
+    let subject = Renderer {
+      previous: vec!["foo".into(), "bar".into()],
+      previous_width: 80,
+    };
+
+    assert_eq!(
+      subject.refresh(&["foo".into(), "baz".into()], 80, 24),
       Refresh::RedrawTail { from: 1 },
     );
+  }
 
-    case(
-      &["foo", "bar", "baz"],
-      80,
-      &["foo"],
-      80,
-      0,
-      Refresh::FullAppend,
-    );
+  #[test]
+  fn refreshes_with_full_append_when_tail_cannot_be_redrawn() {
+    let subject = Renderer {
+      previous: vec!["foo".into(), "bar".into(), "baz".into()],
+      previous_width: 80,
+    };
 
-    case(
-      &["foo"],
-      80,
-      &["foo", "bar"],
-      81,
-      24,
+    assert_eq!(subject.refresh(&["foo".into()], 80, 0), Refresh::FullAppend);
+  }
+
+  #[test]
+  fn refreshes_with_redraw_tail_when_width_changes() {
+    let subject = Renderer {
+      previous: vec!["foo".into()],
+      previous_width: 80,
+    };
+
+    assert_eq!(
+      subject.refresh(&["foo".into(), "bar".into()], 81, 24),
       Refresh::RedrawTail { from: 0 },
     );
   }
@@ -276,6 +272,9 @@ mod tests {
 
     Renderer::write_lines(&mut stdout, &["foo".into(), "bar".into()]).unwrap();
 
-    assert!(String::from_utf8(stdout).unwrap().contains("foo\r\n"));
+    assert_eq!(
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar",
+    );
   }
 }
