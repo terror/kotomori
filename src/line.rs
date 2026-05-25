@@ -94,40 +94,57 @@ mod tests {
   use super::*;
 
   #[test]
-  fn display() {
-    #[track_caller]
-    fn case(line: &Line, expected: &str) {
-      assert_eq!(line.to_string(), expected);
-    }
+  fn displays_raw_text() {
+    assert_eq!(Line::raw("foo").to_string(), "foo");
+  }
 
-    case(&Line::raw("foo"), "foo");
-
-    case(
-      &vec![Span::styled("foo", Style::CyanBold)].into(),
+  #[test]
+  fn displays_styled_text() {
+    assert_eq!(
+      Line::from(vec![Span::styled("foo", Style::CyanBold)]).to_string(),
       "\x1b[36;1mfoo\x1b[0m",
     );
   }
 
   #[test]
-  fn rendering() {
-    #[track_caller]
-    fn case(line: &Line, width: u16, expected: &[Line]) {
-      assert_eq!(line.render(width).as_slice(), expected);
-    }
-
-    case(
-      &Line::raw("foobar"),
-      3,
-      &[Line::raw("foo"), Line::raw("bar")],
+  fn renders_raw_text_at_width() {
+    assert_eq!(
+      Line::raw("foobar").render(3),
+      [Line::raw("foo"), Line::raw("bar")]
     );
+  }
 
-    case(
-      &vec![Span::styled("foobar", Style::CyanBold)].into(),
-      3,
-      &[
-        vec![Span::styled("foo", Style::CyanBold)].into(),
-        vec![Span::styled("bar", Style::CyanBold)].into(),
+  #[test]
+  fn renders_styled_text_at_width() {
+    assert_eq!(
+      Line::from(vec![Span::styled("foobar", Style::CyanBold)]).render(3),
+      [
+        Line::from(vec![Span::styled("foo", Style::CyanBold)]),
+        Line::from(vec![Span::styled("bar", Style::CyanBold)]),
       ],
+    );
+  }
+
+  #[test]
+  fn renders_with_minimum_width_of_one() {
+    assert_eq!(
+      Line::raw("foo").render(0),
+      [Line::raw("f"), Line::raw("o"), Line::raw("o")]
+    );
+  }
+
+  #[test]
+  fn rendering_preserves_style_boundaries() {
+    assert_eq!(
+      Line::from(vec![
+        Span::styled("foo", Style::CyanBold),
+        Span::styled("bar", Style::DarkGray),
+      ])
+      .render(6),
+      [Line::from(vec![
+        Span::styled("foo", Style::CyanBold),
+        Span::styled("bar", Style::DarkGray),
+      ])],
     );
   }
 }
