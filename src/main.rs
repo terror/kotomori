@@ -64,7 +64,7 @@ use {
     io::{self, Stdout, Write},
     iter::once,
     path::PathBuf,
-    process,
+    process::{self, Output},
     str::{self, FromStr},
     sync::Arc,
     thread,

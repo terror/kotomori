@@ -7,7 +7,6 @@ mod read_file;
 mod search_files;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) struct CommandOutput {
   pub(crate) status: Option<i32>,
   pub(crate) stderr: String,
@@ -15,8 +14,8 @@ pub(crate) struct CommandOutput {
   pub(crate) success: bool,
 }
 
-impl From<std::process::Output> for CommandOutput {
-  fn from(output: std::process::Output) -> Self {
+impl From<Output> for CommandOutput {
+  fn from(output: Output) -> Self {
     Self {
       status: output.status.code(),
       stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
