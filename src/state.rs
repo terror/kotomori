@@ -288,7 +288,7 @@ mod tests {
   fn multiline_input() {
     let mut state = State::new(&Options {
       model: "fake:local".parse().unwrap(),
-      prompt: Some("".into()),
+      prompt: Some(String::new()),
     })
     .unwrap();
 
