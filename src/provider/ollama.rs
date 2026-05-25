@@ -23,10 +23,6 @@ impl Ollama {
       sink.delta(content)?;
     }
 
-    if response.done {
-      sink.done()?;
-    }
-
     Ok(())
   }
 
@@ -42,49 +38,48 @@ impl Ollama {
   }
 }
 
+#[async_trait]
 impl Provider for Ollama {
-  fn stream(
+  async fn stream(
     &self,
     request: CompletionRequest,
     sink: ProviderSink,
-  ) -> BoxFuture<'_, Result> {
-    Box::pin(async move {
-      let request = ChatRequest::from(request);
+  ) -> Result {
+    let request = ChatRequest::from(request);
 
-      let response = self
-        .client
-        .post(&self.url)
-        .json(&request)
-        .send()
-        .await
-        .with_context(|| format!("failed to connect to `{}`", self.url))?
-        .error_for_status()?;
+    let response = self
+      .client
+      .post(&self.url)
+      .json(&request)
+      .send()
+      .await
+      .with_context(|| format!("failed to connect to `{}`", self.url))?
+      .error_for_status()?;
 
-      let stream = response.bytes_stream();
+    let stream = response.bytes_stream();
 
-      pin_mut!(stream);
+    pin_mut!(stream);
 
-      let mut buffer = Vec::new();
+    let mut buffer = Vec::new();
 
-      while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
+    while let Some(chunk) = stream.next().await {
+      let chunk = chunk?;
 
-        buffer.extend_from_slice(&chunk);
+      buffer.extend_from_slice(&chunk);
 
-        while let Some(index) = buffer.iter().position(|byte| *byte == b'\n') {
-          let line = buffer.drain(..=index).collect::<Vec<_>>();
+      while let Some(index) = buffer.iter().position(|byte| *byte == b'\n') {
+        let line = buffer.drain(..=index).collect::<Vec<_>>();
 
-          Self::handle_line(
-            str::from_utf8(&line[..line.len() - 1])?.trim(),
-            &sink,
-          )?;
-        }
+        Self::handle_line(
+          str::from_utf8(&line[..line.len() - 1])?.trim(),
+          &sink,
+        )?;
       }
+    }
 
-      Self::handle_line(str::from_utf8(&buffer)?.trim(), &sink)?;
+    Self::handle_line(str::from_utf8(&buffer)?.trim(), &sink)?;
 
-      Ok(())
-    })
+    Ok(())
   }
 }
 
@@ -111,7 +106,6 @@ impl From<CompletionRequest> for ChatRequest {
 
 #[derive(Debug, Deserialize)]
 struct ChatResponse {
-  done: bool,
   message: Option<ChatResponseMessage>,
 }
 

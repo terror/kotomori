@@ -10,10 +10,6 @@ impl ProviderSink {
     Ok(self.event_sender.send(Event::AgentDelta(delta.into()))?)
   }
 
-  pub(crate) fn done(&self) -> Result {
-    Ok(self.event_sender.send(Event::AgentDone)?)
-  }
-
   pub(crate) fn new(event_sender: UnboundedSender<Event>) -> Self {
     Self { event_sender }
   }

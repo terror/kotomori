@@ -38,6 +38,10 @@ impl Agent {
         CompletionRequest::new(self.model.clone(), messages),
         ProviderSink::new(self.event_sender.clone()),
       )
-      .await
+      .await?;
+
+    self.event_sender.send(Event::AgentDone)?;
+
+    Ok(())
   }
 }
