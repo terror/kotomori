@@ -66,49 +66,58 @@ mod tests {
   use super::*;
 
   #[test]
-  fn parsing() {
-    #[track_caller]
-    fn case(s: &str, expected: &Model) {
-      assert_eq!(&s.parse::<Model>().unwrap(), expected);
-    }
-
-    case(
-      "anthropic:foo",
-      &Model {
-        name: "foo".into(),
-        provider: "anthropic".into(),
-      },
+  fn errors_on_empty_name() {
+    assert_eq!(
+      "foo: ".parse::<Model>().unwrap_err().to_string(),
+      "model name cannot be empty",
     );
+  }
 
-    case(
-      "fake:foo",
-      &Model {
-        name: "foo".into(),
-        provider: "fake".into(),
-      },
+  #[test]
+  fn errors_on_empty_provider() {
+    assert_eq!(
+      ":foo".parse::<Model>().unwrap_err().to_string(),
+      "model provider cannot be empty",
     );
+  }
 
-    case(
-      "ollama:bar",
-      &Model {
+  #[test]
+  fn errors_on_missing_separator() {
+    assert_eq!(
+      "foo".parse::<Model>().unwrap_err().to_string(),
+      "model must be PROVIDER:MODEL",
+    );
+  }
+
+  #[test]
+  fn parses_provider_and_name() {
+    assert_eq!(
+      "foo:bar".parse::<Model>().unwrap(),
+      Model {
         name: "bar".into(),
-        provider: "ollama".into(),
+        provider: "foo".into(),
       },
     );
+  }
 
-    case(
-      "openai:qux",
-      &Model {
-        name: "qux".into(),
-        provider: "openai".into(),
+  #[test]
+  fn preserves_colons_in_name() {
+    assert_eq!(
+      "foo:bar:baz".parse::<Model>().unwrap(),
+      Model {
+        name: "bar:baz".into(),
+        provider: "foo".into(),
       },
     );
+  }
 
-    case(
-      "other:baz",
-      &Model {
-        name: "baz".into(),
-        provider: "other".into(),
+  #[test]
+  fn trims_name() {
+    assert_eq!(
+      "foo: bar ".parse::<Model>().unwrap(),
+      Model {
+        name: "bar".into(),
+        provider: "foo".into(),
       },
     );
   }
