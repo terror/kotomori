@@ -67,7 +67,9 @@ use {
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     time::{interval, sleep},
   },
-  tool::{RawToolCall, RegisteredTool, ToolCallStream},
+  tool::{RawToolCall, RegisteredTool, ToolCallFragment, ToolCallStreamEvent},
+  tool_call_builder::ToolCallBuilder,
+  tool_call_stream::ToolCallStream,
   transcript::Transcript,
   unicode_width::UnicodeWidthChar,
   view::View,
@@ -102,6 +104,8 @@ mod state;
 mod style;
 mod terminal;
 mod tool;
+mod tool_call_builder;
+mod tool_call_stream;
 mod transcript;
 mod view;
 

@@ -30,13 +30,12 @@ impl Provider for OpenAi {
 
     while let Some(response) = stream.next().await {
       for choice in response?.choices {
-        if let Some(content) =
-          choice.delta.content.filter(|content| !content.is_empty())
-        {
-          sink.delta(content)?;
+        match choice.delta.content {
+          Some(content) if !content.is_empty() => sink.delta(content)?,
+          _ => {}
         }
 
-        for chunk in choice.delta.tool_calls.into_iter().flatten() {
+        for chunk in choice.delta.tool_calls.unwrap_or_default() {
           tool_calls.push_event(chunk)?;
         }
       }
