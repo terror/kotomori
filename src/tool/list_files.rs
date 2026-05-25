@@ -7,6 +7,5 @@ define_tool! {
     arguments {
       optional cwd: Option<PathBuf> => {"type": ["string", "null"]},
     }
-    invocation |tool| ToolInvocationKind::ListFiles { cwd: tool.cwd },
   }
 }

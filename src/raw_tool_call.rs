@@ -21,12 +21,18 @@ impl RawToolCall {
     Ok(Self::new(id, name, arguments))
   }
 
-  pub(crate) fn invocation(&self) -> Result<ToolInvocation> {
+  pub(crate) fn into_invocation(self) -> Result<ToolInvocation> {
+    let name = self.name.clone();
+
     inventory::iter::<RegisteredTool>
       .into_iter()
-      .find(|tool| tool.name == self.name.as_str())
-      .with_context(|| format!("unknown tool `{}`", self.name))?
-      .invocation(self.clone())
+      .find(|tool| tool.name == name)
+      .with_context(|| format!("unknown tool `{name}`"))?
+      .invocation(self)
+  }
+
+  pub(crate) fn invocation(&self) -> Result<ToolInvocation> {
+    self.clone().into_invocation()
   }
 
   pub(crate) fn new(

@@ -8,9 +8,5 @@ define_tool! {
       required patch: String => {"type": "string"},
       optional cwd: Option<PathBuf> => {"type": ["string", "null"]},
     }
-    invocation |tool| ToolInvocationKind::ApplyPatch {
-      cwd: tool.cwd,
-      patch: tool.patch,
-    },
   }
 }

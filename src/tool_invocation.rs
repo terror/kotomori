@@ -10,21 +10,21 @@ impl ToolInvocation {
   fn action(&self, tense: ToolActionTense) -> &'static str {
     match tense {
       ToolActionTense::Progressive => match &self.kind {
-        ToolInvocationKind::ListFiles { .. } => "Listing",
-        ToolInvocationKind::ReadFile { .. } => "Reading",
-        ToolInvocationKind::SearchFiles { .. } => "Searching",
+        ToolInvocationKind::ListFiles(_) => "Listing",
+        ToolInvocationKind::ReadFile(_) => "Reading",
+        ToolInvocationKind::SearchFiles(_) => "Searching",
         _ => "Running",
       },
     }
   }
 
-  fn command(&self) -> Option<&CommandInvocation> {
+  fn command(&self) -> Option<&tool::command::Command> {
     match &self.kind {
       ToolInvocationKind::Command(command) => Some(command),
-      ToolInvocationKind::ApplyPatch { .. }
-      | ToolInvocationKind::ListFiles { .. }
-      | ToolInvocationKind::ReadFile { .. }
-      | ToolInvocationKind::SearchFiles { .. } => None,
+      ToolInvocationKind::ApplyPatch(_)
+      | ToolInvocationKind::ListFiles(_)
+      | ToolInvocationKind::ReadFile(_)
+      | ToolInvocationKind::SearchFiles(_) => None,
     }
   }
 
@@ -34,23 +34,24 @@ impl ToolInvocation {
 
   fn subject(&self) -> String {
     match &self.kind {
-      ToolInvocationKind::ApplyPatch { .. } => "apply_patch".into(),
+      ToolInvocationKind::ApplyPatch(_) => "apply_patch".into(),
       ToolInvocationKind::Command(_) => self
         .command()
         .map_or_else(|| "command".into(), ToString::to_string),
-      ToolInvocationKind::ListFiles { cwd } => cwd.as_ref().map_or_else(
+      ToolInvocationKind::ListFiles(tool) => tool.cwd.as_ref().map_or_else(
         || "files".into(),
         |cwd| format!("files in {}", cwd.display()),
       ),
-      ToolInvocationKind::ReadFile { path } => path.display().to_string(),
-      ToolInvocationKind::SearchFiles { arguments, cwd } => {
-        let query = if arguments.is_empty() {
+      ToolInvocationKind::ReadFile(tool) => tool.path.display().to_string(),
+      ToolInvocationKind::SearchFiles(tool) => {
+        let query = if tool.arguments.is_empty() {
           "files".into()
         } else {
-          arguments.join(" ")
+          tool.arguments.join(" ")
         };
 
-        cwd
+        tool
+          .cwd
           .as_ref()
           .map_or(query.clone(), |cwd| format!("{query} in {}", cwd.display()))
       }
@@ -65,7 +66,7 @@ impl ToolInvocation {
 impl Display for ToolInvocation {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
     match &self.kind {
-      ToolInvocationKind::ApplyPatch { .. } => write!(f, "apply_patch"),
+      ToolInvocationKind::ApplyPatch(_) => write!(f, "apply_patch"),
       ToolInvocationKind::Command(_) => {
         if let Some(command) = self.command() {
           write!(f, "{command}")
@@ -73,32 +74,32 @@ impl Display for ToolInvocation {
           write!(f, "command")
         }
       }
-      ToolInvocationKind::ListFiles { cwd } => {
-        if let Some(cwd) = cwd {
+      ToolInvocationKind::ListFiles(tool) => {
+        if let Some(cwd) = &tool.cwd {
           write!(f, "list files in {}", cwd.display())
         } else {
           write!(f, "list files")
         }
       }
-      ToolInvocationKind::ReadFile { path } => {
-        write!(f, "read {}", path.display())
+      ToolInvocationKind::ReadFile(tool) => {
+        write!(f, "read {}", tool.path.display())
       }
-      ToolInvocationKind::SearchFiles { arguments, cwd } => {
-        if arguments.is_empty() {
-          if let Some(cwd) = cwd {
+      ToolInvocationKind::SearchFiles(tool) => {
+        if tool.arguments.is_empty() {
+          if let Some(cwd) = &tool.cwd {
             write!(f, "search files in {}", cwd.display())
           } else {
             write!(f, "search files")
           }
-        } else if let Some(cwd) = cwd {
+        } else if let Some(cwd) = &tool.cwd {
           write!(
             f,
             "search files {} in {}",
-            arguments.join(" "),
+            tool.arguments.join(" "),
             cwd.display()
           )
         } else {
-          write!(f, "search files {}", arguments.join(" "))
+          write!(f, "search files {}", tool.arguments.join(" "))
         }
       }
     }

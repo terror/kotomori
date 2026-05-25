@@ -9,7 +9,6 @@ use {
   async_trait::async_trait,
   clap::{Args, Parser},
   command::Command,
-  command_invocation::CommandInvocation,
   component::Component,
   composer::Composer,
   crossterm::{
@@ -43,6 +42,7 @@ use {
   renderer::Renderer,
   request::Request,
   role::Role,
+  serde::de::DeserializeOwned,
   serde_json::{Value, json},
   span::Span,
   state::State,
@@ -86,7 +86,6 @@ mod agent;
 mod app;
 mod arguments;
 mod command;
-mod command_invocation;
 mod component;
 mod composer;
 mod effect;

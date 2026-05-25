@@ -7,8 +7,5 @@ define_tool! {
     arguments {
       required path: PathBuf => {"type": "string"},
     }
-    invocation |tool| ToolInvocationKind::ReadFile {
-      path: tool.path
-    },
   }
 }

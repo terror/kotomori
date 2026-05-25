@@ -10,28 +10,18 @@ macro_rules! define_tool {
           $presence:ident $field:ident: $field_type:ty => $schema:tt
         ),* $(,)?
       }
-      invocation |$tool:ident| $invocation:expr $(,)?
     }
   ) => {
-    #[derive(serde::Deserialize)]
+    #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
-    struct $type {
-      $($field: $field_type,)*
+    pub(crate) struct $type {
+      $(pub(crate) $field: $field_type,)*
     }
 
     impl Tool for $type {
       const DESCRIPTION: &'static str = $description;
 
       const NAME: &'static str = $name;
-
-      fn invocation(self, id: String) -> ToolInvocation {
-        let $tool = self;
-
-        ToolInvocation {
-          id,
-          kind: $invocation,
-        }
-      }
 
       fn parameters() -> Value {
         let required = [
@@ -49,6 +39,12 @@ macro_rules! define_tool {
           "required": required,
           "additionalProperties": false
         })
+      }
+    }
+
+    impl From<$type> for ToolInvocationKind {
+      fn from(tool: $type) -> Self {
+        Self::$type(tool)
       }
     }
 
@@ -71,11 +67,11 @@ macro_rules! define_tool {
 
 inventory::collect!(RegisteredTool);
 
-mod apply_patch;
-mod command;
-mod list_files;
-mod read_file;
-mod search_files;
+pub(crate) mod apply_patch;
+pub(crate) mod command;
+pub(crate) mod list_files;
+pub(crate) mod read_file;
+pub(crate) mod search_files;
 
 #[derive(Clone, Copy)]
 pub(crate) struct RegisteredTool {
@@ -149,22 +145,31 @@ impl From<&RegisteredTool> for anthropic::types::Tool {
   }
 }
 
-pub(crate) trait Tool: serde::de::DeserializeOwned + Sized {
+pub(crate) trait Tool:
+  Into<ToolInvocationKind> + DeserializeOwned + Sized
+{
   const DESCRIPTION: &'static str;
 
   const NAME: &'static str;
 
-  fn decode(call: &RawToolCall) -> Result<Self> {
-    serde_json::from_value(call.arguments.clone())
-      .with_context(|| format!("failed to decode `{}` arguments", call.name))
+  fn decode(name: &str, arguments: Value) -> Result<Self> {
+    serde_json::from_value(arguments)
+      .with_context(|| format!("failed to decode `{name}` arguments"))
   }
-
-  fn invocation(self, id: String) -> ToolInvocation;
 
   fn parameters() -> Value;
 
   fn parse(call: RawToolCall) -> Result<ToolInvocation> {
-    Ok(Self::decode(&call)?.invocation(call.id))
+    let RawToolCall {
+      arguments,
+      id,
+      name,
+    } = call;
+
+    Ok(ToolInvocation {
+      id,
+      kind: Self::decode(&name, arguments)?.into(),
+    })
   }
 }
 
@@ -180,10 +185,10 @@ mod tests {
         .unwrap(),
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::ApplyPatch {
+        kind: ToolInvocationKind::ApplyPatch(apply_patch::ApplyPatch {
           cwd: None,
           patch: "bar".into(),
-        },
+        }),
       },
     );
   }
@@ -200,7 +205,7 @@ mod tests {
       .unwrap(),
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::Command(CommandInvocation {
+        kind: ToolInvocationKind::Command(command::Command {
           arguments: vec!["baz".into()],
           cwd: None,
           program: "bar".into(),
@@ -217,9 +222,9 @@ mod tests {
         .unwrap(),
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::ListFiles {
+        kind: ToolInvocationKind::ListFiles(list_files::ListFiles {
           cwd: Some("bar".into()),
-        },
+        }),
       },
     );
   }
@@ -232,7 +237,9 @@ mod tests {
         .unwrap(),
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::ReadFile { path: "bar".into() },
+        kind: ToolInvocationKind::ReadFile(read_file::ReadFile {
+          path: "bar".into(),
+        }),
       },
     );
   }
@@ -249,10 +256,10 @@ mod tests {
       .unwrap(),
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::SearchFiles {
+        kind: ToolInvocationKind::SearchFiles(search_files::SearchFiles {
           arguments: vec!["foo".into()],
           cwd: Some("bar".into()),
-        },
+        }),
       },
     );
   }

@@ -12,10 +12,15 @@ define_tool! {
       },
       optional cwd: Option<PathBuf> => {"type": ["string", "null"]},
     }
-    invocation |tool| ToolInvocationKind::Command(CommandInvocation {
-      arguments: tool.arguments,
-      cwd: tool.cwd,
-      program: tool.program,
-    }),
+  }
+}
+
+impl Display for Command {
+  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    if self.arguments.is_empty() {
+      write!(f, "{}", self.program)
+    } else {
+      write!(f, "{} {}", self.program, self.arguments.join(" "))
+    }
   }
 }

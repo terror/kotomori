@@ -11,9 +11,5 @@ define_tool! {
       },
       optional cwd: Option<PathBuf> => {"type": ["string", "null"]},
     }
-    invocation |tool| ToolInvocationKind::SearchFiles {
-      arguments: tool.arguments,
-      cwd: tool.cwd,
-    },
   }
 }
