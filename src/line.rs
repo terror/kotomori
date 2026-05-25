@@ -83,6 +83,12 @@ impl From<Vec<Span>> for Line {
   }
 }
 
+impl From<Line> for Vec<Span> {
+  fn from(line: Line) -> Self {
+    line.spans
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

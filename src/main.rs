@@ -27,6 +27,7 @@ use {
   line::Line,
   message::Message,
   options::Options,
+  ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
   refresh::Refresh,
   renderer::Renderer,
   role::Role,

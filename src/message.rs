@@ -7,25 +7,16 @@ pub(crate) struct Message {
 }
 
 impl Message {
-  pub(crate) fn lines(&self) -> Vec<Line> {
+  pub(crate) fn lines(&self, width: u16) -> Vec<Line> {
     match self.role {
       Role::Agent => self
         .content
         .split('\n')
         .map(|line| vec![Span::raw("  "), Span::raw(line.to_string())].into())
         .collect(),
-      Role::User => self
-        .content
-        .split('\n')
-        .map(|line| {
-          vec![
-            Span::raw("  "),
-            Span::styled("❯ ", Style::CyanBold),
-            Span::raw(line.to_string()),
-          ]
-          .into()
-        })
-        .collect(),
+      Role::User => {
+        Composer::render_textarea_content(self.content.split('\n'), width)
+      }
     }
   }
 

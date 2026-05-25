@@ -44,9 +44,7 @@ impl App {
           continue;
         }
 
-        let Some(action) = Action::from_key(&key) else {
-          continue;
-        };
+        let action = Action::from_key(&key);
 
         if sender.send(Event::Action(action)).is_err() {
           return;
@@ -57,12 +55,13 @@ impl App {
 
   pub(crate) fn new(options: Options) -> Self {
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
+    let prompt = options.prompt.unwrap_or_default();
 
     Self {
       agent: Agent::new(event_sender.clone(), options.model),
       event_receiver,
       event_sender,
-      state: State::new(options.prompt.unwrap_or_default()),
+      state: State::new(&prompt),
     }
   }
 
