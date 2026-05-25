@@ -27,7 +27,9 @@ impl OpenAi {
 impl PendingToolCall {
   fn finish(self) -> Result<ToolCall> {
     let id = self.id.context("missing tool call id")?;
+
     let name = self.name.context("missing tool call name")?;
+
     let arguments = if self.arguments.trim().is_empty() {
       "{}"
     } else {

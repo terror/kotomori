@@ -19,6 +19,7 @@ use {
   async_trait::async_trait,
   clap::{Args, Parser},
   command::Command,
+  command_invocation::CommandInvocation,
   component::Component,
   composer::Composer,
   crossterm::{
@@ -45,7 +46,6 @@ use {
   model::Model,
   options::Options,
   provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
-  provider_event::ProviderEvent,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   refresh::Refresh,
@@ -88,6 +88,7 @@ mod agent;
 mod app;
 mod arguments;
 mod command;
+mod command_invocation;
 mod component;
 mod composer;
 mod effect;
@@ -101,7 +102,6 @@ mod message;
 mod model;
 mod options;
 mod provider;
-mod provider_event;
 mod provider_sink;
 mod refresh;
 mod renderer;

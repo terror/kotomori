@@ -54,11 +54,8 @@ impl State {
     match event {
       Event::Action(action) => return self.handle_action(action),
       Event::AgentDone => self.transcript.finish_agent_message(),
-      Event::Error(error) => self.transcript.error(error),
-      Event::Provider(ProviderEvent::Delta(delta)) => {
-        self.transcript.push_agent_delta(&delta);
-      }
-      Event::Provider(ProviderEvent::ToolCall(tool_call)) => {
+      Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
+      Event::AgentToolCall(tool_call) => {
         let message = tool_call.invocation().map_or_else(
           |_| tool_call.to_string(),
           |invocation| invocation.progressive_tense(),
@@ -66,6 +63,7 @@ impl State {
 
         self.transcript.push_agent_delta(&message);
       }
+      Event::Error(error) => self.transcript.error(error),
       Event::Tick => self.transcript.tick(),
     }
 
@@ -247,7 +245,7 @@ mod tests {
         }]
       );
 
-      state.handle_event(Event::Provider(ProviderEvent::Delta("bar".into())));
+      state.handle_event(Event::AgentDelta("bar".into()));
       state.handle_event(Event::AgentDone);
 
       for c in command.chars() {

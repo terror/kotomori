@@ -7,23 +7,6 @@ mod read_file;
 mod search_files;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct CommandInvocation {
-  pub(crate) arguments: Vec<String>,
-  pub(crate) cwd: Option<PathBuf>,
-  pub(crate) program: String,
-}
-
-impl Display for CommandInvocation {
-  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-    if self.arguments.is_empty() {
-      write!(f, "{}", self.program)
-    } else {
-      write!(f, "{} {}", self.program, self.arguments.join(" "))
-    }
-  }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
 pub(crate) struct CommandOutput {
   pub(crate) status: Option<i32>,
@@ -57,6 +40,7 @@ impl ToolCall {
     arguments: impl AsRef<str>,
   ) -> Result<Self> {
     let name = name.into();
+
     let arguments = serde_json::from_str(arguments.as_ref())
       .with_context(|| format!("failed to parse `{name}` arguments"))?;
 
@@ -248,16 +232,14 @@ pub(crate) trait Tool: serde::de::DeserializeOwned + Sized {
 
   fn action(self) -> ToolAction;
 
-  fn decode_arguments(call: &ToolCall) -> Result<Self> {
+  fn decode(call: &ToolCall) -> Result<Self> {
     serde_json::from_value(call.arguments.clone())
       .with_context(|| format!("failed to decode `{}` arguments", call.name))
   }
 
   fn invocation(call: ToolCall) -> Result<ToolInvocation> {
-    let tool = Self::decode_arguments(&call)?;
-
     Ok(ToolInvocation {
-      action: tool.action(),
+      action: Self::decode(&call)?.action(),
       call,
     })
   }
