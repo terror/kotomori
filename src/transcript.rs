@@ -76,39 +76,41 @@ impl Component for Transcript {
     for message in self.messages() {
       match message.role {
         Role::Agent => {
-          lines.push(Line::blank());
           lines.extend(
-            message
-              .content
-              .split('\n')
-              .map(|line| Line::raw(format!(" {line}"))),
+            once(Line::blank())
+              .chain(
+                message
+                  .content
+                  .lines()
+                  .map(|line| Line::raw(format!(" {line}"))),
+              )
+              .chain(once(Line::blank())),
           );
-          lines.push(Line::blank());
         }
         Role::User => lines.extend(message.render(width)),
       }
     }
 
-    if let Some(message) = &self.active_agent_message {
-      if message.is_empty() {
-        lines.push(Line::blank());
-        lines.push(
+    match self.active_agent_message.as_deref() {
+      Some("") => {
+        lines.extend([
+          Line::blank(),
           vec![
             Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
             Span::styled(" Working...", Style::Gray),
           ]
           .into(),
-        );
-        lines.push(Line::blank());
-      } else {
-        lines.push(Line::blank());
-        lines.extend(
-          message
-            .split('\n')
-            .map(|line| Line::raw(format!(" {line}"))),
-        );
-        lines.push(Line::blank());
+          Line::blank(),
+        ]);
       }
+      Some(message) => {
+        lines.extend(
+          once(Line::blank())
+            .chain(message.lines().map(|line| Line::raw(format!(" {line}"))))
+            .chain(once(Line::blank())),
+        );
+      }
+      None => {}
     }
 
     lines
