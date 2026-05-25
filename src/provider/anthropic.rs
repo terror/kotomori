@@ -1,22 +1,10 @@
 use super::*;
 
-const MAX_TOKENS: u32 = 4096;
-
 pub(crate) struct Anthropic {
   client: anthropic_sdk::Anthropic,
 }
 
 impl Anthropic {
-  fn message(message: &Message) -> types::MessageParam {
-    types::MessageParam {
-      content: types::MessageContent::Text(message.content.clone()),
-      role: match message.role {
-        Role::Agent => types::Role::Assistant,
-        Role::User => types::Role::User,
-      },
-    }
-  }
-
   pub(crate) fn new() -> Result<Self> {
     let base_url = env::var("ANTHROPIC_BASE_URL")
       .unwrap_or_else(|_| "https://api.anthropic.com".into());
@@ -33,26 +21,6 @@ impl Anthropic {
       )?,
     })
   }
-
-  fn request(request: &Request) -> types::MessageCreateParams {
-    types::MessageCreateParams {
-      max_tokens: env::var("ANTHROPIC_MAX_TOKENS")
-        .ok()
-        .and_then(|max_tokens| max_tokens.parse::<u32>().ok())
-        .unwrap_or(MAX_TOKENS),
-      messages: request.messages().map(Self::message).collect::<Vec<_>>(),
-      metadata: None,
-      model: request.model_name().into(),
-      stop_sequences: None,
-      stream: Some(true),
-      system: None,
-      temperature: None,
-      tool_choice: None,
-      tools: None,
-      top_k: None,
-      top_p: None,
-    }
-  }
 }
 
 impl Debug for Anthropic {
@@ -67,7 +35,7 @@ impl Provider for Anthropic {
     let mut stream = self
       .client
       .messages()
-      .create_stream(Self::request(&request))
+      .create_stream((&request).into())
       .await?;
 
     while let Some(event) = stream.next().await {
