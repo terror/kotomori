@@ -2,17 +2,12 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct State {
-  active_frame: usize,
   composer: Composer,
   should_quit: bool,
   transcript: Transcript,
 }
 
 impl State {
-  pub(crate) fn active_frame(&self) -> usize {
-    self.active_frame
-  }
-
   pub(crate) fn composer(&self) -> &Composer {
     &self.composer
   }
@@ -61,11 +56,7 @@ impl State {
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
       Event::AgentDone => self.transcript.finish_agent_message(),
       Event::Error(error) => self.transcript.error(error),
-      Event::Tick => {
-        if self.transcript.is_agent_active() {
-          self.active_frame = self.active_frame.wrapping_add(1);
-        }
-      }
+      Event::Tick => self.transcript.tick(),
     }
 
     Vec::new()
@@ -78,7 +69,6 @@ impl State {
 
   pub(crate) fn new(options: &Options) -> Result<Self> {
     Ok(Self {
-      active_frame: 0,
       composer: Composer::new(options.prompt.as_deref().unwrap_or_default())
         .footer(Footer::new(&options.model)?),
       should_quit: false,
@@ -144,7 +134,6 @@ impl State {
     let input = input.to_string();
 
     self.transcript.send(input.clone());
-    self.active_frame = 0;
 
     let messages = self.transcript.messages().to_vec();
 
@@ -236,16 +225,22 @@ mod tests {
 
     state.handle_event(Event::Action(Action::Submit));
 
-    assert_eq!(state.active_frame(), 0);
+    assert_eq!(
+      state.transcript().render(80).last(),
+      Some(&Line::raw("⠋ Working..."))
+    );
 
     state.handle_event(Event::Tick);
 
-    assert_eq!(state.active_frame(), 1);
+    assert_eq!(
+      state.transcript().render(80).last(),
+      Some(&Line::raw("⠙ Working..."))
+    );
 
     state.handle_event(Event::AgentDone);
     state.handle_event(Event::Tick);
 
-    assert_eq!(state.active_frame(), 1);
+    assert_eq!(state.transcript().render(80).last(), Some(&Line::raw("")));
   }
 
   #[test]

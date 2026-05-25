@@ -18,12 +18,7 @@ impl Component for View<'_> {
       .chain(once(Line::blank()))
       .chain(Hint.render(width))
       .chain(once(Line::blank()))
-      .chain(
-        self
-          .state
-          .transcript()
-          .render_active(self.state.active_frame(), width),
-      )
+      .chain(self.state.transcript().render(width))
       .chain(self.state.composer().render(width))
       .collect()
   }
