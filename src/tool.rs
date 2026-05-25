@@ -1,6 +1,30 @@
 use super::*;
 
+mod apply_patch;
+mod command;
+mod list_files;
+mod read_file;
+mod search_files;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CommandInvocation {
+  pub(crate) arguments: Vec<String>,
+  pub(crate) cwd: Option<PathBuf>,
+  pub(crate) program: String,
+}
+
+impl Display for CommandInvocation {
+  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    if self.arguments.is_empty() {
+      write!(f, "{}", self.program)
+    } else {
+      write!(f, "{} {}", self.program, self.arguments.join(" "))
+    }
+  }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) struct CommandOutput {
   pub(crate) status: Option<i32>,
   pub(crate) stderr: String,
@@ -20,6 +44,61 @@ impl From<std::process::Output> for CommandOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ToolCall {
+  pub(crate) arguments: Value,
+  pub(crate) id: String,
+  pub(crate) name: String,
+}
+
+impl ToolCall {
+  pub(crate) fn from_arguments_string(
+    id: impl Into<String>,
+    name: impl Into<String>,
+    arguments: impl AsRef<str>,
+  ) -> Result<Self> {
+    let name = name.into();
+    let arguments = serde_json::from_str(arguments.as_ref())
+      .with_context(|| format!("failed to parse `{name}` arguments"))?;
+
+    Ok(Self::new(id, name, arguments))
+  }
+
+  pub(crate) fn invocation(&self) -> Result<ToolInvocation> {
+    tools()
+      .into_iter()
+      .find(|tool| tool.name == self.name.as_str())
+      .with_context(|| format!("unknown tool `{}`", self.name))?
+      .invocation(self.clone())
+  }
+
+  pub(crate) fn new(
+    id: impl Into<String>,
+    name: impl Into<String>,
+    arguments: Value,
+  ) -> Self {
+    Self {
+      arguments,
+      id: id.into(),
+      name: name.into(),
+    }
+  }
+}
+
+impl Display for ToolCall {
+  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    write!(f, "{} {}", self.name, self.arguments)
+  }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ToolAction {
+  ApplyPatch { cwd: Option<PathBuf>, patch: String },
+  Command(CommandInvocation),
+  ReadFile { path: PathBuf },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) struct ToolError {
   pub(crate) message: String,
 }
@@ -33,208 +112,35 @@ impl ToolError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ToolCall {
-  pub(crate) arguments: String,
-  pub(crate) id: String,
-  pub(crate) name: String,
-}
-
-impl ToolCall {
-  pub(crate) fn invocation(&self) -> Result<ToolInvocation> {
-    let arguments = serde_json::from_str::<Value>(&self.arguments)
-      .with_context(|| format!("failed to parse `{}` arguments", self.name))?;
-
-    ToolInvocation::from_json(&self.name, &arguments)
-  }
-
-  pub(crate) fn new(
-    id: impl Into<String>,
-    name: impl Into<String>,
-    arguments: impl Into<String>,
-  ) -> Self {
-    Self {
-      arguments: arguments.into(),
-      id: id.into(),
-      name: name.into(),
-    }
-  }
-}
-
-impl Display for ToolCall {
-  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-    write!(f, "{} {}", self.name, self.arguments)
-  }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ToolDefinition {
-  description: &'static str,
-  name: &'static str,
-  parameters: Value,
-}
-
-impl ToolDefinition {
-  pub(crate) fn anthropic(&self) -> types::Tool {
-    let Value::Object(schema) = self.parameters.clone() else {
-      unreachable!()
-    };
-
-    let properties = schema
-      .get("properties")
-      .and_then(Value::as_object)
-      .cloned()
-      .unwrap_or_default();
-
-    let required = schema
-      .get("required")
-      .and_then(Value::as_array)
-      .into_iter()
-      .flatten()
-      .filter_map(Value::as_str)
-      .map(str::to_string)
-      .collect();
-
-    let additional = schema
-      .into_iter()
-      .filter(|(key, _)| {
-        key != "properties" && key != "required" && key != "type"
-      })
-      .collect();
-
-    types::Tool {
-      description: self.description.into(),
-      input_schema: types::ToolInputSchema {
-        additional,
-        properties,
-        required,
-        schema_type: "object".into(),
-      },
-      name: self.name.into(),
-    }
-  }
-
-  fn new(
-    name: &'static str,
-    description: &'static str,
-    parameters: Value,
-  ) -> Self {
-    Self {
-      description,
-      name,
-      parameters,
-    }
-  }
-
-  pub(crate) fn openai(&self) -> ChatCompletionTools {
-    ChatCompletionTools::Function(ChatCompletionTool {
-      function: FunctionObject {
-        description: Some(self.description.into()),
-        name: self.name.into(),
-        parameters: Some(self.parameters.clone()),
-        strict: None,
-      },
-    })
-  }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ToolInvocation {
-  ApplyPatch {
-    cwd: Option<PathBuf>,
-    patch: String,
-  },
-  Command {
-    arguments: Vec<String>,
-    cwd: Option<PathBuf>,
-    program: String,
-  },
-  ListFiles {
-    cwd: Option<PathBuf>,
-  },
-  ReadFile {
-    path: PathBuf,
-  },
-  Rg {
-    arguments: Vec<String>,
-    cwd: Option<PathBuf>,
-  },
+pub(crate) struct ToolInvocation {
+  pub(crate) action: ToolAction,
+  pub(crate) call: ToolCall,
 }
 
 impl ToolInvocation {
   fn action(&self, tense: ToolActionTense) -> &'static str {
     match tense {
-      ToolActionTense::Past => match self {
-        Self::ListFiles { .. } => "Listed",
-        Self::ReadFile { .. } => "Read",
-        Self::ApplyPatch { .. } | Self::Command { .. } | Self::Rg { .. } => {
-          "Ran"
-        }
+      ToolActionTense::Past => match self.call.name.as_str() {
+        "list_files" => "Listed",
+        "read_file" => "Read",
+        _ => "Ran",
       },
-      ToolActionTense::Progressive => match self {
-        Self::ListFiles { .. } => "Listing",
-        Self::ReadFile { .. } => "Reading",
-        Self::ApplyPatch { .. } | Self::Command { .. } | Self::Rg { .. } => {
-          "Running"
-        }
+      ToolActionTense::Progressive => match self.call.name.as_str() {
+        "list_files" => "Listing",
+        "read_file" => "Reading",
+        _ => "Running",
       },
     }
   }
 
-  fn command_line(program: &str, arguments: &[String]) -> String {
-    if arguments.is_empty() {
-      program.into()
-    } else {
-      format!("{program} {}", arguments.join(" "))
+  fn command(&self) -> Option<&CommandInvocation> {
+    match &self.action {
+      ToolAction::Command(command) => Some(command),
+      ToolAction::ApplyPatch { .. } | ToolAction::ReadFile { .. } => None,
     }
   }
 
-  fn field<'a>(arguments: &'a Value, name: &str) -> Result<&'a Value> {
-    arguments
-      .get(name)
-      .with_context(|| format!("missing `{name}`"))
-  }
-
-  fn from_json(name: &str, arguments: &Value) -> Result<Self> {
-    match name {
-      "apply_patch" => Ok(Self::ApplyPatch {
-        cwd: Self::optional_path(arguments, "cwd")?,
-        patch: Self::required_string(arguments, "patch")?,
-      }),
-      "command" => Ok(Self::Command {
-        arguments: Self::string_array(arguments, "arguments")?,
-        cwd: Self::optional_path(arguments, "cwd")?,
-        program: Self::required_string(arguments, "program")?,
-      }),
-      "list_files" => Ok(Self::ListFiles {
-        cwd: Self::optional_path(arguments, "cwd")?,
-      }),
-      "read_file" => Ok(Self::ReadFile {
-        path: PathBuf::from(Self::required_string(arguments, "path")?),
-      }),
-      "rg" => Ok(Self::Rg {
-        arguments: Self::string_array(arguments, "arguments")?,
-        cwd: Self::optional_path(arguments, "cwd")?,
-      }),
-      _ => bail!("unknown tool `{name}`"),
-    }
-  }
-
-  fn optional_path(arguments: &Value, name: &str) -> Result<Option<PathBuf>> {
-    let Some(value) = arguments.get(name) else {
-      return Ok(None);
-    };
-
-    if value.is_null() {
-      return Ok(None);
-    }
-
-    Ok(Some(PathBuf::from(
-      value
-        .as_str()
-        .with_context(|| format!("`{name}` must be a string"))?,
-    )))
-  }
-
+  #[allow(dead_code)]
   pub(crate) fn past_tense(&self) -> String {
     self.title(ToolActionTense::Past)
   }
@@ -243,43 +149,26 @@ impl ToolInvocation {
     self.title(ToolActionTense::Progressive)
   }
 
-  fn required_string(arguments: &Value, name: &str) -> Result<String> {
-    Ok(
-      Self::field(arguments, name)?
-        .as_str()
-        .with_context(|| format!("`{name}` must be a string"))?
-        .into(),
-    )
-  }
-
-  fn string_array(arguments: &Value, name: &str) -> Result<Vec<String>> {
-    Self::field(arguments, name)?
-      .as_array()
-      .with_context(|| format!("`{name}` must be an array"))?
-      .iter()
-      .map(|value| {
-        Ok(
-          value
-            .as_str()
-            .with_context(|| format!("`{name}` entries must be strings"))?
-            .into(),
-        )
-      })
-      .collect()
-  }
-
   fn subject(&self) -> String {
-    match self {
-      Self::ApplyPatch { .. } => "apply_patch".into(),
-      Self::Command {
-        arguments, program, ..
-      } => Self::command_line(program, arguments),
-      Self::ListFiles { cwd } => cwd.as_ref().map_or_else(
-        || "files".into(),
-        |cwd| format!("files in {}", cwd.display()),
-      ),
-      Self::ReadFile { path } => path.display().to_string(),
-      Self::Rg { arguments, .. } => Self::command_line("rg", arguments),
+    match self.call.name.as_str() {
+      "apply_patch" => "apply_patch".into(),
+      "command" | "search_files" => self
+        .command()
+        .map_or_else(|| self.call.name.clone(), ToString::to_string),
+      "list_files" => self
+        .command()
+        .and_then(|command| command.cwd.as_ref())
+        .map_or_else(
+          || "files".into(),
+          |cwd| format!("files in {}", cwd.display()),
+        ),
+      "read_file" => match &self.action {
+        ToolAction::ReadFile { path } => path.display().to_string(),
+        ToolAction::ApplyPatch { .. } | ToolAction::Command(_) => {
+          self.call.name.clone()
+        }
+      },
+      _ => self.call.name.clone(),
     }
   }
 
@@ -296,117 +185,112 @@ enum ToolActionTense {
 
 impl Display for ToolInvocation {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-    match self {
-      Self::ApplyPatch { .. } => write!(f, "apply_patch"),
-      Self::Command {
-        arguments, program, ..
-      } => write!(f, "{}", Self::command_line(program, arguments)),
-      Self::ListFiles { cwd } => {
-        if let Some(cwd) = cwd {
+    match self.call.name.as_str() {
+      "apply_patch" => write!(f, "apply_patch"),
+      "command" | "search_files" => {
+        if let Some(command) = self.command() {
+          write!(f, "{command}")
+        } else {
+          write!(f, "{}", self.call.name)
+        }
+      }
+      "list_files" => {
+        if let Some(cwd) =
+          self.command().and_then(|command| command.cwd.as_ref())
+        {
           write!(f, "list files in {}", cwd.display())
         } else {
           write!(f, "list files")
         }
       }
-      Self::ReadFile { path } => write!(f, "read {}", path.display()),
-      Self::Rg { arguments, .. } => {
-        write!(f, "{}", Self::command_line("rg", arguments))
-      }
+      "read_file" => match &self.action {
+        ToolAction::ReadFile { path } => write!(f, "read {}", path.display()),
+        ToolAction::ApplyPatch { .. } | ToolAction::Command(_) => {
+          write!(f, "{}", self.call.name)
+        }
+      },
+      _ => write!(f, "{}", self.call.name),
     }
   }
 }
 
-pub(crate) fn tool_definitions() -> Vec<ToolDefinition> {
+#[derive(Clone, Copy)]
+pub(crate) struct RegisteredTool {
+  pub(crate) description: &'static str,
+  invocation: fn(ToolCall) -> Result<ToolInvocation>,
+  pub(crate) name: &'static str,
+  parameters: fn() -> Value,
+}
+
+impl RegisteredTool {
+  pub(crate) fn invocation(&self, call: ToolCall) -> Result<ToolInvocation> {
+    (self.invocation)(call)
+  }
+
+  fn new<T: Tool>() -> Self {
+    Self {
+      description: T::DESCRIPTION,
+      invocation: T::invocation,
+      name: T::NAME,
+      parameters: T::parameters,
+    }
+  }
+
+  pub(crate) fn parameters(&self) -> Value {
+    (self.parameters)()
+  }
+}
+
+pub(crate) trait Tool: serde::de::DeserializeOwned + Sized {
+  const DESCRIPTION: &'static str;
+
+  const NAME: &'static str;
+
+  fn action(self) -> ToolAction;
+
+  fn decode_arguments(call: &ToolCall) -> Result<Self> {
+    serde_json::from_value(call.arguments.clone())
+      .with_context(|| format!("failed to decode `{}` arguments", call.name))
+  }
+
+  fn invocation(call: ToolCall) -> Result<ToolInvocation> {
+    let tool = Self::decode_arguments(&call)?;
+
+    Ok(ToolInvocation {
+      action: tool.action(),
+      call,
+    })
+  }
+
+  fn parameters() -> Value;
+}
+
+pub(crate) fn tools() -> Vec<RegisteredTool> {
   vec![
-    ToolDefinition::new(
-      "list_files",
-      "List project files while respecting .gitignore and other standard ignore rules.",
-      json!({
-        "type": "object",
-        "properties": {
-          "cwd": {"type": ["string", "null"]}
-        },
-        "required": [],
-        "additionalProperties": false
-      }),
-    ),
-    ToolDefinition::new(
-      "rg",
-      "Search files with ripgrep.",
-      json!({
-        "type": "object",
-        "properties": {
-          "arguments": {
-            "type": "array",
-            "items": {"type": "string"}
-          },
-          "cwd": {"type": ["string", "null"]}
-        },
-        "required": ["arguments"],
-        "additionalProperties": false
-      }),
-    ),
-    ToolDefinition::new(
-      "read_file",
-      "Read a UTF-8 text file.",
-      json!({
-        "type": "object",
-        "properties": {
-          "path": {"type": "string"}
-        },
-        "required": ["path"],
-        "additionalProperties": false
-      }),
-    ),
-    ToolDefinition::new(
-      "command",
-      "Run a command and capture stdout, stderr, and exit status. Do not use this to list project files; use list_files instead.",
-      json!({
-        "type": "object",
-        "properties": {
-          "program": {"type": "string"},
-          "arguments": {
-            "type": "array",
-            "items": {"type": "string"}
-          },
-          "cwd": {"type": ["string", "null"]}
-        },
-        "required": ["program", "arguments"],
-        "additionalProperties": false
-      }),
-    ),
-    ToolDefinition::new(
-      "apply_patch",
-      "Apply a unified patch to the workspace.",
-      json!({
-        "type": "object",
-        "properties": {
-          "patch": {"type": "string"},
-          "cwd": {"type": ["string", "null"]}
-        },
-        "required": ["patch"],
-        "additionalProperties": false
-      }),
-    ),
+    RegisteredTool::new::<list_files::ListFiles>(),
+    RegisteredTool::new::<search_files::SearchFiles>(),
+    RegisteredTool::new::<read_file::ReadFile>(),
+    RegisteredTool::new::<command::Command>(),
+    RegisteredTool::new::<apply_patch::ApplyPatch>(),
   ]
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) enum ToolOutput {
-  ApplyPatch(CommandOutput),
   Command(CommandOutput),
-  ListFiles(CommandOutput),
-  ReadFile(String),
-  Rg(CommandOutput),
+  Text(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) struct ToolResult {
   pub(crate) invocation: ToolInvocation,
   pub(crate) output: std::result::Result<ToolOutput, ToolError>,
 }
 
 impl ToolResult {
+  #[allow(dead_code)]
   pub(crate) fn error(
     invocation: ToolInvocation,
     message: impl Into<String>,
@@ -417,6 +301,7 @@ impl ToolResult {
     }
   }
 
+  #[allow(dead_code)]
   pub(crate) fn message(&self) -> String {
     match &self.output {
       Ok(output) => format!(
@@ -430,6 +315,7 @@ impl ToolResult {
     }
   }
 
+  #[allow(dead_code)]
   pub(crate) fn ok(invocation: ToolInvocation, output: ToolOutput) -> Self {
     Self {
       invocation,
@@ -465,11 +351,8 @@ impl ToolOutput {
 
   pub(crate) fn content(&self) -> String {
     match self {
-      Self::ApplyPatch(output)
-      | Self::Command(output)
-      | Self::ListFiles(output)
-      | Self::Rg(output) => Self::command_content(output),
-      Self::ReadFile(content) => content.clone(),
+      Self::Command(output) => Self::command_content(output),
+      Self::Text(content) => content.clone(),
     }
   }
 }
@@ -479,48 +362,13 @@ mod tests {
   use super::*;
 
   #[test]
-  fn parses_tool_calls() {
-    #[track_caller]
-    fn case(call: &ToolCall, expected: &ToolInvocation) {
-      assert_eq!(&call.invocation().unwrap(), expected);
-    }
-
-    case(
-      &ToolCall::new("foo", "rg", r#"{"arguments":["foo"],"cwd":"bar"}"#),
-      &ToolInvocation::Rg {
-        arguments: vec!["foo".into()],
-        cwd: Some("bar".into()),
-      },
-    );
-
-    case(
-      &ToolCall::new("foo", "read_file", r#"{"path":"bar"}"#),
-      &ToolInvocation::ReadFile { path: "bar".into() },
-    );
-
-    case(
-      &ToolCall::new("foo", "list_files", r#"{"cwd":"bar"}"#),
-      &ToolInvocation::ListFiles {
-        cwd: Some("bar".into()),
-      },
-    );
-
-    case(
-      &ToolCall::new(
-        "foo",
-        "command",
-        r#"{"program":"bar","arguments":["baz"],"cwd":null}"#,
-      ),
-      &ToolInvocation::Command {
-        arguments: vec!["baz".into()],
-        cwd: None,
-        program: "bar".into(),
-      },
-    );
-
-    case(
-      &ToolCall::new("foo", "apply_patch", r#"{"patch":"bar"}"#),
-      &ToolInvocation::ApplyPatch {
+  fn parses_apply_patch_tool_call() {
+    assert_eq!(
+      ToolCall::new("foo", "apply_patch", json!({"patch": "bar"}))
+        .invocation()
+        .unwrap()
+        .action,
+      ToolAction::ApplyPatch {
         cwd: None,
         patch: "bar".into(),
       },
@@ -528,9 +376,82 @@ mod tests {
   }
 
   #[test]
+  fn parses_command_tool_call() {
+    assert_eq!(
+      ToolCall::new(
+        "foo",
+        "command",
+        json!({"program": "bar", "arguments": ["baz"], "cwd": null}),
+      )
+      .invocation()
+      .unwrap()
+      .action,
+      ToolAction::Command(CommandInvocation {
+        arguments: vec!["baz".into()],
+        cwd: None,
+        program: "bar".into(),
+      }),
+    );
+  }
+
+  #[test]
+  fn parses_list_files_tool_call() {
+    assert_eq!(
+      ToolCall::new("foo", "list_files", json!({"cwd": "bar"}))
+        .invocation()
+        .unwrap()
+        .action,
+      ToolAction::Command(CommandInvocation {
+        arguments: vec!["--files".into()],
+        cwd: Some("bar".into()),
+        program: "rg".into(),
+      }),
+    );
+  }
+
+  #[test]
+  fn parses_read_file_tool_call() {
+    assert_eq!(
+      ToolCall::new("foo", "read_file", json!({"path": "bar"}))
+        .invocation()
+        .unwrap()
+        .action,
+      ToolAction::ReadFile { path: "bar".into() },
+    );
+  }
+
+  #[test]
+  fn parses_search_files_tool_call() {
+    assert_eq!(
+      ToolCall::new(
+        "foo",
+        "search_files",
+        json!({"arguments": ["foo"], "cwd": "bar"}),
+      )
+      .invocation()
+      .unwrap()
+      .action,
+      ToolAction::Command(CommandInvocation {
+        arguments: vec!["foo".into()],
+        cwd: Some("bar".into()),
+        program: "rg".into(),
+      }),
+    );
+  }
+
+  #[test]
+  fn parses_tool_call_arguments() {
+    assert_eq!(
+      ToolCall::from_arguments_string("foo", "read_file", r#"{"path":"bar"}"#)
+        .unwrap(),
+      ToolCall::new("foo", "read_file", json!({"path": "bar"})),
+    );
+  }
+
+  #[test]
   fn unknown_tool_errors() {
     assert_eq!(
-      ToolCall::new("foo", "bar", "{}")
+      ToolCall::new("foo", "bar", json!({}))
         .invocation()
         .unwrap_err()
         .to_string(),

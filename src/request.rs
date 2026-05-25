@@ -31,38 +31,6 @@ impl Request {
   }
 }
 
-impl From<&Request> for types::MessageCreateParams {
-  fn from(request: &Request) -> Self {
-    request
-      .messages()
-      .map(types::MessageParam::from)
-      .fold(
-        types::MessageCreateBuilder::new(
-          request.model_name(),
-          env::var("ANTHROPIC_MAX_TOKENS")
-            .ok()
-            .and_then(|max_tokens| max_tokens.parse::<u32>().ok())
-            .unwrap_or(4096),
-        ),
-        |builder, message| builder.message(message.role, message.content),
-      )
-      .build()
-  }
-}
-
-impl TryFrom<&Request> for CreateChatCompletionRequest {
-  type Error = Error;
-
-  fn try_from(request: &Request) -> Result<Self> {
-    Ok(
-      CreateChatCompletionRequestArgs::default()
-        .model(request.model_name())
-        .messages(request.messages().map(Into::into).collect::<Vec<_>>())
-        .build()?,
-    )
-  }
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;

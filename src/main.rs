@@ -45,6 +45,7 @@ use {
   model::Model,
   options::Options,
   provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
+  provider_event::ProviderEvent,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   refresh::Refresh,
@@ -57,6 +58,7 @@ use {
   std::{
     backtrace::BacktraceStatus,
     cmp::Ordering,
+    collections::BTreeMap,
     env,
     fmt::{self, Debug, Display, Formatter},
     io::{self, Stdout, Write},
@@ -75,6 +77,7 @@ use {
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     time::{interval, sleep},
   },
+  tool::{RegisteredTool, ToolCall, tools},
   transcript::Transcript,
   unicode_width::UnicodeWidthChar,
   view::View,
@@ -98,6 +101,7 @@ mod message;
 mod model;
 mod options;
 mod provider;
+mod provider_event;
 mod provider_sink;
 mod refresh;
 mod renderer;
@@ -107,7 +111,6 @@ mod span;
 mod state;
 mod style;
 mod terminal;
-#[allow(dead_code)]
 mod tool;
 mod transcript;
 mod view;
