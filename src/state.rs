@@ -161,16 +161,30 @@ mod tests {
 
     state.handle_event(Event::Action(Action::Submit));
 
-    assert_eq!(
-      state.transcript().render(80).last(),
-      Some(&Line::raw("⠋ Working..."))
+    assert!(
+      state.transcript().render(80).ends_with(&[
+        Line::blank(),
+        vec![
+          Span::styled("✦", Style::CyanBold),
+          Span::styled(" Working...", Style::Gray),
+        ]
+        .into(),
+        Line::blank(),
+      ])
     );
 
     state.handle_event(Event::Tick);
 
-    assert_eq!(
-      state.transcript().render(80).last(),
-      Some(&Line::raw("⠙ Working..."))
+    assert!(
+      state.transcript().render(80).ends_with(&[
+        Line::blank(),
+        vec![
+          Span::styled("✧", Style::CyanBold),
+          Span::styled(" Working...", Style::Gray),
+        ]
+        .into(),
+        Line::blank(),
+      ])
     );
 
     state.handle_event(Event::AgentDone);

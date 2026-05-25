@@ -8,7 +8,7 @@ pub(crate) struct Transcript {
 }
 
 impl Transcript {
-  const FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  const FRAMES: &[&str] = &["✦", "✧", "✶", "✹", "✶", "✧"];
 
   pub(crate) fn clear(&mut self) {
     self.active_agent_message = None;
@@ -71,20 +71,43 @@ impl Transcript {
 
 impl Component for Transcript {
   fn render(&self, width: u16) -> Vec<Line> {
-    let mut lines = self
-      .messages()
-      .iter()
-      .flat_map(|message| message.render(width))
-      .collect::<Vec<_>>();
+    let mut lines = Vec::new();
+
+    for message in self.messages() {
+      match message.role {
+        Role::Agent => {
+          lines.push(Line::blank());
+          lines.extend(
+            message
+              .content
+              .split('\n')
+              .map(|line| Line::raw(format!(" {line}"))),
+          );
+          lines.push(Line::blank());
+        }
+        Role::User => lines.extend(message.render(width)),
+      }
+    }
 
     if let Some(message) = &self.active_agent_message {
       if message.is_empty() {
-        lines.push(Line::raw(format!(
-          "{} Working...",
-          Self::spinner(self.active_frame)
-        )));
+        lines.push(Line::blank());
+        lines.push(
+          vec![
+            Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
+            Span::styled(" Working...", Style::Gray),
+          ]
+          .into(),
+        );
+        lines.push(Line::blank());
       } else {
-        lines.extend(Message::new(Role::Agent, message).render(width));
+        lines.push(Line::blank());
+        lines.extend(
+          message
+            .split('\n')
+            .map(|line| Line::raw(format!(" {line}"))),
+        );
+        lines.push(Line::blank());
       }
     }
 
@@ -106,13 +129,24 @@ mod tests {
       transcript.tick();
     }
 
-    assert_eq!(
-      transcript.render(80).last(),
-      Some(&Line::raw("⠼ Working..."))
+    assert!(
+      transcript.render(80).ends_with(&[
+        Line::blank(),
+        vec![
+          Span::styled("✶", Style::CyanBold),
+          Span::styled(" Working...", Style::Gray),
+        ]
+        .into(),
+        Line::blank(),
+      ])
     );
 
     transcript.push_agent_delta("bar");
 
-    assert_eq!(transcript.render(80).last(), Some(&Line::raw("bar")));
+    assert!(transcript.render(80).ends_with(&[
+      Line::blank(),
+      Line::raw(" bar"),
+      Line::blank(),
+    ]));
   }
 }
