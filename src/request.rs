@@ -31,56 +31,6 @@ impl Request {
   }
 }
 
-fn anthropic_tool(tool: &RegisteredTool) -> types::Tool {
-  let Value::Object(schema) = tool.parameters() else {
-    unreachable!()
-  };
-
-  let properties = schema
-    .get("properties")
-    .and_then(Value::as_object)
-    .cloned()
-    .unwrap_or_default();
-
-  let required = schema
-    .get("required")
-    .and_then(Value::as_array)
-    .into_iter()
-    .flatten()
-    .filter_map(Value::as_str)
-    .map(str::to_string)
-    .collect();
-
-  let additional = schema
-    .into_iter()
-    .filter(|(key, _)| {
-      key != "properties" && key != "required" && key != "type"
-    })
-    .collect();
-
-  types::Tool {
-    description: tool.description.into(),
-    input_schema: types::ToolInputSchema {
-      additional,
-      properties,
-      required,
-      schema_type: "object".into(),
-    },
-    name: tool.name.into(),
-  }
-}
-
-fn openai_tool(tool: &RegisteredTool) -> ChatCompletionTools {
-  ChatCompletionTools::Function(ChatCompletionTool {
-    function: FunctionObject {
-      description: Some(tool.description.into()),
-      name: tool.name.into(),
-      parameters: Some(tool.parameters()),
-      strict: None,
-    },
-  })
-}
-
 impl From<&Request> for types::MessageCreateParams {
   fn from(request: &Request) -> Self {
     request
@@ -99,7 +49,7 @@ impl From<&Request> for types::MessageCreateParams {
       .tools(
         inventory::iter::<RegisteredTool>
           .into_iter()
-          .map(anthropic_tool)
+          .map(Into::into)
           .collect::<Vec<_>>(),
       )
       .build()
@@ -117,7 +67,7 @@ impl TryFrom<&Request> for CreateChatCompletionRequest {
         .tools(
           inventory::iter::<RegisteredTool>
             .into_iter()
-            .map(openai_tool)
+            .map(Into::into)
             .collect::<Vec<_>>(),
         )
         .build()?,
