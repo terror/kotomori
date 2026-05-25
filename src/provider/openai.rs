@@ -6,38 +6,8 @@ pub(crate) struct OpenAi {
 }
 
 impl OpenAi {
-  fn message(message: &Message) -> ChatCompletionRequestMessage {
-    match message.role {
-      Role::Agent => ChatCompletionRequestMessage::Assistant(
-        ChatCompletionRequestAssistantMessage {
-          content: Some(ChatCompletionRequestAssistantMessageContent::Text(
-            message.content.clone(),
-          )),
-          ..Default::default()
-        },
-      ),
-      Role::User => {
-        ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
-          content: ChatCompletionRequestUserMessageContent::Text(
-            message.content.clone(),
-          ),
-          name: None,
-        })
-      }
-    }
-  }
-
   pub(crate) fn new() -> Self {
     Self::with_config(OpenAIConfig::new())
-  }
-
-  fn request(request: &Request) -> Result<CreateChatCompletionRequest> {
-    Ok(
-      CreateChatCompletionRequestArgs::default()
-        .model(request.model_name())
-        .messages(request.messages().map(Self::message).collect::<Vec<_>>())
-        .build()?,
-    )
   }
 
   pub(crate) fn with_config(config: OpenAIConfig) -> Self {
@@ -53,7 +23,7 @@ impl Provider for OpenAi {
     let mut stream = self
       .client
       .chat()
-      .create_stream(Self::request(&request)?)
+      .create_stream((&request).try_into()?)
       .await?;
 
     while let Some(response) = stream.next().await {

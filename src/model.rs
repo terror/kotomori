@@ -22,20 +22,6 @@ impl Display for Model {
   }
 }
 
-impl TryFrom<Model> for Arc<dyn Provider> {
-  type Error = Error;
-
-  fn try_from(model: Model) -> Result<Self> {
-    match model.provider.as_str() {
-      "anthropic" => Ok(Arc::new(Anthropic::new()?)),
-      "fake" => Ok(Arc::new(Fake)),
-      "ollama" => Ok(Arc::new(Ollama::new())),
-      "openai" => Ok(Arc::new(OpenAi::new())),
-      provider => bail!("unknown provider `{provider}`"),
-    }
-  }
-}
-
 impl FromStr for Model {
   type Err = Error;
 
@@ -58,6 +44,20 @@ impl FromStr for Model {
       name: name.into(),
       provider: provider.into(),
     })
+  }
+}
+
+impl TryFrom<Model> for Arc<dyn Provider> {
+  type Error = Error;
+
+  fn try_from(model: Model) -> Result<Self> {
+    match model.provider.as_str() {
+      "anthropic" => Ok(Arc::new(Anthropic::new()?)),
+      "fake" => Ok(Arc::new(Fake)),
+      "ollama" => Ok(Arc::new(Ollama::new())),
+      "openai" => Ok(Arc::new(OpenAi::new())),
+      provider => bail!("unknown provider `{provider}`"),
+    }
   }
 }
 
