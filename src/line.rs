@@ -77,15 +77,15 @@ impl Display for Line {
   }
 }
 
-impl From<Vec<Span>> for Line {
-  fn from(spans: Vec<Span>) -> Self {
-    Self { spans }
-  }
-}
-
 impl From<Line> for Vec<Span> {
   fn from(line: Line) -> Self {
     line.spans
+  }
+}
+
+impl From<Vec<Span>> for Line {
+  fn from(spans: Vec<Span>) -> Self {
+    Self { spans }
   }
 }
 
