@@ -1,9 +1,21 @@
 use {
   action::Action,
   agent::Agent,
-  anyhow::{Context, Error},
+  anthropic_sdk::{AuthMethod, types},
+  anyhow::{Context, Error, bail},
   app::App,
   arguments::Arguments,
+  async_openai::{
+    config::OpenAIConfig,
+    types::chat::{
+      ChatCompletionRequestAssistantMessage,
+      ChatCompletionRequestAssistantMessageContent,
+      ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
+      ChatCompletionRequestUserMessageContent, CreateChatCompletionRequest,
+      CreateChatCompletionRequestArgs,
+    },
+  },
+  async_trait::async_trait,
   clap::{Args, Parser},
   command::Command,
   component::Component,
@@ -22,25 +34,36 @@ use {
   },
   effect::Effect,
   event::Event,
+  footer::Footer,
   framed_lines::FramedLines,
+  futures_util::StreamExt,
   header::Header,
   hint::Hint,
   line::Line,
   message::Message,
+  model::Model,
   options::Options,
+  provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
+  provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   refresh::Refresh,
   renderer::Renderer,
+  request::Request,
   role::Role,
   span::Span,
   state::State,
   std::{
     backtrace::BacktraceStatus,
     cmp::Ordering,
-    fmt::{self, Display, Formatter},
+    env,
+    fmt::{self, Debug, Display, Formatter},
     io::{self, Stdout, Write},
     iter::once,
-    process, thread,
+    path::PathBuf,
+    process,
+    str::{self, FromStr},
+    sync::Arc,
+    thread,
     time::Duration,
   },
   strum::{EnumIter, IntoEnumIterator},
@@ -48,7 +71,7 @@ use {
   terminal::Terminal,
   tokio::{
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    time::sleep,
+    time::{interval, sleep},
   },
   transcript::Transcript,
   unicode_width::UnicodeWidthChar,
@@ -64,14 +87,19 @@ mod component;
 mod composer;
 mod effect;
 mod event;
+mod footer;
 mod framed_lines;
 mod header;
 mod hint;
 mod line;
 mod message;
+mod model;
 mod options;
+mod provider;
+mod provider_sink;
 mod refresh;
 mod renderer;
+mod request;
 mod role;
 mod span;
 mod state;

@@ -56,6 +56,7 @@ impl State {
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
       Event::AgentDone => self.transcript.finish_agent_message(),
       Event::Error(error) => self.transcript.error(error),
+      Event::Tick => self.transcript.tick(),
     }
 
     Vec::new()
@@ -66,12 +67,13 @@ impl State {
     self.composer.input_text()
   }
 
-  pub(crate) fn new(input: &str) -> Self {
-    Self {
-      composer: Composer::new(input),
+  pub(crate) fn new(options: &Options) -> Result<Self> {
+    Ok(Self {
+      composer: Composer::new(options.prompt.as_deref().unwrap_or_default())
+        .footer(Footer::new(&options.model)?),
       should_quit: false,
       transcript: Transcript::new(),
-    }
+    })
   }
 
   fn quit(&mut self) {
@@ -133,9 +135,11 @@ impl State {
 
     self.transcript.send(input.clone());
 
+    let messages = self.transcript.messages().to_vec();
+
     self.reset_input();
 
-    vec![Effect::RunAgent { input }]
+    vec![Effect::RunAgent { messages }]
   }
 
   pub(crate) fn transcript(&self) -> &Transcript {
@@ -147,16 +151,41 @@ impl State {
 mod tests {
   use super::*;
 
-  fn input(c: char) -> Event {
-    Event::Action(Action::Edit(Input {
-      key: Key::Char(c),
-      ..Default::default()
-    }))
+  #[test]
+  fn active_frame_ticks() {
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+
+    assert_eq!(
+      state.transcript().render(80).last(),
+      Some(&Line::raw("⠋ Working..."))
+    );
+
+    state.handle_event(Event::Tick);
+
+    assert_eq!(
+      state.transcript().render(80).last(),
+      Some(&Line::raw("⠙ Working..."))
+    );
+
+    state.handle_event(Event::AgentDone);
+    state.handle_event(Event::Tick);
+
+    assert_eq!(state.transcript().render(80).last(), Some(&Line::raw("")));
   }
 
   #[test]
   fn command_autocomplete() {
-    let mut state = State::new("/");
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("/".into()),
+    })
+    .unwrap();
 
     assert_eq!(
       state
@@ -181,12 +210,16 @@ mod tests {
   fn command_clear() {
     #[track_caller]
     fn case(command: &str) {
-      let mut state = State::new("foo");
+      let mut state = State::new(&Options {
+        model: "fake:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+      })
+      .unwrap();
 
       assert_eq!(
         state.handle_event(Event::Action(Action::Submit)),
         vec![Effect::RunAgent {
-          input: "foo".into()
+          messages: vec![Message::new(Role::User, "foo")]
         }]
       );
 
@@ -194,7 +227,10 @@ mod tests {
       state.handle_event(Event::AgentDone);
 
       for c in command.chars() {
-        state.handle_event(input(c));
+        state.handle_event(Event::Action(Action::Edit(Input {
+          key: Key::Char(c),
+          ..Default::default()
+        })));
       }
 
       state.handle_event(Event::Action(Action::Submit));
@@ -209,12 +245,16 @@ mod tests {
 
   #[test]
   fn error_clears_active_message() {
-    let mut state = State::new("foo");
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+    })
+    .unwrap();
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        input: "foo".into()
+        messages: vec![Message::new(Role::User, "foo")]
       }]
     );
 
@@ -226,23 +266,37 @@ mod tests {
     );
 
     for c in "baz".chars() {
-      state.handle_event(input(c));
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
     }
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        input: "baz".into()
+        messages: vec![
+          Message::new(Role::User, "foo"),
+          Message::new(Role::Agent, "bar"),
+          Message::new(Role::User, "baz"),
+        ]
       }]
     );
   }
 
   #[test]
   fn multiline_input() {
-    let mut state = State::new("");
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some(String::new()),
+    })
+    .unwrap();
 
     for c in "foo".chars() {
-      state.handle_event(input(c));
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
     }
 
     state.handle_event(Event::Action(Action::Edit(Input {
@@ -251,20 +305,27 @@ mod tests {
     })));
 
     for c in "bar".chars() {
-      state.handle_event(input(c));
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
     }
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        input: "foo\nbar".into()
+        messages: vec![Message::new(Role::User, "foo\nbar")]
       }]
     );
   }
 
   #[test]
   fn unknown_command() {
-    let mut state = State::new("/foobar");
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("/foobar".into()),
+    })
+    .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
 

@@ -3,10 +3,13 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Transcript {
   active_agent_message: Option<String>,
+  active_frame: usize,
   messages: Vec<Message>,
 }
 
 impl Transcript {
+  const FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
   pub(crate) fn clear(&mut self) {
     self.active_agent_message = None;
     self.messages.clear();
@@ -34,6 +37,7 @@ impl Transcript {
   pub(crate) fn new() -> Self {
     Self {
       active_agent_message: None,
+      active_frame: 0,
       messages: Vec::new(),
     }
   }
@@ -51,6 +55,17 @@ impl Transcript {
   pub(crate) fn send(&mut self, input: String) {
     self.messages.push(Message::new(Role::User, input));
     self.active_agent_message = Some(String::new());
+    self.active_frame = 0;
+  }
+
+  fn spinner(frame: usize) -> &'static str {
+    Self::FRAMES[frame % Self::FRAMES.len()]
+  }
+
+  pub(crate) fn tick(&mut self) {
+    if self.is_agent_active() {
+      self.active_frame = self.active_frame.wrapping_add(1);
+    }
   }
 }
 
@@ -63,9 +78,41 @@ impl Component for Transcript {
       .collect::<Vec<_>>();
 
     if let Some(message) = &self.active_agent_message {
-      lines.extend(Message::new(Role::Agent, message).render(width));
+      if message.is_empty() {
+        lines.push(Line::raw(format!(
+          "{} Working...",
+          Self::spinner(self.active_frame)
+        )));
+      } else {
+        lines.extend(Message::new(Role::Agent, message).render(width));
+      }
     }
 
     lines
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn active_rendering() {
+    let mut transcript = Transcript::new();
+
+    transcript.send("foo".into());
+
+    for _ in 0..4 {
+      transcript.tick();
+    }
+
+    assert_eq!(
+      transcript.render(80).last(),
+      Some(&Line::raw("⠼ Working..."))
+    );
+
+    transcript.push_agent_delta("bar");
+
+    assert_eq!(transcript.render(80).last(), Some(&Line::raw("bar")));
   }
 }

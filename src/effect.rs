@@ -1,4 +1,6 @@
+use super::*;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Effect {
-  RunAgent { input: String },
+  RunAgent { messages: Vec<Message> },
 }

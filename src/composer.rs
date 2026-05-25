@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Composer {
   command_index: usize,
+  footer: Option<Footer>,
   textarea: TextArea<'static>,
 }
 
@@ -38,6 +39,13 @@ impl Composer {
     }
   }
 
+  pub(crate) fn footer(self, footer: Footer) -> Self {
+    Self {
+      footer: Some(footer),
+      ..self
+    }
+  }
+
   pub(crate) fn input(&mut self, input: Input) {
     if self.textarea.input(input) {
       self.command_index = 0;
@@ -51,6 +59,7 @@ impl Composer {
   pub(crate) fn new(input: &str) -> Self {
     Self {
       command_index: 0,
+      footer: None,
       textarea: Self::textarea(input),
     }
   }
@@ -113,6 +122,8 @@ impl Component for Composer {
   fn render(&self, width: u16) -> Vec<Line> {
     let cursor = self.textarea.cursor();
 
+    let selected = self.selected_command_index();
+
     let mut lines = FramedLines::new(
       self.textarea.lines().iter().enumerate().map(|(row, line)| {
         if cursor.0 != row {
@@ -125,31 +136,30 @@ impl Component for Composer {
         let under_cursor = chars.next().unwrap_or(' ');
         let after = chars.collect::<String>();
 
-        vec![
+        Line::from(vec![
           Span::raw(before),
           Span::styled(under_cursor.to_string(), Style::Reverse),
           Span::raw(after),
-        ]
-        .into()
+        ])
       }),
     )
     .render(width);
 
-    let selected = self.selected_command_index();
+    if selected.is_none() {
+      lines.extend(self.footer.iter().flat_map(|footer| footer.render(width)));
+    }
 
     lines.extend(self.commands().enumerate().map(|(index, command)| {
-      let style = if Some(index) == selected {
-        Style::CyanBold
-      } else {
-        Style::Gray
+      let input_style = match selected {
+        Some(selected) if selected == index => Style::CyanBold,
+        _ => Style::Gray,
       };
 
-      vec![
-        Span::styled(command.input(), style),
+      Line::from(vec![
+        Span::styled(command.input(), input_style),
         Span::styled("  ", Style::DarkGray),
         Span::styled(command.description(), Style::DarkGray),
-      ]
-      .into()
+      ])
     }));
 
     lines
@@ -182,6 +192,27 @@ mod tests {
         Span::styled("Quit kotomori", Style::DarkGray),
       ]
       .into()
+    );
+  }
+
+  #[test]
+  fn footer_is_hidden_when_command_menu_is_open() {
+    let composer = Composer::new("/").footer(Footer::raw("foo"));
+
+    assert!(
+      !composer
+        .render(80)
+        .contains(&vec![Span::styled("foo", Style::DarkGray)].into())
+    );
+  }
+
+  #[test]
+  fn footer_rendering() {
+    let composer = Composer::new("foo").footer(Footer::raw("bar"));
+
+    assert_eq!(
+      composer.render(80)[3],
+      vec![Span::styled("bar", Style::DarkGray)].into()
     );
   }
 }

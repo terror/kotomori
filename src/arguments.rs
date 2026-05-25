@@ -9,6 +9,6 @@ pub(crate) struct Arguments {
 
 impl Arguments {
   pub(crate) async fn run(self) -> Result {
-    App::new(self.options).run().await
+    App::new(self.options)?.run().await
   }
 }

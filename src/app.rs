@@ -11,8 +11,8 @@ pub(crate) struct App {
 impl App {
   fn handle_effect(&self, effect: Effect) {
     match effect {
-      Effect::RunAgent { input } => {
-        self.agent.spawn(input);
+      Effect::RunAgent { messages } => {
+        self.agent.spawn(messages);
       }
     }
   }
@@ -53,15 +53,17 @@ impl App {
     });
   }
 
-  pub(crate) fn new(options: Options) -> Self {
+  pub(crate) fn new(options: Options) -> Result<Self> {
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
 
-    Self {
-      agent: Agent::new(event_sender.clone(), options.model),
+    let state = State::new(&options)?;
+
+    Ok(Self {
+      agent: Agent::new(event_sender.clone(), options.model)?,
       event_receiver,
       event_sender,
-      state: State::new(&options.prompt.unwrap_or_default()),
-    }
+      state,
+    })
   }
 
   pub(crate) async fn run(mut self) -> Result {
@@ -70,6 +72,7 @@ impl App {
     let mut renderer = Renderer::new();
 
     self.listen();
+    self.tick();
 
     while !self.state.should_quit() {
       renderer.draw(terminal.stdout_mut(), &View::new(&self.state))?;
@@ -86,5 +89,21 @@ impl App {
     }
 
     Ok(())
+  }
+
+  fn tick(&self) {
+    let sender = self.event_sender.clone();
+
+    tokio::spawn(async move {
+      let mut interval = interval(Duration::from_millis(120));
+
+      loop {
+        interval.tick().await;
+
+        if sender.send(Event::Tick).is_err() {
+          return;
+        }
+      }
+    });
   }
 }
