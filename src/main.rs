@@ -11,8 +11,9 @@ use {
       ChatCompletionRequestAssistantMessage,
       ChatCompletionRequestAssistantMessageContent,
       ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
-      ChatCompletionRequestUserMessageContent, CreateChatCompletionRequest,
-      CreateChatCompletionRequestArgs,
+      ChatCompletionRequestUserMessageContent, ChatCompletionTool,
+      ChatCompletionTools, CreateChatCompletionRequest,
+      CreateChatCompletionRequestArgs, FunctionObject,
     },
   },
   async_trait::async_trait,
@@ -50,6 +51,7 @@ use {
   renderer::Renderer,
   request::Request,
   role::Role,
+  serde_json::{Value, json},
   span::Span,
   state::State,
   std::{
@@ -105,6 +107,8 @@ mod span;
 mod state;
 mod style;
 mod terminal;
+#[allow(dead_code)]
+mod tool;
 mod transcript;
 mod view;
 

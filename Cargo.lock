@@ -1295,6 +1295,7 @@ dependencies = [
  "crossterm",
  "futures-util",
  "ratatui-textarea",
+ "serde_json",
  "strum",
  "tokio",
  "unicode-width",
