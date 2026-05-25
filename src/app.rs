@@ -55,13 +55,12 @@ impl App {
 
   pub(crate) fn new(options: Options) -> Self {
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
-    let prompt = options.prompt.unwrap_or_default();
 
     Self {
       agent: Agent::new(event_sender.clone(), options.model),
       event_receiver,
       event_sender,
-      state: State::new(&prompt),
+      state: State::new(&options.prompt.unwrap_or_default()),
     }
   }
 
