@@ -84,12 +84,21 @@ impl Display for ToolInvocation {
         write!(f, "read {}", path.display())
       }
       ToolInvocationKind::SearchFiles { arguments, cwd } => {
-        let query = arguments.join(" ");
-
-        if let Some(cwd) = cwd {
-          write!(f, "search files {query} in {}", cwd.display())
+        if arguments.is_empty() {
+          if let Some(cwd) = cwd {
+            write!(f, "search files in {}", cwd.display())
+          } else {
+            write!(f, "search files")
+          }
+        } else if let Some(cwd) = cwd {
+          write!(
+            f,
+            "search files {} in {}",
+            arguments.join(" "),
+            cwd.display()
+          )
         } else {
-          write!(f, "search files {query}")
+          write!(f, "search files {}", arguments.join(" "))
         }
       }
     }
