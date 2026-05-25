@@ -38,37 +38,21 @@ impl Provider for Anthropic {
       .create_stream((&request).into())
       .await?;
 
-    let mut tool_calls = BTreeMap::<usize, PendingToolCall>::new();
+    let mut tool_calls = ToolCallStream::<usize>::default();
 
     while let Some(event) = stream.next().await {
       let event = event?;
 
       match event {
-        types::MessageStreamEvent::ContentBlockStart {
-          content_block: types::ContentBlock::ToolUse { id, input, name },
-          index,
-        } => {
-          tool_calls.insert(index, PendingToolCall::new(id, name, input));
-        }
         types::MessageStreamEvent::ContentBlockDelta {
           delta: types::ContentBlockDelta::TextDelta { text },
           ..
         } if !text.is_empty() => sink.delta(text)?,
-        types::MessageStreamEvent::ContentBlockDelta {
-          delta: types::ContentBlockDelta::InputJsonDelta { partial_json },
-          index,
-        } => {
-          tool_calls
-            .entry(index)
-            .or_default()
-            .append_arguments(Some(partial_json));
-        }
-        types::MessageStreamEvent::ContentBlockStop { index } => {
-          if let Some(tool_call) = tool_calls.remove(&index) {
-            sink.tool_call(tool_call.finish()?)?;
+        event => {
+          if let Some(tool_call) = tool_calls.push_event(event)? {
+            sink.tool_call(tool_call)?;
           }
         }
-        _ => {}
       }
     }
 

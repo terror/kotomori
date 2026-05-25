@@ -26,7 +26,7 @@ impl Provider for OpenAi {
       .create_stream((&request).try_into()?)
       .await?;
 
-    let mut tool_calls = BTreeMap::<u32, PendingToolCall>::new();
+    let mut tool_calls = ToolCallStream::<u32>::default();
 
     while let Some(response) = stream.next().await {
       for choice in response?.choices {
@@ -37,13 +37,13 @@ impl Provider for OpenAi {
         }
 
         for chunk in choice.delta.tool_calls.into_iter().flatten() {
-          tool_calls.entry(chunk.index).or_default().append(chunk);
+          tool_calls.push_event(chunk)?;
         }
       }
     }
 
-    for tool_call in tool_calls.into_values() {
-      sink.tool_call(tool_call.finish()?)?;
+    for tool_call in tool_calls.finish_all()? {
+      sink.tool_call(tool_call)?;
     }
 
     Ok(())

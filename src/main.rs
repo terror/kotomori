@@ -78,7 +78,7 @@ use {
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     time::{interval, sleep},
   },
-  tool::{PendingToolCall, RawToolCall, RegisteredTool},
+  tool::{RawToolCall, RegisteredTool, ToolCallStream},
   transcript::Transcript,
   unicode_width::UnicodeWidthChar,
   view::View,

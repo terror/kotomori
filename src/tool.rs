@@ -77,67 +77,17 @@ mod list_files;
 mod read_file;
 mod search_files;
 
-#[derive(Default)]
-pub(crate) struct PendingToolCall {
-  pub(crate) arguments: String,
-  pub(crate) id: Option<String>,
-  pub(crate) name: Option<String>,
-}
-
-impl PendingToolCall {
-  pub(crate) fn append(&mut self, chunk: ChatCompletionMessageToolCallChunk) {
-    if let Some(id) = chunk.id {
-      self.id = Some(id);
-    }
-
-    if let Some(function) = chunk.function {
-      if let Some(name) = function.name {
-        self.name = Some(name);
-      }
-
-      self.append_arguments(function.arguments);
-    }
-  }
-
-  pub(crate) fn append_arguments(&mut self, arguments: Option<String>) {
-    if let Some(arguments) = arguments {
-      self.arguments.push_str(&arguments);
-    }
-  }
-
-  fn arguments(arguments: Value) -> String {
-    match arguments {
-      Value::Null => String::new(),
-      Value::Object(object) if object.is_empty() => String::new(),
-      arguments => arguments.to_string(),
-    }
-  }
-
-  pub(crate) fn finish(self) -> Result<RawToolCall> {
-    let id = self.id.context("missing tool call id")?;
-
-    let name = self.name.context("missing tool call name")?;
-
-    let arguments = if self.arguments.trim().is_empty() {
-      "{}"
-    } else {
-      &self.arguments
-    };
-
-    RawToolCall::from_arguments_string(id, name, arguments)
-  }
-
-  pub(crate) fn new(
-    id: impl Into<String>,
-    name: impl Into<String>,
-    arguments: Value,
-  ) -> Self {
-    Self {
-      arguments: Self::arguments(arguments),
-      id: Some(id.into()),
-      name: Some(name.into()),
-    }
-  }
+pub(crate) enum ToolCallFragment<I> {
+  Finish {
+    index: I,
+  },
+  Update {
+    argument_fragment: Option<String>,
+    arguments: Option<Value>,
+    id: Option<String>,
+    index: I,
+    name: Option<String>,
+  },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,6 +95,24 @@ pub(crate) struct RawToolCall {
   pub(crate) arguments: Value,
   pub(crate) id: String,
   pub(crate) name: String,
+}
+
+#[derive(Default)]
+pub(crate) struct ToolCallBuilder {
+  argument_fragments: String,
+  arguments: Option<Value>,
+  id: Option<String>,
+  name: Option<String>,
+}
+
+pub(crate) struct ToolCallStream<I> {
+  calls: BTreeMap<I, ToolCallBuilder>,
+}
+
+pub(crate) trait ToolCallStreamEvent {
+  type Index: Ord;
+
+  fn tool_call_fragment(self) -> Option<ToolCallFragment<Self::Index>>;
 }
 
 impl RawToolCall {
@@ -185,6 +153,176 @@ impl RawToolCall {
 impl Display for RawToolCall {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
     write!(f, "{} {}", self.name, self.arguments)
+  }
+}
+
+impl<I: Ord> Default for ToolCallStream<I> {
+  fn default() -> Self {
+    Self {
+      calls: BTreeMap::new(),
+    }
+  }
+}
+
+impl ToolCallBuilder {
+  pub(crate) fn argument_fragment(
+    self,
+    argument_fragment: Option<&str>,
+  ) -> Self {
+    let argument_fragments = if let Some(argument_fragment) = argument_fragment
+    {
+      format!("{}{argument_fragment}", self.argument_fragments)
+    } else {
+      self.argument_fragments
+    };
+
+    Self {
+      argument_fragments,
+      ..self
+    }
+  }
+
+  pub(crate) fn arguments(self, arguments: Option<Value>) -> Self {
+    Self {
+      arguments: arguments.or(self.arguments),
+      ..self
+    }
+  }
+
+  pub(crate) fn finish(self) -> Result<RawToolCall> {
+    let id = self.id.context("missing tool call id")?;
+
+    let name = self.name.context("missing tool call name")?;
+
+    if self.argument_fragments.trim().is_empty() {
+      Ok(RawToolCall::new(
+        id,
+        name,
+        self.arguments.unwrap_or_else(|| json!({})),
+      ))
+    } else {
+      RawToolCall::from_arguments_string(id, name, self.argument_fragments)
+    }
+  }
+
+  pub(crate) fn id(self, id: Option<String>) -> Self {
+    Self {
+      id: id.or(self.id),
+      ..self
+    }
+  }
+
+  pub(crate) fn name(self, name: Option<String>) -> Self {
+    Self {
+      name: name.or(self.name),
+      ..self
+    }
+  }
+}
+
+impl<I: Ord> ToolCallStream<I> {
+  pub(crate) fn finish_all(self) -> Result<Vec<RawToolCall>> {
+    self
+      .calls
+      .into_values()
+      .map(ToolCallBuilder::finish)
+      .collect()
+  }
+
+  pub(crate) fn push(
+    &mut self,
+    fragment: ToolCallFragment<I>,
+  ) -> Result<Option<RawToolCall>> {
+    match fragment {
+      ToolCallFragment::Finish { index } => self
+        .calls
+        .remove(&index)
+        .map(ToolCallBuilder::finish)
+        .transpose(),
+      ToolCallFragment::Update {
+        argument_fragment,
+        arguments,
+        id,
+        index,
+        name,
+      } => {
+        let tool_call = self
+          .calls
+          .remove(&index)
+          .unwrap_or_default()
+          .id(id)
+          .name(name)
+          .arguments(arguments)
+          .argument_fragment(argument_fragment.as_deref());
+
+        self.calls.insert(index, tool_call);
+
+        Ok(None)
+      }
+    }
+  }
+
+  pub(crate) fn push_event<E>(
+    &mut self,
+    event: E,
+  ) -> Result<Option<RawToolCall>>
+  where
+    E: ToolCallStreamEvent<Index = I>,
+  {
+    event
+      .tool_call_fragment()
+      .map_or(Ok(None), |fragment| self.push(fragment))
+  }
+}
+
+impl ToolCallStreamEvent for ChatCompletionMessageToolCallChunk {
+  type Index = u32;
+
+  fn tool_call_fragment(self) -> Option<ToolCallFragment<Self::Index>> {
+    let (name, argument_fragment) = self
+      .function
+      .map_or((None, None), |function| (function.name, function.arguments));
+
+    Some(ToolCallFragment::Update {
+      argument_fragment,
+      arguments: None,
+      id: self.id,
+      index: self.index,
+      name,
+    })
+  }
+}
+
+impl ToolCallStreamEvent for types::MessageStreamEvent {
+  type Index = usize;
+
+  fn tool_call_fragment(self) -> Option<ToolCallFragment<Self::Index>> {
+    match self {
+      Self::ContentBlockStart {
+        content_block: types::ContentBlock::ToolUse { id, input, name },
+        index,
+      } => Some(ToolCallFragment::Update {
+        argument_fragment: None,
+        arguments: Some(input),
+        id: Some(id),
+        index,
+        name: Some(name),
+      }),
+      Self::ContentBlockDelta {
+        delta: types::ContentBlockDelta::InputJsonDelta { partial_json },
+        index,
+      } => Some(ToolCallFragment::Update {
+        argument_fragment: Some(partial_json),
+        arguments: None,
+        id: None,
+        index,
+        name: None,
+      }),
+      Self::ContentBlockStop { index } => {
+        Some(ToolCallFragment::Finish { index })
+      }
+      _ => None,
+    }
   }
 }
 
