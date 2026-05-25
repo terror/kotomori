@@ -145,7 +145,6 @@ impl Component for Composer {
       };
 
       vec![
-        Span::raw("  "),
         Span::styled(command.input(), style),
         Span::styled("  ", Style::DarkGray),
         Span::styled(command.description(), Style::DarkGray),
@@ -154,5 +153,35 @@ impl Component for Composer {
     }));
 
     lines
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn command_rendering() {
+    let lines = Composer::new("/").render(80);
+
+    assert_eq!(
+      lines[3],
+      vec![
+        Span::styled("/clear", Style::CyanBold),
+        Span::styled("  ", Style::DarkGray),
+        Span::styled("Clear the transcript", Style::DarkGray),
+      ]
+      .into()
+    );
+
+    assert_eq!(
+      lines[4],
+      vec![
+        Span::styled("/quit", Style::Gray),
+        Span::styled("  ", Style::DarkGray),
+        Span::styled("Quit kotomori", Style::DarkGray),
+      ]
+      .into()
+    );
   }
 }
