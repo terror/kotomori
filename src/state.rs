@@ -151,24 +151,41 @@ impl State {
 mod tests {
   use super::*;
 
-  fn input(c: char) -> Event {
-    Event::Action(Action::Edit(Input {
-      key: Key::Char(c),
-      ..Default::default()
-    }))
-  }
-
-  fn state(input: &str) -> State {
-    State::new(&Options {
+  #[test]
+  fn active_frame_ticks() {
+    let mut state = State::new(&Options {
       model: "fake:local".parse().unwrap(),
-      prompt: Some(input.into()),
+      prompt: Some("foo".into()),
     })
-    .unwrap()
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+
+    assert_eq!(
+      state.transcript().render(80).last(),
+      Some(&Line::raw("⠋ Working..."))
+    );
+
+    state.handle_event(Event::Tick);
+
+    assert_eq!(
+      state.transcript().render(80).last(),
+      Some(&Line::raw("⠙ Working..."))
+    );
+
+    state.handle_event(Event::AgentDone);
+    state.handle_event(Event::Tick);
+
+    assert_eq!(state.transcript().render(80).last(), Some(&Line::raw("")));
   }
 
   #[test]
   fn command_autocomplete() {
-    let mut state = state("/");
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("/".into()),
+    })
+    .unwrap();
 
     assert_eq!(
       state
@@ -193,7 +210,11 @@ mod tests {
   fn command_clear() {
     #[track_caller]
     fn case(command: &str) {
-      let mut state = state("foo");
+      let mut state = State::new(&Options {
+        model: "fake:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+      })
+      .unwrap();
 
       assert_eq!(
         state.handle_event(Event::Action(Action::Submit)),
@@ -206,7 +227,10 @@ mod tests {
       state.handle_event(Event::AgentDone);
 
       for c in command.chars() {
-        state.handle_event(input(c));
+        state.handle_event(Event::Action(Action::Edit(Input {
+          key: Key::Char(c),
+          ..Default::default()
+        })));
       }
 
       state.handle_event(Event::Action(Action::Submit));
@@ -220,32 +244,12 @@ mod tests {
   }
 
   #[test]
-  fn active_frame_ticks() {
-    let mut state = state("foo");
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    assert_eq!(
-      state.transcript().render(80).last(),
-      Some(&Line::raw("⠋ Working..."))
-    );
-
-    state.handle_event(Event::Tick);
-
-    assert_eq!(
-      state.transcript().render(80).last(),
-      Some(&Line::raw("⠙ Working..."))
-    );
-
-    state.handle_event(Event::AgentDone);
-    state.handle_event(Event::Tick);
-
-    assert_eq!(state.transcript().render(80).last(), Some(&Line::raw("")));
-  }
-
-  #[test]
   fn error_clears_active_message() {
-    let mut state = state("foo");
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+    })
+    .unwrap();
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
@@ -262,7 +266,10 @@ mod tests {
     );
 
     for c in "baz".chars() {
-      state.handle_event(input(c));
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
     }
 
     assert_eq!(
@@ -279,10 +286,17 @@ mod tests {
 
   #[test]
   fn multiline_input() {
-    let mut state = state("");
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("".into()),
+    })
+    .unwrap();
 
     for c in "foo".chars() {
-      state.handle_event(input(c));
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
     }
 
     state.handle_event(Event::Action(Action::Edit(Input {
@@ -291,7 +305,10 @@ mod tests {
     })));
 
     for c in "bar".chars() {
-      state.handle_event(input(c));
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
     }
 
     assert_eq!(
@@ -304,7 +321,11 @@ mod tests {
 
   #[test]
   fn unknown_command() {
-    let mut state = state("/foobar");
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("/foobar".into()),
+    })
+    .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
 

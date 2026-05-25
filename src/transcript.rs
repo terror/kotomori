@@ -101,6 +101,7 @@ mod tests {
     let mut transcript = Transcript::new();
 
     transcript.send("foo".into());
+
     for _ in 0..4 {
       transcript.tick();
     }
