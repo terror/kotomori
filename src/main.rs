@@ -20,6 +20,7 @@ use {
   clap::{Args, Parser},
   command::Command,
   command_invocation::CommandInvocation,
+  command_output::CommandOutput,
   component::Component,
   composer::Composer,
   crossterm::{
@@ -89,6 +90,7 @@ mod app;
 mod arguments;
 mod command;
 mod command_invocation;
+mod command_output;
 mod component;
 mod composer;
 mod effect;
