@@ -38,6 +38,7 @@ use {
   provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
+  raw_tool_call::RawToolCall,
   refresh::Refresh,
   renderer::Renderer,
   request::Request,
@@ -67,9 +68,14 @@ use {
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     time::{interval, sleep},
   },
-  tool::{RawToolCall, RegisteredTool, ToolCallFragment, ToolCallStreamEvent},
+  tool::RegisteredTool,
+  tool_action_tense::ToolActionTense,
   tool_call_builder::ToolCallBuilder,
+  tool_call_fragment::ToolCallFragment,
   tool_call_stream::ToolCallStream,
+  tool_call_stream_event::ToolCallStreamEvent,
+  tool_invocation::ToolInvocation,
+  tool_invocation_kind::ToolInvocationKind,
   transcript::Transcript,
   unicode_width::UnicodeWidthChar,
   view::View,
@@ -95,6 +101,7 @@ mod model;
 mod options;
 mod provider;
 mod provider_sink;
+mod raw_tool_call;
 mod refresh;
 mod renderer;
 mod request;
@@ -104,8 +111,13 @@ mod state;
 mod style;
 mod terminal;
 mod tool;
+mod tool_action_tense;
 mod tool_call_builder;
+mod tool_call_fragment;
 mod tool_call_stream;
+mod tool_call_stream_event;
+mod tool_invocation;
+mod tool_invocation_kind;
 mod transcript;
 mod view;
 
