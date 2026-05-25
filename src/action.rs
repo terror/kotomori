@@ -1,10 +1,9 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Action {
-  Backspace,
   CompleteCommand,
-  Input(char),
+  Edit(Input),
   Quit,
   SelectNextCommand,
   SelectPreviousCommand,
@@ -12,18 +11,41 @@ pub(crate) enum Action {
 }
 
 impl Action {
-  pub(crate) fn from_key(key: &KeyEvent) -> Option<Self> {
+  pub(crate) fn from_key(key: &KeyEvent) -> Self {
     match key.code {
       KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-        Some(Self::Quit)
+        Self::Quit
       }
-      KeyCode::Enter => Some(Self::Submit),
-      KeyCode::Backspace => Some(Self::Backspace),
-      KeyCode::Tab => Some(Self::CompleteCommand),
-      KeyCode::Down => Some(Self::SelectNextCommand),
-      KeyCode::Up => Some(Self::SelectPreviousCommand),
-      KeyCode::Char(c) => Some(Self::Input(c)),
-      _ => None,
+      KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+        Self::Edit(Input {
+          key: Key::Enter,
+          ..Default::default()
+        })
+      }
+      KeyCode::Enter if key.modifiers.is_empty() => Self::Submit,
+      KeyCode::Tab => Self::CompleteCommand,
+      KeyCode::Down => Self::SelectNextCommand,
+      KeyCode::Up => Self::SelectPreviousCommand,
+      _ => Self::Edit((*key).into()),
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn ctrl_j_inserts_newline() {
+    assert_eq!(
+      Action::from_key(&KeyEvent::new(
+        KeyCode::Char('j'),
+        KeyModifiers::CONTROL
+      )),
+      Action::Edit(Input {
+        key: Key::Enter,
+        ..Default::default()
+      })
+    );
   }
 }

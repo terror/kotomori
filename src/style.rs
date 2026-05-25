@@ -4,6 +4,7 @@ pub(crate) enum Style {
   DarkGray,
   Gray,
   None,
+  Reverse,
 }
 
 impl Style {
@@ -13,6 +14,7 @@ impl Style {
       Self::DarkGray => "\x1b[90m",
       Self::Gray => "\x1b[37m",
       Self::None => "\x1b[0m",
+      Self::Reverse => "\x1b[7m",
     }
   }
 }

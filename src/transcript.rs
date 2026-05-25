@@ -55,15 +55,15 @@ impl Transcript {
 }
 
 impl Component for Transcript {
-  fn render(&self, _width: u16) -> Vec<Line> {
+  fn render(&self, width: u16) -> Vec<Line> {
     let mut lines = self
       .messages()
       .iter()
-      .flat_map(Message::lines)
+      .flat_map(|message| message.render(width))
       .collect::<Vec<_>>();
 
     if let Some(message) = &self.active_agent_message {
-      lines.extend(Message::new(Role::Agent, message).lines());
+      lines.extend(Message::new(Role::Agent, message).render(width));
     }
 
     lines

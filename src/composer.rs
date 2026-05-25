@@ -3,44 +3,56 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Composer {
   command_index: usize,
-  input: String,
+  textarea: TextArea<'static>,
 }
 
 impl Composer {
-  pub(crate) fn backspace(&mut self) {
-    self.input.pop();
+  pub(crate) fn clear(&mut self) {
+    self.textarea = TextArea::default();
     self.command_index = 0;
   }
 
-  pub(crate) fn clear(&mut self) {
-    self.input.clear();
-    self.command_index = 0;
+  fn command_input(&self) -> Option<&str> {
+    let [input] = self.textarea.lines() else {
+      return None;
+    };
+
+    Some(input)
   }
 
   pub(crate) fn commands(&self) -> impl Iterator<Item = Command> + '_ {
-    Command::iter().filter(|command| command.matches(&self.input))
+    Command::iter().filter(|command| {
+      self
+        .command_input()
+        .is_some_and(|input| command.matches(input))
+    })
   }
 
-  pub(crate) fn complete_command(&mut self) {
+  pub(crate) fn complete_command(&mut self) -> bool {
     if let Some(command) = self.selected_command() {
-      self.input = command.input();
+      let input = command.input();
+      self.set_input(&input);
+      true
+    } else {
+      false
     }
   }
 
-  pub(crate) fn input_text(&self) -> &str {
-    &self.input
+  pub(crate) fn input(&mut self, input: Input) {
+    if self.textarea.input(input) {
+      self.command_index = 0;
+    }
   }
 
-  pub(crate) fn new(input: String) -> Self {
+  pub(crate) fn input_text(&self) -> String {
+    self.textarea.lines().join("\n")
+  }
+
+  pub(crate) fn new(input: &str) -> Self {
     Self {
       command_index: 0,
-      input,
+      textarea: Self::textarea(input),
     }
-  }
-
-  pub(crate) fn push(&mut self, c: char) {
-    self.input.push(c);
-    self.command_index = 0;
   }
 
   pub(crate) fn select_next_command(&mut self) {
@@ -76,18 +88,52 @@ impl Composer {
       Some(self.command_index.min(len.saturating_sub(1)))
     }
   }
+
+  fn set_input(&mut self, input: &str) {
+    self.textarea = Self::textarea(input);
+    self.command_index = 0;
+  }
+
+  fn textarea(input: &str) -> TextArea<'static> {
+    let mut textarea = TextArea::from(
+      input
+        .split('\n')
+        .map(ToString::to_string)
+        .collect::<Vec<_>>(),
+    );
+
+    textarea.move_cursor(CursorMove::Bottom);
+    textarea.move_cursor(CursorMove::End);
+
+    textarea
+  }
 }
 
 impl Component for Composer {
-  fn render(&self, _width: u16) -> Vec<Line> {
-    let mut lines = vec![
-      vec![
-        Span::raw("  "),
-        Span::styled("❯ ", Style::CyanBold),
-        Span::raw(self.input_text().to_string()),
-      ]
-      .into(),
-    ];
+  fn render(&self, width: u16) -> Vec<Line> {
+    let cursor = self.textarea.cursor();
+
+    let mut lines = FramedLines::new(
+      self.textarea.lines().iter().enumerate().map(|(row, line)| {
+        if cursor.0 != row {
+          return Line::raw(line);
+        }
+
+        let mut chars = line.chars();
+
+        let before = chars.by_ref().take(cursor.1).collect::<String>();
+        let under_cursor = chars.next().unwrap_or(' ');
+        let after = chars.collect::<String>();
+
+        vec![
+          Span::raw(before),
+          Span::styled(under_cursor.to_string(), Style::Reverse),
+          Span::raw(after),
+        ]
+        .into()
+      }),
+    )
+    .render(width);
 
     let selected = self.selected_command_index();
 
@@ -98,14 +144,8 @@ impl Component for Composer {
         Style::Gray
       };
 
-      let prefix = if Some(index) == selected {
-        "  ❯ "
-      } else {
-        "    "
-      };
-
       vec![
-        Span::raw(prefix),
+        Span::raw("  "),
         Span::styled(command.input(), style),
         Span::styled("  ", Style::DarkGray),
         Span::styled(command.description(), Style::DarkGray),

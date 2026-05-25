@@ -14,12 +14,36 @@ impl State {
 
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
     match action {
-      Action::Backspace => self.composer.backspace(),
-      Action::CompleteCommand => self.composer.complete_command(),
-      Action::Input(c) => self.composer.push(c),
+      Action::CompleteCommand => {
+        if !self.composer.complete_command() {
+          self.composer.input(Input {
+            key: Key::Tab,
+            ..Default::default()
+          });
+        }
+      }
+      Action::Edit(input) => self.composer.input(input),
       Action::Quit => self.quit(),
-      Action::SelectNextCommand => self.composer.select_next_command(),
-      Action::SelectPreviousCommand => self.composer.select_previous_command(),
+      Action::SelectNextCommand => {
+        if self.composer.selected_command().is_some() {
+          self.composer.select_next_command();
+        } else {
+          self.composer.input(Input {
+            key: Key::Down,
+            ..Default::default()
+          });
+        }
+      }
+      Action::SelectPreviousCommand => {
+        if self.composer.selected_command().is_some() {
+          self.composer.select_previous_command();
+        } else {
+          self.composer.input(Input {
+            key: Key::Up,
+            ..Default::default()
+          });
+        }
+      }
       Action::Submit => return self.submit(),
     }
 
@@ -38,11 +62,11 @@ impl State {
   }
 
   #[cfg(test)]
-  pub(crate) fn input_text(&self) -> &str {
+  pub(crate) fn input_text(&self) -> String {
     self.composer.input_text()
   }
 
-  pub(crate) fn new(input: String) -> Self {
+  pub(crate) fn new(input: &str) -> Self {
     Self {
       composer: Composer::new(input),
       should_quit: false,
@@ -74,7 +98,8 @@ impl State {
   }
 
   fn submit(&mut self) -> Vec<Effect> {
-    let input = self.composer.input_text().trim();
+    let input = self.composer.input_text();
+    let input = input.trim();
 
     if let Some(command) = Command::from_input(input) {
       return self.run_command(command);
@@ -122,9 +147,16 @@ impl State {
 mod tests {
   use super::*;
 
+  fn input(c: char) -> Event {
+    Event::Action(Action::Edit(Input {
+      key: Key::Char(c),
+      ..Default::default()
+    }))
+  }
+
   #[test]
   fn command_autocomplete() {
-    let mut state = State::new("/".into());
+    let mut state = State::new("/");
 
     assert_eq!(
       state
@@ -149,7 +181,7 @@ mod tests {
   fn command_clear() {
     #[track_caller]
     fn case(command: &str) {
-      let mut state = State::new("foo".into());
+      let mut state = State::new("foo");
 
       assert_eq!(
         state.handle_event(Event::Action(Action::Submit)),
@@ -162,7 +194,7 @@ mod tests {
       state.handle_event(Event::AgentDone);
 
       for c in command.chars() {
-        state.handle_event(Event::Action(Action::Input(c)));
+        state.handle_event(input(c));
       }
 
       state.handle_event(Event::Action(Action::Submit));
@@ -177,7 +209,7 @@ mod tests {
 
   #[test]
   fn error_clears_active_message() {
-    let mut state = State::new("foo".into());
+    let mut state = State::new("foo");
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
@@ -194,7 +226,7 @@ mod tests {
     );
 
     for c in "baz".chars() {
-      state.handle_event(Event::Action(Action::Input(c)));
+      state.handle_event(input(c));
     }
 
     assert_eq!(
@@ -206,8 +238,33 @@ mod tests {
   }
 
   #[test]
+  fn multiline_input() {
+    let mut state = State::new("");
+
+    for c in "foo".chars() {
+      state.handle_event(input(c));
+    }
+
+    state.handle_event(Event::Action(Action::Edit(Input {
+      key: Key::Enter,
+      ..Default::default()
+    })));
+
+    for c in "bar".chars() {
+      state.handle_event(input(c));
+    }
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        input: "foo\nbar".into()
+      }]
+    );
+  }
+
+  #[test]
   fn unknown_command() {
-    let mut state = State::new("/foobar".into());
+    let mut state = State::new("/foobar");
 
     state.handle_event(Event::Action(Action::Submit));
 
