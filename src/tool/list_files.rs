@@ -7,10 +7,6 @@ define_tool! {
     arguments {
       optional cwd: Option<PathBuf> => {"type": ["string", "null"]},
     }
-    invocation |tool| ToolInvocationKind::ListFiles(CommandInvocation {
-      arguments: vec!["--files".into()],
-      cwd: tool.cwd,
-      program: "rg".into(),
-    }),
+    invocation |tool| ToolInvocationKind::ListFiles { cwd: tool.cwd },
   }
 }

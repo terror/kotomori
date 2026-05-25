@@ -217,11 +217,9 @@ mod tests {
         .unwrap(),
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::ListFiles(CommandInvocation {
-          arguments: vec!["--files".into()],
+        kind: ToolInvocationKind::ListFiles {
           cwd: Some("bar".into()),
-          program: "rg".into(),
-        }),
+        },
       },
     );
   }
@@ -251,11 +249,10 @@ mod tests {
       .unwrap(),
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::SearchFiles(CommandInvocation {
+        kind: ToolInvocationKind::SearchFiles {
           arguments: vec!["foo".into()],
           cwd: Some("bar".into()),
-          program: "rg".into(),
-        }),
+        },
       },
     );
   }
