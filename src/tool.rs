@@ -203,28 +203,9 @@ pub(crate) enum ToolInvocationKind {
   SearchFiles(CommandInvocation),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
-pub(crate) struct ToolError {
-  pub(crate) message: String,
-}
-
-impl ToolError {
-  pub(crate) fn new(message: impl Into<String>) -> Self {
-    Self {
-      message: message.into(),
-    }
-  }
-}
-
 impl ToolInvocation {
   fn action(&self, tense: ToolActionTense) -> &'static str {
     match tense {
-      ToolActionTense::Past => match &self.kind {
-        ToolInvocationKind::ListFiles(_) => "Listed",
-        ToolInvocationKind::ReadFile { .. } => "Read",
-        _ => "Ran",
-      },
       ToolActionTense::Progressive => match &self.kind {
         ToolInvocationKind::ListFiles(_) => "Listing",
         ToolInvocationKind::ReadFile { .. } => "Reading",
@@ -241,11 +222,6 @@ impl ToolInvocation {
       ToolInvocationKind::ApplyPatch { .. }
       | ToolInvocationKind::ReadFile { .. } => None,
     }
-  }
-
-  #[allow(dead_code)]
-  pub(crate) fn past_tense(&self) -> String {
-    self.title(ToolActionTense::Past)
   }
 
   pub(crate) fn progressive_tense(&self) -> String {
@@ -278,7 +254,6 @@ impl ToolInvocation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ToolActionTense {
-  Past,
   Progressive,
 }
 
@@ -397,90 +372,6 @@ pub(crate) trait Tool: serde::de::DeserializeOwned + Sized {
 
   fn parse(call: RawToolCall) -> Result<ToolInvocation> {
     Ok(Self::decode(&call)?.invocation(call.id))
-  }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
-pub(crate) enum ToolOutput {
-  Command(CommandOutput),
-  Text(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
-pub(crate) struct ToolResult {
-  pub(crate) invocation: ToolInvocation,
-  pub(crate) output: std::result::Result<ToolOutput, ToolError>,
-}
-
-impl ToolResult {
-  #[allow(dead_code)]
-  pub(crate) fn error(
-    invocation: ToolInvocation,
-    message: impl Into<String>,
-  ) -> Self {
-    Self {
-      invocation,
-      output: Err(ToolError::new(message)),
-    }
-  }
-
-  #[allow(dead_code)]
-  pub(crate) fn message(&self) -> String {
-    match &self.output {
-      Ok(output) => format!(
-        "Tool result for `{}`:\n{}",
-        self.invocation,
-        output.content()
-      ),
-      Err(error) => {
-        format!("Tool `{}` failed:\n{}", self.invocation, error.message)
-      }
-    }
-  }
-
-  #[allow(dead_code)]
-  pub(crate) fn ok(invocation: ToolInvocation, output: ToolOutput) -> Self {
-    Self {
-      invocation,
-      output: Ok(output),
-    }
-  }
-}
-
-impl ToolOutput {
-  fn command_content(output: &CommandOutput) -> String {
-    let mut content = String::new();
-
-    content.push_str("status: ");
-
-    content.push_str(
-      &output
-        .status
-        .map_or_else(|| "signal".into(), |status| status.to_string()),
-    );
-
-    content.push('\n');
-
-    if !output.stdout.is_empty() {
-      content.push_str("stdout:\n");
-      content.push_str(&output.stdout);
-    }
-
-    if !output.stderr.is_empty() {
-      content.push_str("stderr:\n");
-      content.push_str(&output.stderr);
-    }
-
-    content
-  }
-
-  pub(crate) fn content(&self) -> String {
-    match self {
-      Self::Command(output) => Self::command_content(output),
-      Self::Text(content) => content.clone(),
-    }
   }
 }
 

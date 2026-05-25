@@ -21,7 +21,6 @@ use {
   clap::{Args, Parser},
   command::Command,
   command_invocation::CommandInvocation,
-  command_output::CommandOutput,
   component::Component,
   composer::Composer,
   crossterm::{
@@ -66,7 +65,7 @@ use {
     io::{self, Stdout, Write},
     iter::once,
     path::PathBuf,
-    process::{self, Output},
+    process,
     str::{self, FromStr},
     sync::Arc,
     thread,
@@ -91,7 +90,6 @@ mod app;
 mod arguments;
 mod command;
 mod command_invocation;
-mod command_output;
 mod component;
 mod composer;
 mod effect;
