@@ -29,31 +29,15 @@ impl Provider for OpenAi {
     let mut tool_calls = BTreeMap::<u32, PendingToolCall>::new();
 
     while let Some(response) = stream.next().await {
-      let response = response?;
-
-      for choice in response.choices {
-        if let Some(content) = choice.delta.content
-          && !content.is_empty()
+      for choice in response?.choices {
+        if let Some(content) =
+          choice.delta.content.filter(|content| !content.is_empty())
         {
           sink.delta(content)?;
         }
 
-        for chunk in choice.delta.tool_calls.unwrap_or_default() {
-          let call = tool_calls.entry(chunk.index).or_default();
-
-          if let Some(id) = chunk.id {
-            call.id = Some(id);
-          }
-
-          if let Some(function) = chunk.function {
-            if let Some(name) = function.name {
-              call.name = Some(name);
-            }
-
-            if let Some(arguments) = function.arguments {
-              call.arguments.push_str(&arguments);
-            }
-          }
+        for chunk in choice.delta.tool_calls.into_iter().flatten() {
+          tool_calls.entry(chunk.index).or_default().append(chunk);
         }
       }
     }

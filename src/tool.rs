@@ -83,6 +83,34 @@ pub(crate) struct PendingToolCall {
 }
 
 impl PendingToolCall {
+  pub(crate) fn append(&mut self, chunk: ChatCompletionMessageToolCallChunk) {
+    if let Some(id) = chunk.id {
+      self.id = Some(id);
+    }
+
+    if let Some(function) = chunk.function {
+      if let Some(name) = function.name {
+        self.name = Some(name);
+      }
+
+      self.append_arguments(function.arguments);
+    }
+  }
+
+  pub(crate) fn append_arguments(&mut self, arguments: Option<String>) {
+    if let Some(arguments) = arguments {
+      self.arguments.push_str(&arguments);
+    }
+  }
+
+  fn arguments(arguments: Value) -> String {
+    match arguments {
+      Value::Null => String::new(),
+      Value::Object(object) if object.is_empty() => String::new(),
+      arguments => arguments.to_string(),
+    }
+  }
+
   pub(crate) fn finish(self) -> Result<RawToolCall> {
     let id = self.id.context("missing tool call id")?;
 
@@ -95,6 +123,18 @@ impl PendingToolCall {
     };
 
     RawToolCall::from_arguments_string(id, name, arguments)
+  }
+
+  pub(crate) fn new(
+    id: impl Into<String>,
+    name: impl Into<String>,
+    arguments: Value,
+  ) -> Self {
+    Self {
+      arguments: Self::arguments(arguments),
+      id: Some(id.into()),
+      name: Some(name.into()),
+    }
   }
 }
 

@@ -29,14 +29,6 @@ impl Debug for Anthropic {
   }
 }
 
-fn tool_arguments(input: Value) -> String {
-  match input {
-    Value::Null => String::new(),
-    Value::Object(object) if object.is_empty() => String::new(),
-    input => input.to_string(),
-  }
-}
-
 #[async_trait]
 impl Provider for Anthropic {
   async fn stream(&self, request: Request, sink: ProviderSink) -> Result {
@@ -56,14 +48,7 @@ impl Provider for Anthropic {
           content_block: types::ContentBlock::ToolUse { id, input, name },
           index,
         } => {
-          tool_calls.insert(
-            index,
-            PendingToolCall {
-              arguments: tool_arguments(input),
-              id: Some(id),
-              name: Some(name),
-            },
-          );
+          tool_calls.insert(index, PendingToolCall::new(id, name, input));
         }
         types::MessageStreamEvent::ContentBlockDelta {
           delta: types::ContentBlockDelta::TextDelta { text },
@@ -76,8 +61,7 @@ impl Provider for Anthropic {
           tool_calls
             .entry(index)
             .or_default()
-            .arguments
-            .push_str(&partial_json);
+            .append_arguments(Some(partial_json));
         }
         types::MessageStreamEvent::ContentBlockStop { index } => {
           if let Some(tool_call) = tool_calls.remove(&index) {

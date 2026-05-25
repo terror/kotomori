@@ -8,6 +8,7 @@ use {
   async_openai::{
     config::OpenAIConfig,
     types::chat::{
+      ChatCompletionMessageToolCallChunk,
       ChatCompletionRequestAssistantMessage,
       ChatCompletionRequestAssistantMessageContent,
       ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
