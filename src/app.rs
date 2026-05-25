@@ -28,7 +28,7 @@ impl App {
 
     thread::spawn(move || {
       loop {
-        let event = match ratatui::crossterm::event::read() {
+        let event = match crossterm_event::read() {
           Ok(event) => event,
           Err(error) => {
             let _ = sender.send(Event::Error(error.to_string()));
@@ -69,10 +69,12 @@ impl App {
   pub(crate) async fn run(mut self) -> Result {
     let mut terminal = Terminal::new()?;
 
+    let mut renderer = Renderer::new();
+
     self.listen();
 
     while !self.state.should_quit() {
-      terminal.draw(|frame| View::new(&self.state).render(frame))?;
+      renderer.draw(terminal.stdout_mut(), &View::new(&self.state))?;
 
       let Some(event) = self.event_receiver.recv().await else {
         break;

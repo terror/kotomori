@@ -12,10 +12,6 @@ impl State {
     &self.composer
   }
 
-  pub(crate) fn composer_height(&self) -> u16 {
-    self.composer.height()
-  }
-
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
     match action {
       Action::Backspace => self.composer.backspace(),
@@ -41,6 +37,7 @@ impl State {
     Vec::new()
   }
 
+  #[cfg(test)]
   pub(crate) fn input_text(&self) -> &str {
     self.composer.input_text()
   }
@@ -118,10 +115,6 @@ impl State {
 
   pub(crate) fn transcript(&self) -> &Transcript {
     &self.transcript
-  }
-
-  pub(crate) fn transcript_height(&self, width: u16) -> u16 {
-    self.transcript.height(width)
   }
 }
 

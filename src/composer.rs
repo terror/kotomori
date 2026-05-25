@@ -17,10 +17,6 @@ impl Composer {
     self.command_index = 0;
   }
 
-  pub(crate) fn command_height(&self) -> u16 {
-    u16::try_from(self.commands().count()).unwrap_or(u16::MAX)
-  }
-
   pub(crate) fn commands(&self) -> impl Iterator<Item = Command> + '_ {
     Command::iter().filter(|command| command.matches(&self.input))
   }
@@ -29,10 +25,6 @@ impl Composer {
     if let Some(command) = self.selected_command() {
       self.input = command.input();
     }
-  }
-
-  pub(crate) fn height(&self) -> u16 {
-    self.command_height().saturating_add(1)
   }
 
   pub(crate) fn input_text(&self) -> &str {
@@ -86,57 +78,41 @@ impl Composer {
   }
 }
 
-impl Widget for &Composer {
-  fn render(self, area: Rect, buf: &mut Buffer) {
-    let [input_area, command_area] = Layout::default()
-      .direction(Direction::Vertical)
-      .constraints([Constraint::Length(1), Constraint::Min(0)])
-      .areas(area);
-
-    Paragraph::new(Line::from(vec![
-      Span::raw("  "),
-      Span::styled(
-        "❯ ",
-        Style::default()
-          .fg(Color::Cyan)
-          .add_modifier(Modifier::BOLD),
-      ),
-      Span::raw(self.input_text().to_string()),
-    ]))
-    .render(input_area, buf);
+impl Component for Composer {
+  fn render(&self, _width: u16) -> Vec<Line> {
+    let mut lines = vec![
+      vec![
+        Span::raw("  "),
+        Span::styled("❯ ", Style::CyanBold),
+        Span::raw(self.input_text().to_string()),
+      ]
+      .into(),
+    ];
 
     let selected = self.selected_command_index();
 
-    let lines = self
-      .commands()
-      .enumerate()
-      .map(|(index, command)| {
-        let style = if Some(index) == selected {
-          Style::default()
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD)
-        } else {
-          Style::default().fg(Color::Gray)
-        };
+    lines.extend(self.commands().enumerate().map(|(index, command)| {
+      let style = if Some(index) == selected {
+        Style::CyanBold
+      } else {
+        Style::Gray
+      };
 
-        let prefix = if Some(index) == selected {
-          "  ❯ "
-        } else {
-          "    "
-        };
+      let prefix = if Some(index) == selected {
+        "  ❯ "
+      } else {
+        "    "
+      };
 
-        Line::from(vec![
-          Span::raw(prefix),
-          Span::styled(command.input(), style),
-          Span::styled("  ", Style::default().fg(Color::DarkGray)),
-          Span::styled(
-            command.description(),
-            Style::default().fg(Color::DarkGray),
-          ),
-        ])
-      })
-      .collect::<Vec<_>>();
+      vec![
+        Span::raw(prefix),
+        Span::styled(command.input(), style),
+        Span::styled("  ", Style::DarkGray),
+        Span::styled(command.description(), Style::DarkGray),
+      ]
+      .into()
+    }));
 
-    Paragraph::new(lines).render(command_area, buf);
+    lines
   }
 }

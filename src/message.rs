@@ -7,29 +7,23 @@ pub(crate) struct Message {
 }
 
 impl Message {
-  pub(crate) fn lines(&self) -> Vec<Line<'static>> {
+  pub(crate) fn lines(&self) -> Vec<Line> {
     match self.role {
       Role::Agent => self
         .content
         .split('\n')
-        .map(|line| {
-          Line::from(vec![Span::raw("  "), Span::raw(line.to_string())])
-        })
+        .map(|line| vec![Span::raw("  "), Span::raw(line.to_string())].into())
         .collect(),
       Role::User => self
         .content
         .split('\n')
         .map(|line| {
-          Line::from(vec![
+          vec![
             Span::raw("  "),
-            Span::styled(
-              "❯ ",
-              Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-            ),
+            Span::styled("❯ ", Style::CyanBold),
             Span::raw(line.to_string()),
-          ])
+          ]
+          .into()
         })
         .collect(),
     }
@@ -39,13 +33,6 @@ impl Message {
     Self {
       content: content.into(),
       role,
-    }
-  }
-
-  pub(crate) fn width(&self) -> usize {
-    match self.role {
-      Role::Agent => 2 + self.content.len(),
-      Role::User => 4 + self.content.len(),
     }
   }
 }
