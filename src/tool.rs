@@ -69,6 +69,8 @@ macro_rules! define_tool {
   };
 }
 
+inventory::collect!(RegisteredTool);
+
 mod apply_patch;
 mod command;
 mod list_files;
@@ -379,8 +381,6 @@ impl From<&RegisteredTool> for types::Tool {
   }
 }
 
-inventory::collect!(RegisteredTool);
-
 pub(crate) trait Tool: serde::de::DeserializeOwned + Sized {
   const DESCRIPTION: &'static str;
 
@@ -454,11 +454,13 @@ impl ToolOutput {
     let mut content = String::new();
 
     content.push_str("status: ");
+
     content.push_str(
       &output
         .status
         .map_or_else(|| "signal".into(), |status| status.to_string()),
     );
+
     content.push('\n');
 
     if !output.stdout.is_empty() {
