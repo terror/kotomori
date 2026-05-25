@@ -40,9 +40,10 @@ impl Composer {
   }
 
   pub(crate) fn footer(self, footer: Footer) -> Self {
-    let footer = Some(footer);
-
-    Self { footer, ..self }
+    Self {
+      footer: Some(footer),
+      ..self
+    }
   }
 
   pub(crate) fn input(&mut self, input: Input) {
