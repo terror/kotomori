@@ -3,40 +3,41 @@ use super::*;
 #[derive(Debug, Clone)]
 pub(crate) struct Agent {
   event_sender: UnboundedSender<Event>,
-  model: String,
+  model: Model,
+  provider: Provider,
 }
 
 impl Agent {
   pub(crate) fn new(
     event_sender: UnboundedSender<Event>,
-    model: String,
+    model: Model,
   ) -> Self {
+    let provider = Provider::new(&model);
+
     Self {
       event_sender,
       model,
+      provider,
     }
   }
 
-  pub(crate) fn spawn(&self, input: String) {
+  pub(crate) fn spawn(&self, messages: Vec<Message>) {
     let agent = self.clone();
 
     tokio::spawn(async move {
-      if let Err(error) = agent.stream(input).await {
+      if let Err(error) = agent.stream(messages).await {
         let _ = agent.event_sender.send(Event::Error(error.to_string()));
       }
     });
   }
 
-  async fn stream(&self, input: String) -> Result {
-    let response = format!("queued for {}: {input}", self.model);
-
-    for c in response.chars() {
-      self.event_sender.send(Event::AgentDelta(c.to_string()))?;
-      sleep(Duration::from_millis(20)).await;
-    }
-
-    self.event_sender.send(Event::AgentDone)?;
-
-    Ok(())
+  async fn stream(&self, messages: Vec<Message>) -> Result {
+    self
+      .provider
+      .stream(
+        CompletionRequest::new(self.model.clone(), messages),
+        Sink::new(self.event_sender.clone()),
+      )
+      .await
   }
 }

@@ -1,7 +1,7 @@
 use {
   action::Action,
   agent::Agent,
-  anyhow::{Context, Error},
+  anyhow::{Context, Error, bail},
   app::App,
   arguments::Arguments,
   clap::{Args, Parser},
@@ -23,24 +23,33 @@ use {
   effect::Effect,
   event::Event,
   framed_lines::FramedLines,
+  futures_util::{StreamExt, pin_mut},
   header::Header,
   hint::Hint,
   line::Line,
   message::Message,
+  model::{Model, ProviderName},
   options::Options,
+  provider::{CompletionRequest, Provider, Sink},
+  providers::{Fake, Ollama},
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   refresh::Refresh,
   renderer::Renderer,
+  reqwest::Client,
   role::Role,
+  serde::{Deserialize, Serialize},
   span::Span,
   state::State,
   std::{
     backtrace::BacktraceStatus,
     cmp::Ordering,
+    env,
     fmt::{self, Display, Formatter},
     io::{self, Stdout, Write},
     iter::once,
-    process, thread,
+    process,
+    str::{self, FromStr},
+    thread,
     time::Duration,
   },
   strum::{EnumIter, IntoEnumIterator},
@@ -48,7 +57,7 @@ use {
   terminal::Terminal,
   tokio::{
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    time::sleep,
+    time::{interval, sleep},
   },
   transcript::Transcript,
   unicode_width::UnicodeWidthChar,
@@ -69,7 +78,10 @@ mod header;
 mod hint;
 mod line;
 mod message;
+mod model;
 mod options;
+mod provider;
+mod providers;
 mod refresh;
 mod renderer;
 mod role;

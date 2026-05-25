@@ -11,8 +11,8 @@ pub(crate) struct App {
 impl App {
   fn handle_effect(&self, effect: Effect) {
     match effect {
-      Effect::RunAgent { input } => {
-        self.agent.spawn(input);
+      Effect::RunAgent { messages } => {
+        self.agent.spawn(messages);
       }
     }
   }
@@ -70,6 +70,7 @@ impl App {
     let mut renderer = Renderer::new();
 
     self.listen();
+    self.tick();
 
     while !self.state.should_quit() {
       renderer.draw(terminal.stdout_mut(), &View::new(&self.state))?;
@@ -86,5 +87,21 @@ impl App {
     }
 
     Ok(())
+  }
+
+  fn tick(&self) {
+    let sender = self.event_sender.clone();
+
+    tokio::spawn(async move {
+      let mut interval = interval(Duration::from_millis(120));
+
+      loop {
+        interval.tick().await;
+
+        if sender.send(Event::Tick).is_err() {
+          return;
+        }
+      }
+    });
   }
 }

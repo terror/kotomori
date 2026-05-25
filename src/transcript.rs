@@ -48,14 +48,7 @@ impl Transcript {
     }
   }
 
-  pub(crate) fn send(&mut self, input: String) {
-    self.messages.push(Message::new(Role::User, input));
-    self.active_agent_message = Some(String::new());
-  }
-}
-
-impl Component for Transcript {
-  fn render(&self, width: u16) -> Vec<Line> {
+  pub(crate) fn render_active(&self, frame: usize, width: u16) -> Vec<Line> {
     let mut lines = self
       .messages()
       .iter()
@@ -63,9 +56,54 @@ impl Component for Transcript {
       .collect::<Vec<_>>();
 
     if let Some(message) = &self.active_agent_message {
-      lines.extend(Message::new(Role::Agent, message).render(width));
+      if message.is_empty() {
+        lines.push(Line::raw(format!("{} Working...", Self::spinner(frame))));
+      } else {
+        lines.extend(Message::new(Role::Agent, message).render(width));
+      }
     }
 
     lines
+  }
+
+  pub(crate) fn send(&mut self, input: String) {
+    self.messages.push(Message::new(Role::User, input));
+    self.active_agent_message = Some(String::new());
+  }
+
+  fn spinner(frame: usize) -> &'static str {
+    const FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+    FRAMES[frame % FRAMES.len()]
+  }
+}
+
+impl Component for Transcript {
+  fn render(&self, width: u16) -> Vec<Line> {
+    self.render_active(0, width)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn active_rendering() {
+    let mut transcript = Transcript::new();
+
+    transcript.send("foo".into());
+
+    assert_eq!(
+      transcript.render_active(4, 80).last(),
+      Some(&Line::raw("⠼ Working..."))
+    );
+
+    transcript.push_agent_delta("bar");
+
+    assert_eq!(
+      transcript.render_active(4, 80).last(),
+      Some(&Line::raw("bar"))
+    );
   }
 }

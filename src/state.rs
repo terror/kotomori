@@ -2,12 +2,17 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct State {
+  active_frame: usize,
   composer: Composer,
   should_quit: bool,
   transcript: Transcript,
 }
 
 impl State {
+  pub(crate) fn active_frame(&self) -> usize {
+    self.active_frame
+  }
+
   pub(crate) fn composer(&self) -> &Composer {
     &self.composer
   }
@@ -56,6 +61,11 @@ impl State {
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
       Event::AgentDone => self.transcript.finish_agent_message(),
       Event::Error(error) => self.transcript.error(error),
+      Event::Tick => {
+        if self.transcript.is_agent_active() {
+          self.active_frame = self.active_frame.wrapping_add(1);
+        }
+      }
     }
 
     Vec::new()
@@ -68,6 +78,7 @@ impl State {
 
   pub(crate) fn new(input: &str) -> Self {
     Self {
+      active_frame: 0,
       composer: Composer::new(input),
       should_quit: false,
       transcript: Transcript::new(),
@@ -132,10 +143,13 @@ impl State {
     let input = input.to_string();
 
     self.transcript.send(input.clone());
+    self.active_frame = 0;
+
+    let messages = self.transcript.messages().to_vec();
 
     self.reset_input();
 
-    vec![Effect::RunAgent { input }]
+    vec![Effect::RunAgent { messages }]
   }
 
   pub(crate) fn transcript(&self) -> &Transcript {
@@ -186,7 +200,7 @@ mod tests {
       assert_eq!(
         state.handle_event(Event::Action(Action::Submit)),
         vec![Effect::RunAgent {
-          input: "foo".into()
+          messages: vec![Message::new(Role::User, "foo")]
         }]
       );
 
@@ -208,13 +222,31 @@ mod tests {
   }
 
   #[test]
+  fn active_frame_ticks() {
+    let mut state = State::new("foo");
+
+    state.handle_event(Event::Action(Action::Submit));
+
+    assert_eq!(state.active_frame(), 0);
+
+    state.handle_event(Event::Tick);
+
+    assert_eq!(state.active_frame(), 1);
+
+    state.handle_event(Event::AgentDone);
+    state.handle_event(Event::Tick);
+
+    assert_eq!(state.active_frame(), 1);
+  }
+
+  #[test]
   fn error_clears_active_message() {
     let mut state = State::new("foo");
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        input: "foo".into()
+        messages: vec![Message::new(Role::User, "foo")]
       }]
     );
 
@@ -232,7 +264,11 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        input: "baz".into()
+        messages: vec![
+          Message::new(Role::User, "foo"),
+          Message::new(Role::Agent, "bar"),
+          Message::new(Role::User, "baz"),
+        ]
       }]
     );
   }
@@ -257,7 +293,7 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        input: "foo\nbar".into()
+        messages: vec![Message::new(Role::User, "foo\nbar")]
       }]
     );
   }
