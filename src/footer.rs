@@ -6,7 +6,22 @@ pub(crate) struct Footer {
 }
 
 impl Footer {
-  pub(crate) fn new(model: &Model) -> Result<Self> {
+  #[cfg(test)]
+  pub(crate) fn raw(text: impl Into<String>) -> Self {
+    Self { text: text.into() }
+  }
+}
+
+impl Component for Footer {
+  fn render(&self, _width: u16) -> Vec<Line> {
+    vec![vec![Span::styled(&self.text, Style::DarkGray)].into()]
+  }
+}
+
+impl TryFrom<&Model> for Footer {
+  type Error = Error;
+
+  fn try_from(model: &Model) -> Result<Self> {
     let directory =
       env::current_dir().context("failed to read current directory")?;
 
@@ -22,16 +37,5 @@ impl Footer {
     Ok(Self {
       text: format!("{} · {} · {directory}", model.provider(), model.name()),
     })
-  }
-
-  #[cfg(test)]
-  pub(crate) fn raw(text: impl Into<String>) -> Self {
-    Self { text: text.into() }
-  }
-}
-
-impl Component for Footer {
-  fn render(&self, _width: u16) -> Vec<Line> {
-    vec![vec![Span::styled(&self.text, Style::DarkGray)].into()]
   }
 }

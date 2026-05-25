@@ -70,7 +70,7 @@ impl State {
   pub(crate) fn new(options: &Options) -> Result<Self> {
     Ok(Self {
       composer: Composer::new(options.prompt.as_deref().unwrap_or_default())
-        .footer(Footer::new(&options.model)?),
+        .footer(Footer::try_from(&options.model)?),
       should_quit: false,
       transcript: Transcript::new(),
     })
