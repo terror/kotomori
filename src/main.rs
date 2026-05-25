@@ -23,6 +23,7 @@ use {
   },
   effect::Effect,
   event::Event,
+  footer::Footer,
   framed_lines::FramedLines,
   futures_util::{StreamExt, future::BoxFuture, pin_mut},
   header::Header,
@@ -77,6 +78,7 @@ mod component;
 mod composer;
 mod effect;
 mod event;
+mod footer;
 mod framed_lines;
 mod header;
 mod hint;

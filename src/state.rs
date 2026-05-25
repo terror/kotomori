@@ -76,13 +76,14 @@ impl State {
     self.composer.input_text()
   }
 
-  pub(crate) fn new(input: &str) -> Self {
-    Self {
+  pub(crate) fn new(options: &Options) -> Result<Self> {
+    Ok(Self {
       active_frame: 0,
-      composer: Composer::new(input),
+      composer: Composer::new(options.prompt.as_deref().unwrap_or_default())
+        .footer(Footer::new(&options.model)?),
       should_quit: false,
       transcript: Transcript::new(),
-    }
+    })
   }
 
   fn quit(&mut self) {
@@ -168,9 +169,17 @@ mod tests {
     }))
   }
 
+  fn state(input: &str) -> State {
+    State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some(input.into()),
+    })
+    .unwrap()
+  }
+
   #[test]
   fn command_autocomplete() {
-    let mut state = State::new("/");
+    let mut state = state("/");
 
     assert_eq!(
       state
@@ -195,7 +204,7 @@ mod tests {
   fn command_clear() {
     #[track_caller]
     fn case(command: &str) {
-      let mut state = State::new("foo");
+      let mut state = state("foo");
 
       assert_eq!(
         state.handle_event(Event::Action(Action::Submit)),
@@ -223,7 +232,7 @@ mod tests {
 
   #[test]
   fn active_frame_ticks() {
-    let mut state = State::new("foo");
+    let mut state = state("foo");
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -241,7 +250,7 @@ mod tests {
 
   #[test]
   fn error_clears_active_message() {
-    let mut state = State::new("foo");
+    let mut state = state("foo");
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
@@ -275,7 +284,7 @@ mod tests {
 
   #[test]
   fn multiline_input() {
-    let mut state = State::new("");
+    let mut state = state("");
 
     for c in "foo".chars() {
       state.handle_event(input(c));
@@ -300,7 +309,7 @@ mod tests {
 
   #[test]
   fn unknown_command() {
-    let mut state = State::new("/foobar");
+    let mut state = state("/foobar");
 
     state.handle_event(Event::Action(Action::Submit));
 
