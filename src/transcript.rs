@@ -59,11 +59,11 @@ impl Component for Transcript {
     let mut lines = self
       .messages()
       .iter()
-      .flat_map(|message| message.lines(width))
+      .flat_map(|message| message.render(width))
       .collect::<Vec<_>>();
 
     if let Some(message) = &self.active_agent_message {
-      lines.extend(Message::new(Role::Agent, message).lines(width));
+      lines.extend(Message::new(Role::Agent, message).render(width));
     }
 
     lines

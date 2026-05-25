@@ -55,73 +55,6 @@ impl Composer {
     }
   }
 
-  fn render_input_line(line: &str, row: usize, cursor: DataCursor) -> Line {
-    if cursor.0 != row {
-      return Line::raw(line);
-    }
-
-    let col = cursor.1;
-    let before = line.chars().take(col).collect::<String>();
-    let under_cursor = line.chars().nth(col);
-    let after = line.chars().skip(col.saturating_add(1)).collect::<String>();
-    let mut spans = Vec::new();
-
-    if !before.is_empty() {
-      spans.push(Span::raw(before));
-    }
-
-    spans.push(Span::styled(
-      under_cursor.unwrap_or(' ').to_string(),
-      Style::Reverse,
-    ));
-
-    if !after.is_empty() {
-      spans.push(Span::raw(after));
-    }
-
-    spans.into()
-  }
-
-  fn render_textarea(&self, width: u16) -> Vec<Line> {
-    let cursor = self.textarea.cursor();
-
-    Self::render_textarea_lines(
-      self
-        .textarea
-        .lines()
-        .iter()
-        .enumerate()
-        .map(|(row, line)| Self::render_input_line(line, row, cursor)),
-      width,
-    )
-  }
-
-  pub(crate) fn render_textarea_content<'a>(
-    lines: impl IntoIterator<Item = &'a str>,
-    width: u16,
-  ) -> Vec<Line> {
-    Self::render_textarea_lines(lines.into_iter().map(Line::raw), width)
-  }
-
-  fn render_textarea_lines(
-    lines: impl IntoIterator<Item = Line>,
-    width: u16,
-  ) -> Vec<Line> {
-    let width = width.max(1);
-    let border = "─".repeat(usize::from(width));
-
-    let mut rendered =
-      vec![vec![Span::styled(border.clone(), Style::DarkGray)].into()];
-
-    for line in lines {
-      rendered.extend(line.render(width));
-    }
-
-    rendered.push(vec![Span::styled(border, Style::DarkGray)].into());
-
-    rendered
-  }
-
   pub(crate) fn select_next_command(&mut self) {
     let len = self.commands().count();
 
@@ -178,7 +111,29 @@ impl Composer {
 
 impl Component for Composer {
   fn render(&self, width: u16) -> Vec<Line> {
-    let mut lines = self.render_textarea(width);
+    let cursor = self.textarea.cursor();
+
+    let mut lines = FramedLines::new(
+      self.textarea.lines().iter().enumerate().map(|(row, line)| {
+        if cursor.0 != row {
+          return Line::raw(line);
+        }
+
+        let mut chars = line.chars();
+
+        let before = chars.by_ref().take(cursor.1).collect::<String>();
+        let under_cursor = chars.next().unwrap_or(' ');
+        let after = chars.collect::<String>();
+
+        vec![
+          Span::raw(before),
+          Span::styled(under_cursor.to_string(), Style::Reverse),
+          Span::raw(after),
+        ]
+        .into()
+      }),
+    )
+    .render(width);
 
     let selected = self.selected_command_index();
 

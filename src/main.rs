@@ -22,12 +22,13 @@ use {
   },
   effect::Effect,
   event::Event,
+  framed_lines::FramedLines,
   header::Header,
   hint::Hint,
   line::Line,
   message::Message,
   options::Options,
-  ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
+  ratatui_textarea::{CursorMove, Input, Key, TextArea},
   refresh::Refresh,
   renderer::Renderer,
   role::Role,
@@ -63,6 +64,7 @@ mod component;
 mod composer;
 mod effect;
 mod event;
+mod framed_lines;
 mod header;
 mod hint;
 mod line;
