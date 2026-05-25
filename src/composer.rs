@@ -111,6 +111,16 @@ impl Composer {
 
 impl Component for Composer {
   fn render(&self, width: u16) -> Vec<Line> {
+    self.render_with_footer(width, None)
+  }
+}
+
+impl Composer {
+  pub(crate) fn render_with_footer(
+    &self,
+    width: u16,
+    footer: Option<&str>,
+  ) -> Vec<Line> {
     let cursor = self.textarea.cursor();
 
     let mut lines = FramedLines::new(
@@ -134,6 +144,10 @@ impl Component for Composer {
       }),
     )
     .render(width);
+
+    if let Some(footer) = footer {
+      lines.push(vec![Span::styled(footer, Style::DarkGray)].into());
+    }
 
     let selected = self.selected_command_index();
 

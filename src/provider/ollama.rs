@@ -7,17 +7,19 @@ pub(crate) struct Ollama {
 }
 
 impl Ollama {
-  fn handle_line(line: &str, sink: &Sink) -> Result {
+  fn handle_line(line: &str, sink: &ProviderSink) -> Result {
     if line.is_empty() {
       return Ok(());
     }
 
     let response = serde_json::from_str::<ChatResponse>(line)?;
 
-    if let Some(message) = response.message
-      && let Some(content) = message.content
-      && !content.is_empty()
-    {
+    let content = response
+      .message
+      .and_then(|message| message.content)
+      .filter(|content| !content.is_empty());
+
+    if let Some(content) = content {
       sink.delta(content)?;
     }
 
@@ -29,57 +31,60 @@ impl Ollama {
   }
 
   pub(crate) fn new() -> Self {
-    let host = env::var("OLLAMA_HOST")
-      .unwrap_or_else(|_| "http://localhost:11434".into());
-
-    let host = if host.starts_with("http://") || host.starts_with("https://") {
-      host
-    } else {
-      format!("http://{host}")
-    };
-
     Self {
       client: Client::new(),
-      url: format!("{}/api/chat", host.trim_end_matches('/')),
+      url: format!(
+        "{}/api/chat",
+        env::var("OLLAMA_HOST")
+          .unwrap_or_else(|_| "http://localhost:11434".into())
+      ),
     }
   }
+}
 
-  pub(crate) async fn stream(
+impl Provider for Ollama {
+  fn stream(
     &self,
     request: CompletionRequest,
-    sink: Sink,
-  ) -> Result {
-    let request = ChatRequest::from(request);
+    sink: ProviderSink,
+  ) -> BoxFuture<'_, Result> {
+    Box::pin(async move {
+      let request = ChatRequest::from(request);
 
-    let response = self
-      .client
-      .post(&self.url)
-      .json(&request)
-      .send()
-      .await
-      .with_context(|| format!("failed to connect to `{}`", self.url))?
-      .error_for_status()?;
+      let response = self
+        .client
+        .post(&self.url)
+        .json(&request)
+        .send()
+        .await
+        .with_context(|| format!("failed to connect to `{}`", self.url))?
+        .error_for_status()?;
 
-    let stream = response.bytes_stream();
-    pin_mut!(stream);
+      let stream = response.bytes_stream();
 
-    let mut buffer = Vec::new();
+      pin_mut!(stream);
 
-    while let Some(chunk) = stream.next().await {
-      let chunk = chunk?;
+      let mut buffer = Vec::new();
 
-      buffer.extend_from_slice(&chunk);
+      while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
 
-      while let Some(index) = buffer.iter().position(|byte| *byte == b'\n') {
-        let line = buffer.drain(..=index).collect::<Vec<_>>();
-        let line = str::from_utf8(&line[..line.len() - 1])?.trim();
-        Self::handle_line(line, &sink)?;
+        buffer.extend_from_slice(&chunk);
+
+        while let Some(index) = buffer.iter().position(|byte| *byte == b'\n') {
+          let line = buffer.drain(..=index).collect::<Vec<_>>();
+
+          Self::handle_line(
+            str::from_utf8(&line[..line.len() - 1])?.trim(),
+            &sink,
+          )?;
+        }
       }
-    }
 
-    Self::handle_line(str::from_utf8(&buffer)?.trim(), &sink)?;
+      Self::handle_line(str::from_utf8(&buffer)?.trim(), &sink)?;
 
-    Ok(())
+      Ok(())
+    })
   }
 }
 

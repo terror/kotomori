@@ -3,7 +3,7 @@ use super::*;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Model {
   name: String,
-  provider: ProviderName,
+  provider: String,
 }
 
 impl Model {
@@ -11,14 +11,24 @@ impl Model {
     &self.name
   }
 
-  pub(crate) fn provider(&self) -> ProviderName {
-    self.provider
+  pub(crate) fn provider(&self) -> &str {
+    &self.provider
   }
 }
 
 impl Display for Model {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
     write!(f, "{}:{}", self.provider, self.name)
+  }
+}
+
+impl From<Model> for Arc<dyn Provider> {
+  fn from(model: Model) -> Self {
+    match model.provider.as_str() {
+      "fake" => Arc::new(Fake),
+      "ollama" => Arc::new(Ollama::new()),
+      provider => panic!("unknown provider `{provider}`"),
+    }
   }
 }
 
@@ -32,41 +42,18 @@ impl FromStr for Model {
 
     let name = name.trim();
 
+    if provider.is_empty() {
+      bail!("model provider cannot be empty");
+    }
+
     if name.is_empty() {
       bail!("model name cannot be empty");
     }
 
     Ok(Self {
       name: name.into(),
-      provider: provider.parse()?,
+      provider: provider.into(),
     })
-  }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ProviderName {
-  Fake,
-  Ollama,
-}
-
-impl Display for ProviderName {
-  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-    match self {
-      Self::Fake => write!(f, "fake"),
-      Self::Ollama => write!(f, "ollama"),
-    }
-  }
-}
-
-impl FromStr for ProviderName {
-  type Err = Error;
-
-  fn from_str(s: &str) -> Result<Self> {
-    match s {
-      "fake" => Ok(Self::Fake),
-      "ollama" => Ok(Self::Ollama),
-      provider => bail!("unknown provider `{provider}`"),
-    }
   }
 }
 
@@ -85,7 +72,7 @@ mod tests {
       "fake:foo",
       &Model {
         name: "foo".into(),
-        provider: ProviderName::Fake,
+        provider: "fake".into(),
       },
     );
 
@@ -93,7 +80,15 @@ mod tests {
       "ollama:bar",
       &Model {
         name: "bar".into(),
-        provider: ProviderName::Ollama,
+        provider: "ollama".into(),
+      },
+    );
+
+    case(
+      "other:baz",
+      &Model {
+        name: "baz".into(),
+        provider: "other".into(),
       },
     );
   }

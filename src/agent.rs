@@ -4,7 +4,7 @@ use super::*;
 pub(crate) struct Agent {
   event_sender: UnboundedSender<Event>,
   model: Model,
-  provider: Provider,
+  provider: Arc<dyn Provider>,
 }
 
 impl Agent {
@@ -12,7 +12,7 @@ impl Agent {
     event_sender: UnboundedSender<Event>,
     model: Model,
   ) -> Self {
-    let provider = Provider::new(&model);
+    let provider = model.clone().into();
 
     Self {
       event_sender,
@@ -36,7 +36,7 @@ impl Agent {
       .provider
       .stream(
         CompletionRequest::new(self.model.clone(), messages),
-        Sink::new(self.event_sender.clone()),
+        ProviderSink::new(self.event_sender.clone()),
       )
       .await
   }

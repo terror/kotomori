@@ -6,6 +6,7 @@ use {
   arguments::Arguments,
   clap::{Args, Parser},
   command::Command,
+  completion_request::CompletionRequest,
   component::Component,
   composer::Composer,
   crossterm::{
@@ -23,15 +24,15 @@ use {
   effect::Effect,
   event::Event,
   framed_lines::FramedLines,
-  futures_util::{StreamExt, pin_mut},
+  futures_util::{StreamExt, future::BoxFuture, pin_mut},
   header::Header,
   hint::Hint,
   line::Line,
   message::Message,
-  model::{Model, ProviderName},
+  model::Model,
   options::Options,
-  provider::{CompletionRequest, Provider, Sink},
-  providers::{Fake, Ollama},
+  provider::{Fake, Ollama, Provider},
+  provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   refresh::Refresh,
   renderer::Renderer,
@@ -47,8 +48,10 @@ use {
     fmt::{self, Display, Formatter},
     io::{self, Stdout, Write},
     iter::once,
+    path::PathBuf,
     process,
     str::{self, FromStr},
+    sync::Arc,
     thread,
     time::Duration,
   },
@@ -69,6 +72,7 @@ mod agent;
 mod app;
 mod arguments;
 mod command;
+mod completion_request;
 mod component;
 mod composer;
 mod effect;
@@ -81,7 +85,7 @@ mod message;
 mod model;
 mod options;
 mod provider;
-mod providers;
+mod provider_sink;
 mod refresh;
 mod renderer;
 mod role;

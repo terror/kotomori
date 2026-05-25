@@ -5,10 +5,34 @@ pub(crate) struct App {
   agent: Agent,
   event_receiver: UnboundedReceiver<Event>,
   event_sender: UnboundedSender<Event>,
+  footer: String,
   state: State,
 }
 
 impl App {
+  fn footer(model: &Model) -> Result<String> {
+    let directory =
+      env::current_dir().context("failed to read current directory")?;
+
+    let directory = if let Some(home) = env::var_os("HOME").map(PathBuf::from)
+      && let Ok(directory) = directory.strip_prefix(home)
+    {
+      if directory.as_os_str().is_empty() {
+        "~".into()
+      } else {
+        format!("~/{}", directory.display())
+      }
+    } else {
+      directory.display().to_string()
+    };
+
+    Ok(format!(
+      "{} · {} · {directory}",
+      model.provider(),
+      model.name()
+    ))
+  }
+
   fn handle_effect(&self, effect: Effect) {
     match effect {
       Effect::RunAgent { messages } => {
@@ -53,15 +77,17 @@ impl App {
     });
   }
 
-  pub(crate) fn new(options: Options) -> Self {
+  pub(crate) fn new(options: Options) -> Result<Self> {
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
+    let footer = Self::footer(&options.model)?;
 
-    Self {
+    Ok(Self {
       agent: Agent::new(event_sender.clone(), options.model),
       event_receiver,
       event_sender,
+      footer,
       state: State::new(&options.prompt.unwrap_or_default()),
-    }
+    })
   }
 
   pub(crate) async fn run(mut self) -> Result {
@@ -73,7 +99,8 @@ impl App {
     self.tick();
 
     while !self.state.should_quit() {
-      renderer.draw(terminal.stdout_mut(), &View::new(&self.state))?;
+      renderer
+        .draw(terminal.stdout_mut(), &View::new(&self.state, &self.footer))?;
 
       let Some(event) = self.event_receiver.recv().await else {
         break;
