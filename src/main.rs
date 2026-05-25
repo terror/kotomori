@@ -26,10 +26,11 @@ use {
   event::Event,
   footer::Footer,
   framed_lines::FramedLines,
-  futures_util::{StreamExt, pin_mut},
+  futures_util::{Stream, StreamExt},
   header::Header,
   hint::Hint,
   line::Line,
+  line_stream::LineStream,
   message::Message,
   model::Model,
   options::Options,
@@ -51,6 +52,7 @@ use {
     io::{self, Stdout, Write},
     iter::once,
     path::PathBuf,
+    pin::Pin,
     process,
     str::{self, FromStr},
     sync::Arc,
@@ -84,6 +86,7 @@ mod framed_lines;
 mod header;
 mod hint;
 mod line;
+mod line_stream;
 mod message;
 mod model;
 mod options;

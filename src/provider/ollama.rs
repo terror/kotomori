@@ -7,25 +7,6 @@ pub(crate) struct Ollama {
 }
 
 impl Ollama {
-  fn handle_line(line: &str, sink: &ProviderSink) -> Result {
-    if line.is_empty() {
-      return Ok(());
-    }
-
-    let response = serde_json::from_str::<ChatResponse>(line)?;
-
-    let content = response
-      .message
-      .and_then(|message| message.content)
-      .filter(|content| !content.is_empty());
-
-    if let Some(content) = content {
-      sink.delta(content)?;
-    }
-
-    Ok(())
-  }
-
   pub(crate) fn new() -> Self {
     Self {
       client: Client::new(),
@@ -56,28 +37,26 @@ impl Provider for Ollama {
       .with_context(|| format!("failed to connect to `{}`", self.url))?
       .error_for_status()?;
 
-    let stream = response.bytes_stream();
+    LineStream::new(response.bytes_stream())
+      .for_each(|line| {
+        if line.is_empty() {
+          return Ok(());
+        }
 
-    pin_mut!(stream);
+        let response = serde_json::from_str::<ChatResponse>(line)?;
 
-    let mut buffer = Vec::new();
+        let content = response
+          .message
+          .and_then(|message| message.content)
+          .filter(|content| !content.is_empty());
 
-    while let Some(chunk) = stream.next().await {
-      let chunk = chunk?;
+        if let Some(content) = content {
+          sink.delta(content)?;
+        }
 
-      buffer.extend_from_slice(&chunk);
-
-      while let Some(index) = buffer.iter().position(|byte| *byte == b'\n') {
-        let line = buffer.drain(..=index).collect::<Vec<_>>();
-
-        Self::handle_line(
-          str::from_utf8(&line[..line.len() - 1])?.trim(),
-          &sink,
-        )?;
-      }
-    }
-
-    Self::handle_line(str::from_utf8(&buffer)?.trim(), &sink)?;
+        Ok(())
+      })
+      .await?;
 
     Ok(())
   }
