@@ -5,16 +5,9 @@ pub(crate) struct Fake;
 
 #[async_trait]
 impl Provider for Fake {
-  async fn stream(
-    &self,
-    request: CompletionRequest,
-    sink: ProviderSink,
-  ) -> Result {
+  async fn stream(&self, request: Request, sink: ProviderSink) -> Result {
     let input = request
-      .messages()
-      .iter()
-      .rev()
-      .find(|message| message.role == Role::User)
+      .last_user_message()
       .map(|message| message.content.as_str())
       .unwrap_or_default();
 

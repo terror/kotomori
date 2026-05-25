@@ -1,13 +1,23 @@
 use {
   action::Action,
   agent::Agent,
+  anthropic_sdk::{AuthMethod, types},
   anyhow::{Context, Error, bail},
   app::App,
   arguments::Arguments,
+  async_openai::{
+    config::OpenAIConfig,
+    types::chat::{
+      ChatCompletionRequestAssistantMessage,
+      ChatCompletionRequestAssistantMessageContent,
+      ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
+      ChatCompletionRequestUserMessageContent, CreateChatCompletionRequest,
+      CreateChatCompletionRequestArgs,
+    },
+  },
   async_trait::async_trait,
   clap::{Args, Parser},
   command::Command,
-  completion_request::CompletionRequest,
   component::Component,
   composer::Composer,
   crossterm::{
@@ -26,33 +36,30 @@ use {
   event::Event,
   footer::Footer,
   framed_lines::FramedLines,
-  futures_util::{Stream, StreamExt},
+  futures_util::StreamExt,
   header::Header,
   hint::Hint,
   line::Line,
-  line_stream::LineStream,
   message::Message,
   model::Model,
   options::Options,
-  provider::{Fake, Ollama, Provider},
+  provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   refresh::Refresh,
   renderer::Renderer,
-  reqwest::Client,
+  request::Request,
   role::Role,
-  serde::{Deserialize, Serialize},
   span::Span,
   state::State,
   std::{
     backtrace::BacktraceStatus,
     cmp::Ordering,
     env,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     io::{self, Stdout, Write},
     iter::once,
     path::PathBuf,
-    pin::Pin,
     process,
     str::{self, FromStr},
     sync::Arc,
@@ -76,7 +83,6 @@ mod agent;
 mod app;
 mod arguments;
 mod command;
-mod completion_request;
 mod component;
 mod composer;
 mod effect;
@@ -86,7 +92,6 @@ mod framed_lines;
 mod header;
 mod hint;
 mod line;
-mod line_stream;
 mod message;
 mod model;
 mod options;
@@ -94,6 +99,7 @@ mod provider;
 mod provider_sink;
 mod refresh;
 mod renderer;
+mod request;
 mod role;
 mod span;
 mod state;

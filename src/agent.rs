@@ -11,14 +11,14 @@ impl Agent {
   pub(crate) fn new(
     event_sender: UnboundedSender<Event>,
     model: Model,
-  ) -> Self {
-    let provider = model.clone().into();
+  ) -> Result<Self> {
+    let provider = Arc::<dyn Provider>::try_from(model.clone())?;
 
-    Self {
+    Ok(Self {
       event_sender,
       model,
       provider,
-    }
+    })
   }
 
   pub(crate) fn spawn(&self, messages: Vec<Message>) {
@@ -35,7 +35,7 @@ impl Agent {
     self
       .provider
       .stream(
-        CompletionRequest::new(self.model.clone(), messages),
+        Request::new(self.model.clone(), messages),
         ProviderSink::new(self.event_sender.clone()),
       )
       .await?;

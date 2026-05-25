@@ -13,8 +13,6 @@ impl<'a> View<'a> {
 
 impl Component for View<'_> {
   fn render(&self, width: u16) -> Vec<Line> {
-    let composer = self.state.composer().render(width);
-
     once(Line::blank())
       .chain(Header.render(width))
       .chain(once(Line::blank()))
@@ -26,7 +24,7 @@ impl Component for View<'_> {
           .transcript()
           .render_active(self.state.active_frame(), width),
       )
-      .chain(composer)
+      .chain(self.state.composer().render(width))
       .collect()
   }
 }

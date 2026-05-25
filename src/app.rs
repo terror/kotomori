@@ -59,7 +59,7 @@ impl App {
     let state = State::new(&options)?;
 
     Ok(Self {
-      agent: Agent::new(event_sender.clone(), options.model),
+      agent: Agent::new(event_sender.clone(), options.model)?,
       event_receiver,
       event_sender,
       state,

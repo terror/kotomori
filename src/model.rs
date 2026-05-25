@@ -22,12 +22,16 @@ impl Display for Model {
   }
 }
 
-impl From<Model> for Arc<dyn Provider> {
-  fn from(model: Model) -> Self {
+impl TryFrom<Model> for Arc<dyn Provider> {
+  type Error = Error;
+
+  fn try_from(model: Model) -> Result<Self> {
     match model.provider.as_str() {
-      "fake" => Arc::new(Fake),
-      "ollama" => Arc::new(Ollama::new()),
-      provider => panic!("unknown provider `{provider}`"),
+      "anthropic" => Ok(Arc::new(Anthropic::new()?)),
+      "fake" => Ok(Arc::new(Fake)),
+      "ollama" => Ok(Arc::new(Ollama::new())),
+      "openai" => Ok(Arc::new(OpenAi::new())),
+      provider => bail!("unknown provider `{provider}`"),
     }
   }
 }
@@ -69,6 +73,14 @@ mod tests {
     }
 
     case(
+      "anthropic:foo",
+      &Model {
+        name: "foo".into(),
+        provider: "anthropic".into(),
+      },
+    );
+
+    case(
       "fake:foo",
       &Model {
         name: "foo".into(),
@@ -81,6 +93,14 @@ mod tests {
       &Model {
         name: "bar".into(),
         provider: "ollama".into(),
+      },
+    );
+
+    case(
+      "openai:qux",
+      &Model {
+        name: "qux".into(),
+        provider: "openai".into(),
       },
     );
 
