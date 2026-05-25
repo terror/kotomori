@@ -1,19 +1,111 @@
 use super::*;
 
+macro_rules! define_tool {
+  (
+    $type:ident {
+      name: $name:literal,
+      description: $description:literal,
+      arguments {
+        $(
+          $presence:ident $field:ident: $field_type:ty => $schema:tt
+        ),* $(,)?
+      }
+      invocation |$tool:ident| $invocation:expr $(,)?
+    }
+  ) => {
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct $type {
+      $($field: $field_type,)*
+    }
+
+    impl Tool for $type {
+      const DESCRIPTION: &'static str = $description;
+
+      const NAME: &'static str = $name;
+
+      fn invocation(self, id: String) -> ToolInvocation {
+        let $tool = self;
+
+        ToolInvocation {
+          id,
+          kind: $invocation,
+        }
+      }
+
+      fn parameters() -> Value {
+        let required = [
+          $(define_tool!(@required $presence $field),)*
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+
+        json!({
+          "type": "object",
+          "properties": {
+            $(stringify!($field): $schema,)*
+          },
+          "required": required,
+          "additionalProperties": false
+        })
+      }
+    }
+
+    inventory::submit! {
+      RegisteredTool {
+        description: <$type as Tool>::DESCRIPTION,
+        invocation: <$type as Tool>::parse,
+        name: <$type as Tool>::NAME,
+        parameters: <$type as Tool>::parameters,
+      }
+    }
+  };
+  (@required required $field:ident) => {
+    Some(stringify!($field))
+  };
+  (@required optional $field:ident) => {
+    None::<&str>
+  };
+}
+
 mod apply_patch;
 mod command;
 mod list_files;
 mod read_file;
 mod search_files;
 
+#[derive(Default)]
+pub(crate) struct PendingToolCall {
+  pub(crate) arguments: String,
+  pub(crate) id: Option<String>,
+  pub(crate) name: Option<String>,
+}
+
+impl PendingToolCall {
+  pub(crate) fn finish(self) -> Result<RawToolCall> {
+    let id = self.id.context("missing tool call id")?;
+
+    let name = self.name.context("missing tool call name")?;
+
+    let arguments = if self.arguments.trim().is_empty() {
+      "{}"
+    } else {
+      &self.arguments
+    };
+
+    RawToolCall::from_arguments_string(id, name, arguments)
+  }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ToolCall {
+pub(crate) struct RawToolCall {
   pub(crate) arguments: Value,
   pub(crate) id: String,
   pub(crate) name: String,
 }
 
-impl ToolCall {
+impl RawToolCall {
   pub(crate) fn from_arguments_string(
     id: impl Into<String>,
     name: impl Into<String>,
@@ -28,7 +120,7 @@ impl ToolCall {
   }
 
   pub(crate) fn invocation(&self) -> Result<ToolInvocation> {
-    tools()
+    inventory::iter::<RegisteredTool>
       .into_iter()
       .find(|tool| tool.name == self.name.as_str())
       .with_context(|| format!("unknown tool `{}`", self.name))?
@@ -48,17 +140,25 @@ impl ToolCall {
   }
 }
 
-impl Display for ToolCall {
+impl Display for RawToolCall {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
     write!(f, "{} {}", self.name, self.arguments)
   }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ToolAction {
+pub(crate) struct ToolInvocation {
+  pub(crate) id: String,
+  pub(crate) kind: ToolInvocationKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ToolInvocationKind {
   ApplyPatch { cwd: Option<PathBuf>, patch: String },
   Command(CommandInvocation),
+  ListFiles(CommandInvocation),
   ReadFile { path: PathBuf },
+  SearchFiles(CommandInvocation),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,32 +175,29 @@ impl ToolError {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ToolInvocation {
-  pub(crate) action: ToolAction,
-  pub(crate) call: ToolCall,
-}
-
 impl ToolInvocation {
   fn action(&self, tense: ToolActionTense) -> &'static str {
     match tense {
-      ToolActionTense::Past => match self.call.name.as_str() {
-        "list_files" => "Listed",
-        "read_file" => "Read",
+      ToolActionTense::Past => match &self.kind {
+        ToolInvocationKind::ListFiles(_) => "Listed",
+        ToolInvocationKind::ReadFile { .. } => "Read",
         _ => "Ran",
       },
-      ToolActionTense::Progressive => match self.call.name.as_str() {
-        "list_files" => "Listing",
-        "read_file" => "Reading",
+      ToolActionTense::Progressive => match &self.kind {
+        ToolInvocationKind::ListFiles(_) => "Listing",
+        ToolInvocationKind::ReadFile { .. } => "Reading",
         _ => "Running",
       },
     }
   }
 
   fn command(&self) -> Option<&CommandInvocation> {
-    match &self.action {
-      ToolAction::Command(command) => Some(command),
-      ToolAction::ApplyPatch { .. } | ToolAction::ReadFile { .. } => None,
+    match &self.kind {
+      ToolInvocationKind::Command(command)
+      | ToolInvocationKind::ListFiles(command)
+      | ToolInvocationKind::SearchFiles(command) => Some(command),
+      ToolInvocationKind::ApplyPatch { .. }
+      | ToolInvocationKind::ReadFile { .. } => None,
     }
   }
 
@@ -114,25 +211,21 @@ impl ToolInvocation {
   }
 
   fn subject(&self) -> String {
-    match self.call.name.as_str() {
-      "apply_patch" => "apply_patch".into(),
-      "command" | "search_files" => self
-        .command()
-        .map_or_else(|| self.call.name.clone(), ToString::to_string),
-      "list_files" => self
+    match &self.kind {
+      ToolInvocationKind::ApplyPatch { .. } => "apply_patch".into(),
+      ToolInvocationKind::Command(_) | ToolInvocationKind::SearchFiles(_) => {
+        self
+          .command()
+          .map_or_else(|| "command".into(), ToString::to_string)
+      }
+      ToolInvocationKind::ListFiles(_) => self
         .command()
         .and_then(|command| command.cwd.as_ref())
         .map_or_else(
           || "files".into(),
           |cwd| format!("files in {}", cwd.display()),
         ),
-      "read_file" => match &self.action {
-        ToolAction::ReadFile { path } => path.display().to_string(),
-        ToolAction::ApplyPatch { .. } | ToolAction::Command(_) => {
-          self.call.name.clone()
-        }
-      },
-      _ => self.call.name.clone(),
+      ToolInvocationKind::ReadFile { path } => path.display().to_string(),
     }
   }
 
@@ -149,16 +242,16 @@ enum ToolActionTense {
 
 impl Display for ToolInvocation {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-    match self.call.name.as_str() {
-      "apply_patch" => write!(f, "apply_patch"),
-      "command" | "search_files" => {
+    match &self.kind {
+      ToolInvocationKind::ApplyPatch { .. } => write!(f, "apply_patch"),
+      ToolInvocationKind::Command(_) | ToolInvocationKind::SearchFiles(_) => {
         if let Some(command) = self.command() {
           write!(f, "{command}")
         } else {
-          write!(f, "{}", self.call.name)
+          write!(f, "command")
         }
       }
-      "list_files" => {
+      ToolInvocationKind::ListFiles(_) => {
         if let Some(cwd) =
           self.command().and_then(|command| command.cwd.as_ref())
         {
@@ -167,13 +260,9 @@ impl Display for ToolInvocation {
           write!(f, "list files")
         }
       }
-      "read_file" => match &self.action {
-        ToolAction::ReadFile { path } => write!(f, "read {}", path.display()),
-        ToolAction::ApplyPatch { .. } | ToolAction::Command(_) => {
-          write!(f, "{}", self.call.name)
-        }
-      },
-      _ => write!(f, "{}", self.call.name),
+      ToolInvocationKind::ReadFile { path } => {
+        write!(f, "read {}", path.display())
+      }
     }
   }
 }
@@ -181,23 +270,14 @@ impl Display for ToolInvocation {
 #[derive(Clone, Copy)]
 pub(crate) struct RegisteredTool {
   pub(crate) description: &'static str,
-  invocation: fn(ToolCall) -> Result<ToolInvocation>,
+  invocation: fn(RawToolCall) -> Result<ToolInvocation>,
   pub(crate) name: &'static str,
   parameters: fn() -> Value,
 }
 
 impl RegisteredTool {
-  pub(crate) fn invocation(&self, call: ToolCall) -> Result<ToolInvocation> {
+  pub(crate) fn invocation(&self, call: RawToolCall) -> Result<ToolInvocation> {
     (self.invocation)(call)
-  }
-
-  fn new<T: Tool>() -> Self {
-    Self {
-      description: T::DESCRIPTION,
-      invocation: T::invocation,
-      name: T::NAME,
-      parameters: T::parameters,
-    }
   }
 
   pub(crate) fn parameters(&self) -> Value {
@@ -205,36 +285,25 @@ impl RegisteredTool {
   }
 }
 
+inventory::collect!(RegisteredTool);
+
 pub(crate) trait Tool: serde::de::DeserializeOwned + Sized {
   const DESCRIPTION: &'static str;
 
   const NAME: &'static str;
 
-  fn action(self) -> ToolAction;
-
-  fn decode(call: &ToolCall) -> Result<Self> {
+  fn decode(call: &RawToolCall) -> Result<Self> {
     serde_json::from_value(call.arguments.clone())
       .with_context(|| format!("failed to decode `{}` arguments", call.name))
   }
 
-  fn invocation(call: ToolCall) -> Result<ToolInvocation> {
-    Ok(ToolInvocation {
-      action: Self::decode(&call)?.action(),
-      call,
-    })
-  }
+  fn invocation(self, id: String) -> ToolInvocation;
 
   fn parameters() -> Value;
-}
 
-pub(crate) fn tools() -> Vec<RegisteredTool> {
-  vec![
-    RegisteredTool::new::<list_files::ListFiles>(),
-    RegisteredTool::new::<search_files::SearchFiles>(),
-    RegisteredTool::new::<read_file::ReadFile>(),
-    RegisteredTool::new::<command::Command>(),
-    RegisteredTool::new::<apply_patch::ApplyPatch>(),
-  ]
+  fn parse(call: RawToolCall) -> Result<ToolInvocation> {
+    Ok(Self::decode(&call)?.invocation(call.id))
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -326,13 +395,15 @@ mod tests {
   #[test]
   fn parses_apply_patch_tool_call() {
     assert_eq!(
-      ToolCall::new("foo", "apply_patch", json!({"patch": "bar"}))
+      RawToolCall::new("foo", "apply_patch", json!({"patch": "bar"}))
         .invocation()
-        .unwrap()
-        .action,
-      ToolAction::ApplyPatch {
-        cwd: None,
-        patch: "bar".into(),
+        .unwrap(),
+      ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::ApplyPatch {
+          cwd: None,
+          patch: "bar".into(),
+        },
       },
     );
   }
@@ -340,80 +411,92 @@ mod tests {
   #[test]
   fn parses_command_tool_call() {
     assert_eq!(
-      ToolCall::new(
+      RawToolCall::new(
         "foo",
         "command",
         json!({"program": "bar", "arguments": ["baz"], "cwd": null}),
       )
       .invocation()
-      .unwrap()
-      .action,
-      ToolAction::Command(CommandInvocation {
-        arguments: vec!["baz".into()],
-        cwd: None,
-        program: "bar".into(),
-      }),
+      .unwrap(),
+      ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::Command(CommandInvocation {
+          arguments: vec!["baz".into()],
+          cwd: None,
+          program: "bar".into(),
+        }),
+      },
     );
   }
 
   #[test]
   fn parses_list_files_tool_call() {
     assert_eq!(
-      ToolCall::new("foo", "list_files", json!({"cwd": "bar"}))
+      RawToolCall::new("foo", "list_files", json!({"cwd": "bar"}))
         .invocation()
-        .unwrap()
-        .action,
-      ToolAction::Command(CommandInvocation {
-        arguments: vec!["--files".into()],
-        cwd: Some("bar".into()),
-        program: "rg".into(),
-      }),
+        .unwrap(),
+      ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::ListFiles(CommandInvocation {
+          arguments: vec!["--files".into()],
+          cwd: Some("bar".into()),
+          program: "rg".into(),
+        }),
+      },
     );
   }
 
   #[test]
   fn parses_read_file_tool_call() {
     assert_eq!(
-      ToolCall::new("foo", "read_file", json!({"path": "bar"}))
+      RawToolCall::new("foo", "read_file", json!({"path": "bar"}))
         .invocation()
-        .unwrap()
-        .action,
-      ToolAction::ReadFile { path: "bar".into() },
+        .unwrap(),
+      ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::ReadFile { path: "bar".into() },
+      },
     );
   }
 
   #[test]
   fn parses_search_files_tool_call() {
     assert_eq!(
-      ToolCall::new(
+      RawToolCall::new(
         "foo",
         "search_files",
         json!({"arguments": ["foo"], "cwd": "bar"}),
       )
       .invocation()
-      .unwrap()
-      .action,
-      ToolAction::Command(CommandInvocation {
-        arguments: vec!["foo".into()],
-        cwd: Some("bar".into()),
-        program: "rg".into(),
-      }),
+      .unwrap(),
+      ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::SearchFiles(CommandInvocation {
+          arguments: vec!["foo".into()],
+          cwd: Some("bar".into()),
+          program: "rg".into(),
+        }),
+      },
     );
   }
 
   #[test]
   fn parses_tool_call_arguments() {
     assert_eq!(
-      ToolCall::from_arguments_string("foo", "read_file", r#"{"path":"bar"}"#)
-        .unwrap(),
-      ToolCall::new("foo", "read_file", json!({"path": "bar"})),
+      RawToolCall::from_arguments_string(
+        "foo",
+        "read_file",
+        r#"{"path":"bar"}"#
+      )
+      .unwrap(),
+      RawToolCall::new("foo", "read_file", json!({"path": "bar"})),
     );
   }
 
   #[test]
   fn unknown_tool_errors() {
     assert_eq!(
-      ToolCall::new("foo", "bar", json!({}))
+      RawToolCall::new("foo", "bar", json!({}))
         .invocation()
         .unwrap_err()
         .to_string(),

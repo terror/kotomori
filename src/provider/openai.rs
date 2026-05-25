@@ -5,13 +5,6 @@ pub(crate) struct OpenAi {
   client: async_openai::Client<OpenAIConfig>,
 }
 
-#[derive(Default)]
-struct PendingToolCall {
-  arguments: String,
-  id: Option<String>,
-  name: Option<String>,
-}
-
 impl OpenAi {
   pub(crate) fn new() -> Self {
     Self::with_config(OpenAIConfig::new())
@@ -22,33 +15,6 @@ impl OpenAi {
       client: async_openai::Client::with_config(config),
     }
   }
-}
-
-impl PendingToolCall {
-  fn finish(self) -> Result<ToolCall> {
-    let id = self.id.context("missing tool call id")?;
-
-    let name = self.name.context("missing tool call name")?;
-
-    let arguments = if self.arguments.trim().is_empty() {
-      "{}"
-    } else {
-      &self.arguments
-    };
-
-    ToolCall::from_arguments_string(id, name, arguments)
-  }
-}
-
-fn tool(tool: RegisteredTool) -> ChatCompletionTools {
-  ChatCompletionTools::Function(ChatCompletionTool {
-    function: FunctionObject {
-      description: Some(tool.description.into()),
-      name: tool.name.into(),
-      parameters: Some(tool.parameters()),
-      strict: None,
-    },
-  })
 }
 
 #[async_trait]
@@ -100,20 +66,6 @@ impl Provider for OpenAi {
   }
 }
 
-impl TryFrom<&Request> for CreateChatCompletionRequest {
-  type Error = Error;
-
-  fn try_from(request: &Request) -> Result<Self> {
-    Ok(
-      CreateChatCompletionRequestArgs::default()
-        .model(request.model_name())
-        .messages(request.messages().map(Into::into).collect::<Vec<_>>())
-        .tools(tools().into_iter().map(tool).collect::<Vec<_>>())
-        .build()?,
-    )
-  }
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -126,22 +78,26 @@ mod tests {
     ))
     .unwrap();
 
+    let mut tools = request
+      .tools
+      .unwrap()
+      .into_iter()
+      .map(|tool| match tool {
+        ChatCompletionTools::Function(tool) => tool.function.name,
+        ChatCompletionTools::Custom(_) => unreachable!(),
+      })
+      .collect::<Vec<_>>();
+
+    tools.sort();
+
     assert_eq!(
-      request
-        .tools
-        .unwrap()
-        .into_iter()
-        .map(|tool| match tool {
-          ChatCompletionTools::Function(tool) => tool.function.name,
-          ChatCompletionTools::Custom(_) => unreachable!(),
-        })
-        .collect::<Vec<_>>(),
+      tools,
       vec![
-        "list_files",
-        "search_files",
-        "read_file",
+        "apply_patch",
         "command",
-        "apply_patch"
+        "list_files",
+        "read_file",
+        "search_files",
       ],
     );
   }
@@ -156,7 +112,7 @@ mod tests {
       }
       .finish()
       .unwrap(),
-      ToolCall::new("foo", "read_file", json!({"path": "bar"})),
+      RawToolCall::new("foo", "read_file", json!({"path": "bar"})),
     );
   }
 }

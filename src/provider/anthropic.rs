@@ -4,13 +4,6 @@ pub(crate) struct Anthropic {
   client: anthropic_sdk::Anthropic,
 }
 
-#[derive(Default)]
-struct PendingToolCall {
-  arguments: String,
-  id: Option<String>,
-  name: Option<String>,
-}
-
 impl Anthropic {
   pub(crate) fn new() -> Result<Self> {
     let base_url = env::var("ANTHROPIC_BASE_URL")
@@ -30,62 +23,9 @@ impl Anthropic {
   }
 }
 
-impl PendingToolCall {
-  fn finish(self) -> Result<ToolCall> {
-    let id = self.id.context("missing tool call id")?;
-    let name = self.name.context("missing tool call name")?;
-    let arguments = if self.arguments.trim().is_empty() {
-      "{}"
-    } else {
-      &self.arguments
-    };
-
-    ToolCall::from_arguments_string(id, name, arguments)
-  }
-}
-
 impl Debug for Anthropic {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
     f.debug_struct("Anthropic").finish_non_exhaustive()
-  }
-}
-
-fn tool(tool: RegisteredTool) -> types::Tool {
-  let Value::Object(schema) = tool.parameters() else {
-    unreachable!()
-  };
-
-  let properties = schema
-    .get("properties")
-    .and_then(Value::as_object)
-    .cloned()
-    .unwrap_or_default();
-
-  let required = schema
-    .get("required")
-    .and_then(Value::as_array)
-    .into_iter()
-    .flatten()
-    .filter_map(Value::as_str)
-    .map(str::to_string)
-    .collect();
-
-  let additional = schema
-    .into_iter()
-    .filter(|(key, _)| {
-      key != "properties" && key != "required" && key != "type"
-    })
-    .collect();
-
-  types::Tool {
-    description: tool.description.into(),
-    input_schema: types::ToolInputSchema {
-      additional,
-      properties,
-      required,
-      schema_type: "object".into(),
-    },
-    name: tool.name.into(),
   }
 }
 
@@ -152,26 +92,6 @@ impl Provider for Anthropic {
   }
 }
 
-impl From<&Request> for types::MessageCreateParams {
-  fn from(request: &Request) -> Self {
-    request
-      .messages()
-      .map(types::MessageParam::from)
-      .fold(
-        types::MessageCreateBuilder::new(
-          request.model_name(),
-          env::var("ANTHROPIC_MAX_TOKENS")
-            .ok()
-            .and_then(|max_tokens| max_tokens.parse::<u32>().ok())
-            .unwrap_or(4096),
-        ),
-        |builder, message| builder.message(message.role, message.content),
-      )
-      .tools(tools().into_iter().map(tool).collect::<Vec<_>>())
-      .build()
-  }
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -183,19 +103,23 @@ mod tests {
       vec![Message::new(Role::User, "bar")],
     ));
 
+    let mut tools = request
+      .tools
+      .unwrap()
+      .into_iter()
+      .map(|tool| tool.name)
+      .collect::<Vec<_>>();
+
+    tools.sort();
+
     assert_eq!(
-      request
-        .tools
-        .unwrap()
-        .into_iter()
-        .map(|tool| tool.name)
-        .collect::<Vec<_>>(),
+      tools,
       vec![
-        "list_files",
-        "search_files",
-        "read_file",
+        "apply_patch",
         "command",
-        "apply_patch"
+        "list_files",
+        "read_file",
+        "search_files",
       ],
     );
   }
@@ -210,7 +134,7 @@ mod tests {
       }
       .finish()
       .unwrap(),
-      ToolCall::new("foo", "list_files", json!({})),
+      RawToolCall::new("foo", "list_files", json!({})),
     );
   }
 }

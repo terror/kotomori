@@ -31,6 +31,100 @@ impl Request {
   }
 }
 
+fn anthropic_tool(tool: &RegisteredTool) -> types::Tool {
+  let Value::Object(schema) = tool.parameters() else {
+    unreachable!()
+  };
+
+  let properties = schema
+    .get("properties")
+    .and_then(Value::as_object)
+    .cloned()
+    .unwrap_or_default();
+
+  let required = schema
+    .get("required")
+    .and_then(Value::as_array)
+    .into_iter()
+    .flatten()
+    .filter_map(Value::as_str)
+    .map(str::to_string)
+    .collect();
+
+  let additional = schema
+    .into_iter()
+    .filter(|(key, _)| {
+      key != "properties" && key != "required" && key != "type"
+    })
+    .collect();
+
+  types::Tool {
+    description: tool.description.into(),
+    input_schema: types::ToolInputSchema {
+      additional,
+      properties,
+      required,
+      schema_type: "object".into(),
+    },
+    name: tool.name.into(),
+  }
+}
+
+fn openai_tool(tool: &RegisteredTool) -> ChatCompletionTools {
+  ChatCompletionTools::Function(ChatCompletionTool {
+    function: FunctionObject {
+      description: Some(tool.description.into()),
+      name: tool.name.into(),
+      parameters: Some(tool.parameters()),
+      strict: None,
+    },
+  })
+}
+
+impl From<&Request> for types::MessageCreateParams {
+  fn from(request: &Request) -> Self {
+    request
+      .messages()
+      .map(types::MessageParam::from)
+      .fold(
+        types::MessageCreateBuilder::new(
+          request.model_name(),
+          env::var("ANTHROPIC_MAX_TOKENS")
+            .ok()
+            .and_then(|max_tokens| max_tokens.parse::<u32>().ok())
+            .unwrap_or(4096),
+        ),
+        |builder, message| builder.message(message.role, message.content),
+      )
+      .tools(
+        inventory::iter::<RegisteredTool>
+          .into_iter()
+          .map(anthropic_tool)
+          .collect::<Vec<_>>(),
+      )
+      .build()
+  }
+}
+
+impl TryFrom<&Request> for CreateChatCompletionRequest {
+  type Error = Error;
+
+  fn try_from(request: &Request) -> Result<Self> {
+    Ok(
+      CreateChatCompletionRequestArgs::default()
+        .model(request.model_name())
+        .messages(request.messages().map(Into::into).collect::<Vec<_>>())
+        .tools(
+          inventory::iter::<RegisteredTool>
+            .into_iter()
+            .map(openai_tool)
+            .collect::<Vec<_>>(),
+        )
+        .build()?,
+    )
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

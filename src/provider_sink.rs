@@ -14,7 +14,7 @@ impl ProviderSink {
     Self { event_sender }
   }
 
-  pub(crate) fn tool_call(&self, tool_call: ToolCall) -> Result {
+  pub(crate) fn tool_call(&self, tool_call: RawToolCall) -> Result {
     Ok(self.event_sender.send(Event::AgentToolCall(tool_call))?)
   }
 }

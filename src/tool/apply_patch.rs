@@ -1,33 +1,16 @@
 use super::*;
 
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct ApplyPatch {
-  cwd: Option<PathBuf>,
-  patch: String,
-}
-
-impl Tool for ApplyPatch {
-  const DESCRIPTION: &'static str = "Apply a unified patch to the workspace.";
-
-  const NAME: &'static str = "apply_patch";
-
-  fn action(self) -> ToolAction {
-    ToolAction::ApplyPatch {
-      cwd: self.cwd,
-      patch: self.patch,
+define_tool! {
+  ApplyPatch {
+    name: "apply_patch",
+    description: "Apply a unified patch to the workspace.",
+    arguments {
+      required patch: String => {"type": "string"},
+      optional cwd: Option<PathBuf> => {"type": ["string", "null"]},
     }
-  }
-
-  fn parameters() -> Value {
-    json!({
-      "type": "object",
-      "properties": {
-        "patch": {"type": "string"},
-        "cwd": {"type": ["string", "null"]}
-      },
-      "required": ["patch"],
-      "additionalProperties": false
-    })
+    invocation |tool| ToolInvocationKind::ApplyPatch {
+      cwd: tool.cwd,
+      patch: tool.patch,
+    },
   }
 }
