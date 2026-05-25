@@ -238,23 +238,6 @@ mod tests {
   }
 
   #[test]
-  fn unknown_command() {
-    let mut state = State::new("/foobar");
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    assert_eq!(
-      state.transcript().messages(),
-      &[Message::new(
-        Role::Agent,
-        "Unrecognized command '/foobar'. Type \"/\" for a list of supported commands."
-      )]
-    );
-
-    assert_eq!(state.input_text(), "");
-  }
-
-  #[test]
   fn multiline_input() {
     let mut state = State::new("");
 
@@ -277,5 +260,22 @@ mod tests {
         input: "foo\nbar".into()
       }]
     );
+  }
+
+  #[test]
+  fn unknown_command() {
+    let mut state = State::new("/foobar");
+
+    state.handle_event(Event::Action(Action::Submit));
+
+    assert_eq!(
+      state.transcript().messages(),
+      &[Message::new(
+        Role::Agent,
+        "Unrecognized command '/foobar'. Type \"/\" for a list of supported commands."
+      )]
+    );
+
+    assert_eq!(state.input_text(), "");
   }
 }
