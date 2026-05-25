@@ -1,4 +1,4 @@
-use super::*;
+use {super::*, async_openai as openai};
 
 #[derive(Debug)]
 pub(crate) struct Ollama {
@@ -9,7 +9,7 @@ impl Ollama {
   pub(crate) fn new() -> Self {
     Self {
       openai: OpenAi::with_config(
-        OpenAIConfig::new()
+        openai::config::OpenAIConfig::new()
           .with_api_base(format!(
             "{}/v1",
             env::var("OLLAMA_HOST")

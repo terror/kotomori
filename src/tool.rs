@@ -169,12 +169,9 @@ impl ToolCallBuilder {
     self,
     argument_fragment: Option<&str>,
   ) -> Self {
-    let argument_fragments = if let Some(argument_fragment) = argument_fragment
-    {
-      format!("{}{argument_fragment}", self.argument_fragments)
-    } else {
-      self.argument_fragments
-    };
+    let argument_fragments = argument_fragment
+      .map(|fragment| format!("{}{fragment}", self.argument_fragments))
+      .unwrap_or(self.argument_fragments);
 
     Self {
       argument_fragments,
@@ -275,7 +272,9 @@ impl<I: Ord> ToolCallStream<I> {
   }
 }
 
-impl ToolCallStreamEvent for ChatCompletionMessageToolCallChunk {
+impl ToolCallStreamEvent
+  for openai::types::chat::ChatCompletionMessageToolCallChunk
+{
   type Index = u32;
 
   fn tool_call_fragment(self) -> Option<ToolCallFragment<Self::Index>> {
@@ -293,13 +292,14 @@ impl ToolCallStreamEvent for ChatCompletionMessageToolCallChunk {
   }
 }
 
-impl ToolCallStreamEvent for types::MessageStreamEvent {
+impl ToolCallStreamEvent for anthropic::types::MessageStreamEvent {
   type Index = usize;
 
   fn tool_call_fragment(self) -> Option<ToolCallFragment<Self::Index>> {
     match self {
       Self::ContentBlockStart {
-        content_block: types::ContentBlock::ToolUse { id, input, name },
+        content_block:
+          anthropic::types::ContentBlock::ToolUse { id, input, name },
         index,
       } => Some(ToolCallFragment::Update {
         argument_fragment: None,
@@ -309,7 +309,8 @@ impl ToolCallStreamEvent for types::MessageStreamEvent {
         name: Some(name),
       }),
       Self::ContentBlockDelta {
-        delta: types::ContentBlockDelta::InputJsonDelta { partial_json },
+        delta:
+          anthropic::types::ContentBlockDelta::InputJsonDelta { partial_json },
         index,
       } => Some(ToolCallFragment::Update {
         argument_fragment: Some(partial_json),
@@ -440,10 +441,10 @@ impl RegisteredTool {
   }
 }
 
-impl From<&RegisteredTool> for ChatCompletionTools {
+impl From<&RegisteredTool> for openai::types::chat::ChatCompletionTools {
   fn from(tool: &RegisteredTool) -> Self {
-    Self::Function(ChatCompletionTool {
-      function: FunctionObject {
+    Self::Function(openai::types::chat::ChatCompletionTool {
+      function: openai::types::chat::FunctionObject {
         description: Some(tool.description.into()),
         name: tool.name.into(),
         parameters: Some(tool.parameters()),
@@ -453,7 +454,7 @@ impl From<&RegisteredTool> for ChatCompletionTools {
   }
 }
 
-impl From<&RegisteredTool> for types::Tool {
+impl From<&RegisteredTool> for anthropic::types::Tool {
   fn from(tool: &RegisteredTool) -> Self {
     let Value::Object(schema) = tool.parameters() else {
       unreachable!()
@@ -483,7 +484,7 @@ impl From<&RegisteredTool> for types::Tool {
 
     Self {
       description: tool.description.into(),
-      input_schema: types::ToolInputSchema {
+      input_schema: anthropic::types::ToolInputSchema {
         additional,
         properties,
         required,

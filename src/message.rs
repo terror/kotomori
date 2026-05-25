@@ -24,36 +24,43 @@ impl Component for Message {
   }
 }
 
-impl From<&Message> for ChatCompletionRequestMessage {
+impl From<&Message> for openai::types::chat::ChatCompletionRequestMessage {
   fn from(message: &Message) -> Self {
     match message.role {
-      Role::Agent => ChatCompletionRequestMessage::Assistant(
-        ChatCompletionRequestAssistantMessage {
-          content: Some(ChatCompletionRequestAssistantMessageContent::Text(
-            message.content.clone(),
-          )),
-          ..Default::default()
-        },
-      ),
+      Role::Agent => {
+        openai::types::chat::ChatCompletionRequestMessage::Assistant(
+          openai::types::chat::ChatCompletionRequestAssistantMessage {
+            content: Some(
+              openai::types::chat::ChatCompletionRequestAssistantMessageContent::Text(
+                message.content.clone(),
+              ),
+            ),
+            ..Default::default()
+          },
+        )
+      }
       Role::User => {
-        ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
-          content: ChatCompletionRequestUserMessageContent::Text(
-            message.content.clone(),
-          ),
-          name: None,
-        })
+        openai::types::chat::ChatCompletionRequestMessage::User(
+          openai::types::chat::ChatCompletionRequestUserMessage {
+            content:
+              openai::types::chat::ChatCompletionRequestUserMessageContent::Text(
+                message.content.clone(),
+              ),
+            name: None,
+          },
+        )
       }
     }
   }
 }
 
-impl From<&Message> for types::MessageParam {
+impl From<&Message> for anthropic::types::MessageParam {
   fn from(message: &Message) -> Self {
-    types::MessageParam {
-      content: types::MessageContent::Text(message.content.clone()),
+    anthropic::types::MessageParam {
+      content: anthropic::types::MessageContent::Text(message.content.clone()),
       role: match message.role {
-        Role::Agent => types::Role::Assistant,
-        Role::User => types::Role::User,
+        Role::Agent => anthropic::types::Role::Assistant,
+        Role::User => anthropic::types::Role::User,
       },
     }
   }
