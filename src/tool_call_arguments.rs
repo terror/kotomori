@@ -8,14 +8,15 @@ pub(crate) enum ToolCallArguments {
 }
 
 impl ToolCallArguments {
-  pub(crate) fn argument_delta(self, argument_delta: &str) -> Self {
+  pub(crate) fn argument_delta(&mut self, argument_delta: &str) -> &mut Self {
     match self {
-      Self::Empty => Self::Deltas(argument_delta.into()),
-      Self::Deltas(mut argument_deltas) => {
+      Self::Empty => *self = Self::Deltas(argument_delta.into()),
+      Self::Deltas(argument_deltas) => {
         argument_deltas.push_str(argument_delta);
-        Self::Deltas(argument_deltas)
       }
     }
+
+    self
   }
 
   pub(crate) fn finish(self) -> Result<Value> {

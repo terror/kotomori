@@ -13,19 +13,14 @@ impl<I: Ord> ToolCallStream<I> {
       .collect()
   }
 
-  pub(crate) fn push(
-    &mut self,
-    update: ToolCallUpdate<I>,
-  ) -> Result<Vec<RawToolCall>> {
+  fn push(&mut self, update: ToolCallUpdate<I>) -> Result<Vec<RawToolCall>> {
     match update.kind {
       ToolCallUpdateKind::ArgumentDelta(argument_delta) => {
-        let tool_call = self
+        self
           .calls
-          .remove(&update.index)
-          .unwrap_or_default()
+          .entry(update.index)
+          .or_default()
           .argument_delta(&argument_delta);
-
-        self.calls.insert(update.index, tool_call);
 
         Ok(Vec::new())
       }
@@ -37,21 +32,12 @@ impl<I: Ord> ToolCallStream<I> {
         .map(Option::into_iter)
         .map(Iterator::collect),
       ToolCallUpdateKind::Id(id) => {
-        let tool_call =
-          self.calls.remove(&update.index).unwrap_or_default().id(id);
-
-        self.calls.insert(update.index, tool_call);
+        self.calls.entry(update.index).or_default().id(id);
 
         Ok(Vec::new())
       }
       ToolCallUpdateKind::Name(name) => {
-        let tool_call = self
-          .calls
-          .remove(&update.index)
-          .unwrap_or_default()
-          .name(name);
-
-        self.calls.insert(update.index, tool_call);
+        self.calls.entry(update.index).or_default().name(name);
 
         Ok(Vec::new())
       }
@@ -62,13 +48,13 @@ impl<I: Ord> ToolCallStream<I> {
   where
     E: ToolCallStreamEvent<Index = I>,
   {
-    event.tool_call_updates().into_iter().try_fold(
-      Vec::new(),
-      |mut tool_calls, update| {
-        tool_calls.extend(self.push(update)?);
-        Ok(tool_calls)
-      },
-    )
+    let mut tool_calls = Vec::new();
+
+    for update in event.tool_call_updates() {
+      tool_calls.extend(self.push(update)?);
+    }
+
+    Ok(tool_calls)
   }
 }
 
