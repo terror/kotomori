@@ -38,23 +38,7 @@ impl ToolInvocation {
   }
 
   fn arguments(&self) -> Value {
-    match &self.kind {
-      ToolInvocationKind::ApplyPatchTool(tool) => {
-        serde_json::to_value(tool).expect("failed to serialize tool arguments")
-      }
-      ToolInvocationKind::CommandTool(tool) => {
-        serde_json::to_value(tool).expect("failed to serialize tool arguments")
-      }
-      ToolInvocationKind::ListFilesTool(tool) => {
-        serde_json::to_value(tool).expect("failed to serialize tool arguments")
-      }
-      ToolInvocationKind::ReadFileTool(tool) => {
-        serde_json::to_value(tool).expect("failed to serialize tool arguments")
-      }
-      ToolInvocationKind::SearchFilesTool(tool) => {
-        serde_json::to_value(tool).expect("failed to serialize tool arguments")
-      }
-    }
+    self.kind.arguments()
   }
 
   fn command(&self) -> Option<&CommandTool> {
@@ -279,6 +263,23 @@ mod tests {
           cwd: Some("bar".into()),
         }),
       },
+    );
+  }
+
+  #[test]
+  fn serializes_tool_arguments() {
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::CommandTool(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "baz".into(),
+      }),
+    };
+
+    assert_eq!(
+      invocation.arguments(),
+      json!({"arguments": ["bar"], "cwd": null, "program": "baz"}),
     );
   }
 

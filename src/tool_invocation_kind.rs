@@ -1,7 +1,8 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[allow(clippy::enum_variant_names)]
+#[serde(untagged)]
 pub(crate) enum ToolInvocationKind {
   ApplyPatchTool(ApplyPatchTool),
   CommandTool(CommandTool),
@@ -11,6 +12,10 @@ pub(crate) enum ToolInvocationKind {
 }
 
 impl ToolInvocationKind {
+  pub(crate) fn arguments(&self) -> Value {
+    serde_json::to_value(self).expect("failed to serialize tool arguments")
+  }
+
   pub(crate) fn execute(&self) -> ToolResult {
     match self {
       Self::ApplyPatchTool(tool) => tool.execute(),
