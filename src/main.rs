@@ -24,6 +24,7 @@ use {
       enable_raw_mode,
     },
   },
+  cursor::Cursor,
   diff::Diff,
   dimensions::Dimensions,
   effect::Effect,
@@ -47,7 +48,7 @@ use {
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
-  render_op::RenderOp,
+  render_operation::RenderOperation,
   renderer::Renderer,
   request::Request,
   role::Role,
@@ -76,7 +77,6 @@ use {
   strum::{EnumIter, IntoEnumIterator},
   style::Style,
   terminal::Terminal,
-  terminal_cursor::Cursor,
   tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
@@ -155,13 +155,14 @@ mod openai {
     },
   };
 }
+mod cursor;
 mod options;
 mod presented_frame;
 mod provider;
 mod provider_output;
 mod provider_sink;
 mod raw_tool_call;
-mod render_op;
+mod render_operation;
 mod renderer;
 mod request;
 mod role;
@@ -169,7 +170,6 @@ mod span;
 mod state;
 mod style;
 mod terminal;
-mod terminal_cursor;
 mod tool;
 mod tool_action_tense;
 mod tool_call_arguments;

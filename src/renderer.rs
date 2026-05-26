@@ -87,19 +87,24 @@ impl Renderer {
   ) -> Result {
     let next = Frame::new(rendered, Dimensions { height, width });
 
-    let op = self.render_op(&next);
+    let operation = self.render_operation(&next);
 
-    let presented = match op {
-      RenderOp::Full { clear } => Self::full_render(stdout, &next, clear)?,
-      RenderOp::Noop => self.present_noop(&next),
-      RenderOp::Patch { diff } => self.patch_render(stdout, next, diff)?,
+    let presented = match operation {
+      RenderOperation::Full { clear } => {
+        Self::full_render(stdout, &next, clear)?
+      }
+      RenderOperation::NoOperation => self.present_no_operation(&next),
+      RenderOperation::Patch { diff } => {
+        self.patch_render(stdout, next, diff)?
+      }
     };
 
-    self.max_lines_rendered = if matches!(op, RenderOp::Full { clear: true }) {
-      presented.frame.len()
-    } else {
-      self.max_lines_rendered.max(presented.frame.len())
-    };
+    self.max_lines_rendered =
+      if matches!(operation, RenderOperation::Full { clear: true }) {
+        presented.frame.len()
+      } else {
+        self.max_lines_rendered.max(presented.frame.len())
+      };
 
     self.presented = Some(presented);
 
@@ -288,7 +293,7 @@ impl Renderer {
     Ok(PresentedFrame::new(cursor, next, next_viewport))
   }
 
-  fn present_noop(&self, next: &Frame) -> PresentedFrame {
+  fn present_no_operation(&self, next: &Frame) -> PresentedFrame {
     let presented = self.presented.as_ref().unwrap();
 
     PresentedFrame::new(
@@ -316,49 +321,49 @@ impl Renderer {
     }
   }
 
-  fn render_op(&self, next: &Frame) -> RenderOp {
+  fn render_operation(&self, next: &Frame) -> RenderOperation {
     let Some(presented) = &self.presented else {
-      return RenderOp::Full { clear: false };
+      return RenderOperation::Full { clear: false };
     };
 
     if presented.frame.dimensions.width != next.dimensions.width {
-      return RenderOp::Full { clear: true };
+      return RenderOperation::Full { clear: true };
     }
 
     if presented.frame.dimensions.height != next.dimensions.height
       && !Self::is_termux_session()
     {
-      return RenderOp::Full { clear: true };
+      return RenderOperation::Full { clear: true };
     }
 
     if next.len() < self.max_lines_rendered
       && env::var_os("KOTOMORI_CLEAR_ON_SHRINK").is_some()
     {
-      return RenderOp::Full { clear: true };
+      return RenderOperation::Full { clear: true };
     }
 
     let Some(diff) = Diff::between(&presented.frame, next) else {
-      return RenderOp::Noop;
+      return RenderOperation::NoOperation;
     };
 
     let previous_viewport = self.previous_viewport(next);
 
     if diff.changed.first < previous_viewport.top() {
-      return RenderOp::Full { clear: true };
+      return RenderOperation::Full { clear: true };
     }
 
     if diff.is_pure_tail_delete()
       && next.last_row() < previous_viewport.top()
       && !next.is_empty()
     {
-      return RenderOp::Full { clear: true };
+      return RenderOperation::Full { clear: true };
     }
 
     if diff.deleted_tail_len() > next.dimensions.height() {
-      return RenderOp::Full { clear: true };
+      return RenderOperation::Full { clear: true };
     }
 
-    RenderOp::Patch { diff }
+    RenderOperation::Patch { diff }
   }
 
   fn write_lines(stdout: &mut impl Write, lines: &[String]) -> Result {
