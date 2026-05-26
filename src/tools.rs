@@ -101,3 +101,30 @@ impl Display for CommandTool {
     }
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn tool_parameters_are_derived_from_type() {
+    let tool = TOOLS.iter().find(|tool| tool.name == "command").unwrap();
+
+    assert_eq!(
+      tool.parameters,
+      json!({
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "type": "array",
+            "items": {"type": "string"},
+          },
+          "cwd": {"type": ["string", "null"]},
+          "program": {"type": "string"},
+        },
+        "required": ["arguments", "program"],
+        "additionalProperties": false,
+      }),
+    );
+  }
+}
