@@ -34,6 +34,7 @@ use {
   model::Model,
   options::Options,
   provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
+  provider_output::ProviderOutput,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
@@ -133,6 +134,7 @@ mod openai {
 }
 mod options;
 mod provider;
+mod provider_output;
 mod provider_sink;
 mod raw_tool_call;
 mod refresh;
