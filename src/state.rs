@@ -78,7 +78,7 @@ impl State {
       composer: Composer::new(options.prompt.as_deref().unwrap_or_default())
         .footer(Footer::try_from(&options.model)?),
       should_quit: false,
-      transcript: Transcript::new(),
+      transcript: Transcript::default(),
     })
   }
 

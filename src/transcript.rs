@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct Transcript {
   active_agent_message: Option<String>,
   active_frame: usize,
@@ -38,16 +38,6 @@ impl Transcript {
 
   pub(crate) fn messages(&self) -> &[Message] {
     &self.messages
-  }
-
-  pub(crate) fn new() -> Self {
-    Self {
-      active_agent_message: None,
-      active_frame: 0,
-      messages: Vec::new(),
-      tool_invocations: BTreeMap::new(),
-      tool_results: BTreeMap::new(),
-    }
   }
 
   pub(crate) fn push_agent(&mut self, content: impl Into<String>) {
@@ -175,7 +165,7 @@ mod tests {
 
   #[test]
   fn active_rendering() {
-    let mut transcript = Transcript::new();
+    let mut transcript = Transcript::default();
 
     transcript.send("foo".into());
 
