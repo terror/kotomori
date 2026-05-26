@@ -68,6 +68,7 @@ use {
   },
   tool::RegisteredTool,
   tool_action_tense::ToolActionTense,
+  tool_call_arguments::ToolCallArguments,
   tool_call_builder::ToolCallBuilder,
   tool_call_fragment::ToolCallFragment,
   tool_call_stream::ToolCallStream,
@@ -131,6 +132,7 @@ mod style;
 mod terminal;
 mod tool;
 mod tool_action_tense;
+mod tool_call_arguments;
 mod tool_call_builder;
 mod tool_call_fragment;
 mod tool_call_stream;

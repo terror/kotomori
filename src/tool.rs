@@ -278,19 +278,6 @@ mod tests {
   }
 
   #[test]
-  fn parses_tool_call_arguments() {
-    assert_eq!(
-      RawToolCall::from_arguments_string(
-        "foo",
-        "read_file",
-        r#"{"path":"bar"}"#
-      )
-      .unwrap(),
-      RawToolCall::new("foo", "read_file", json!({"path": "bar"})),
-    );
-  }
-
-  #[test]
   fn unknown_tool_errors() {
     let result: Result<ToolInvocation> =
       RawToolCall::new("foo", "bar", json!({})).try_into();

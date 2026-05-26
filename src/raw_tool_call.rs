@@ -8,19 +8,6 @@ pub(crate) struct RawToolCall {
 }
 
 impl RawToolCall {
-  pub(crate) fn from_arguments_string(
-    id: impl Into<String>,
-    name: impl Into<String>,
-    arguments: impl AsRef<str>,
-  ) -> Result<Self> {
-    let name = name.into();
-
-    let arguments = serde_json::from_str(arguments.as_ref())
-      .with_context(|| format!("failed to parse `{name}` arguments"))?;
-
-    Ok(Self::new(id, name, arguments))
-  }
-
   pub(crate) fn new(
     id: impl Into<String>,
     name: impl Into<String>,
