@@ -49,7 +49,7 @@ impl Provider for Anthropic {
           ..
         } if !text.is_empty() => sink.delta(text)?,
         event => {
-          if let Some(tool_call) = tool_calls.push_event(event)? {
+          for tool_call in tool_calls.push_event(event)? {
             sink.tool_call(tool_call)?;
           }
         }

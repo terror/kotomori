@@ -36,7 +36,9 @@ impl Provider for OpenAi {
         }
 
         for chunk in choice.delta.tool_calls.unwrap_or_default() {
-          tool_calls.push_event(chunk)?;
+          for tool_call in tool_calls.push_event(chunk)? {
+            sink.tool_call(tool_call)?;
+          }
         }
       }
     }
