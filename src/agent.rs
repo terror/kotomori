@@ -91,6 +91,7 @@ mod tests {
     async fn stream(&self, request: Request, sink: ProviderSink) -> Result {
       let index = {
         let mut requests = self.requests.lock().unwrap();
+
         let index = requests.len();
 
         requests.push(request.messages().cloned().collect());
@@ -119,6 +120,7 @@ mod tests {
   #[tokio::test]
   async fn loops_until_provider_returns_no_tool_calls() {
     let (event_sender, mut event_receiver) = mpsc::unbounded_channel();
+
     let requests = Arc::new(Mutex::new(Vec::new()));
 
     let agent = Agent {
@@ -136,24 +138,32 @@ mod tests {
 
     let requests = requests.lock().unwrap();
 
-    assert_eq!(requests.len(), 2);
-    assert_eq!(requests[0], [Message::new(Role::User, "foo")]);
-    assert_eq!(requests[1].len(), 3);
-    assert_eq!(requests[1][0], Message::new(Role::User, "foo"));
+    let tool_result = ToolResult {
+      content: None,
+      error: None,
+      exit_status: Some(0),
+      stdout: Some("bar\n".into()),
+    };
 
-    assert!(matches!(
-      requests[1][1].kind(),
-      MessageKind::ToolUse { name, .. } if name == "command"
-    ));
-
-    assert!(matches!(
-      requests[1][2].kind(),
-      MessageKind::ToolResult {
-        content,
-        is_error: false,
-        ..
-      } if content.contains(r#""stdout":"bar\n""#)
-    ));
+    assert_eq!(
+      *requests,
+      [
+        vec![Message::new(Role::User, "foo")],
+        vec![
+          Message::new(Role::User, "foo"),
+          Message::tool_use(
+            "foo",
+            "command",
+            json!({
+              "arguments": ["bar"],
+              "cwd": null,
+              "program": "echo",
+            }),
+          ),
+          Message::tool_result("foo", tool_result.message_content(), false),
+        ],
+      ],
+    );
 
     let mut events = Vec::new();
 
@@ -161,9 +171,24 @@ mod tests {
       events.push(event);
     }
 
-    assert!(matches!(events[0], Event::AgentToolCall(_)));
-    assert!(matches!(events[1], Event::AgentToolResult { .. }));
-    assert_eq!(events[2], Event::AgentDelta("done".into()));
-    assert_eq!(events[3], Event::AgentDone);
+    assert_eq!(
+      events,
+      [
+        Event::AgentToolCall(ToolInvocation {
+          id: "foo".into(),
+          kind: ToolInvocationKind::CommandTool(CommandTool {
+            arguments: vec!["bar".into()],
+            cwd: None,
+            program: "echo".into(),
+          }),
+        }),
+        Event::AgentToolResult {
+          id: "foo".into(),
+          result: tool_result,
+        },
+        Event::AgentDelta("done".into()),
+        Event::AgentDone,
+      ],
+    );
   }
 }
