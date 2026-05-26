@@ -29,17 +29,6 @@ impl<I: Ord> ToolCallStream<I> {
 
         Ok(Vec::new())
       }
-      ToolCallUpdateKind::Arguments(arguments) => {
-        let tool_call = self
-          .calls
-          .remove(&update.index)
-          .unwrap_or_default()
-          .arguments(arguments);
-
-        self.calls.insert(update.index, tool_call);
-
-        Ok(Vec::new())
-      }
       ToolCallUpdateKind::Finish => self
         .calls
         .remove(&update.index)
@@ -128,7 +117,7 @@ mod tests {
     stream
       .push(ToolCallUpdate {
         index: 0,
-        kind: ToolCallUpdateKind::Arguments(json!({"path": "foo"})),
+        kind: ToolCallUpdateKind::ArgumentDelta(r#"{"path":"foo"}"#.into()),
       })
       .unwrap();
 
@@ -149,7 +138,7 @@ mod tests {
     stream
       .push(ToolCallUpdate {
         index: 1,
-        kind: ToolCallUpdateKind::Arguments(json!({"path": "bar"})),
+        kind: ToolCallUpdateKind::ArgumentDelta(r#"{"path":"bar"}"#.into()),
       })
       .unwrap();
 

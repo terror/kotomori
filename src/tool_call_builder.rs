@@ -15,13 +15,6 @@ impl ToolCallBuilder {
     })
   }
 
-  pub(crate) fn arguments(self, arguments: Value) -> Self {
-    Self {
-      arguments: ToolCallArguments::Value(arguments),
-      ..self
-    }
-  }
-
   pub(crate) fn finish(self) -> Result<RawToolCall> {
     Ok(RawToolCall::new(
       self.id.context("missing tool call id")?,
