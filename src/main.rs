@@ -1,6 +1,7 @@
 use {
   action::Action,
   agent::Agent,
+  agent_activity::AgentActivity,
   anyhow::{Context, Error, bail},
   app::App,
   arguments::Arguments,
@@ -109,6 +110,7 @@ use {
 
 mod action;
 mod agent;
+mod agent_activity;
 mod anthropic {
   pub(crate) use anthropic_sdk::{
     Anthropic, AuthMethod, ClientConfig, ContentBlock, ContentBlockDelta,

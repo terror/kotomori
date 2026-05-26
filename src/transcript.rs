@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug, Default)]
 pub(crate) struct Transcript {
-  active_agent_message: Option<String>,
+  active_agent_activity: AgentActivity,
   active_elapsed: Duration,
   active_frame: usize,
   entries: Vec<TranscriptEntry>,
@@ -12,13 +12,13 @@ impl Transcript {
   const FRAMES: &[&str] = &["✦", "✧", "✶", "✹", "✶", "✧"];
 
   pub(crate) fn clear(&mut self) {
-    self.active_agent_message = None;
+    self.active_agent_activity = AgentActivity::Idle;
     self.active_elapsed = Duration::ZERO;
     self.entries.clear();
   }
 
   pub(crate) fn error(&mut self, error: String) {
-    self.active_agent_message = None;
+    self.active_agent_activity = AgentActivity::Idle;
     self.active_elapsed = Duration::ZERO;
     self.entries.push(TranscriptEntry::Agent(error));
   }
@@ -36,7 +36,9 @@ impl Transcript {
   }
 
   pub(crate) fn finish_agent_message(&mut self) {
-    let Some(message) = self.active_agent_message.take() else {
+    let AgentActivity::Streaming(message) =
+      std::mem::take(&mut self.active_agent_activity)
+    else {
       return;
     };
 
@@ -54,7 +56,7 @@ impl Transcript {
   }
 
   pub(crate) fn is_agent_active(&self) -> bool {
-    self.active_agent_message.is_some()
+    !matches!(self.active_agent_activity, AgentActivity::Idle)
   }
 
   pub(crate) fn messages(&self) -> Vec<Message> {
@@ -70,10 +72,14 @@ impl Transcript {
   }
 
   pub(crate) fn push_agent_delta(&mut self, delta: &str) {
-    if let Some(message) = &mut self.active_agent_message {
-      message.push_str(delta);
-    } else {
-      self.active_agent_message = Some(delta.into());
+    match &mut self.active_agent_activity {
+      AgentActivity::Idle | AgentActivity::Waiting if delta.is_empty() => {
+        self.active_agent_activity = AgentActivity::Waiting;
+      }
+      AgentActivity::Idle | AgentActivity::Waiting => {
+        self.active_agent_activity = AgentActivity::Streaming(delta.into());
+      }
+      AgentActivity::Streaming(message) => message.push_str(delta),
     }
   }
 
@@ -85,7 +91,7 @@ impl Transcript {
       result: None,
     });
 
-    self.active_agent_message = Some(String::new());
+    self.active_agent_activity = AgentActivity::Waiting;
   }
 
   pub(crate) fn push_tool_result(&mut self, id: &str, result: ToolResult) {
@@ -93,14 +99,14 @@ impl Transcript {
       *entry_result = Some(result);
     }
 
-    self.active_agent_message = Some(String::new());
+    self.active_agent_activity = AgentActivity::Waiting;
   }
 
   pub(crate) fn send(&mut self, input: String) {
-    self.entries.push(TranscriptEntry::User(input));
-    self.active_agent_message = Some(String::new());
+    self.active_agent_activity = AgentActivity::Waiting;
     self.active_elapsed = Duration::ZERO;
     self.active_frame = 0;
+    self.entries.push(TranscriptEntry::User(input));
   }
 
   fn spinner(frame: usize) -> &'static str {
@@ -151,8 +157,21 @@ impl Component for Transcript {
       }
     }
 
-    match self.active_agent_message.as_deref() {
-      Some("") => {
+    match &self.active_agent_activity {
+      AgentActivity::Idle => {}
+      AgentActivity::Streaming(message) => {
+        if !lines.last().is_some_and(|line| line == &Line::blank()) {
+          lines.push(Line::blank());
+        }
+
+        lines.extend(
+          message
+            .lines()
+            .map(|line| Line::raw(format!(" {line}")))
+            .chain(once(Line::blank())),
+        );
+      }
+      AgentActivity::Waiting => {
         if !lines.last().is_some_and(|line| line == &Line::blank()) {
           lines.push(Line::blank());
         }
@@ -170,19 +189,6 @@ impl Component for Transcript {
           Line::blank(),
         ]);
       }
-      Some(message) => {
-        if !lines.last().is_some_and(|line| line == &Line::blank()) {
-          lines.push(Line::blank());
-        }
-
-        lines.extend(
-          message
-            .lines()
-            .map(|line| Line::raw(format!(" {line}")))
-            .chain(once(Line::blank())),
-        );
-      }
-      None => {}
     }
 
     lines
