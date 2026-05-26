@@ -143,7 +143,13 @@ impl Renderer {
       queue!(stdout, MoveTo(0, 0), Clear(ClearType::All))?;
     }
 
-    Self::write_lines(stdout, &next.lines)?;
+    let lines = if clear {
+      &next.lines[next.len().saturating_sub(next.dimensions.height())..]
+    } else {
+      &next.lines
+    };
+
+    Self::write_lines(stdout, lines)?;
 
     write!(stdout, "\x1b[?2026l")?;
 
@@ -353,6 +359,13 @@ impl Renderer {
 
     let previous_viewport = self.previous_viewport(next);
 
+    let next_viewport =
+      Viewport::anchored_to_bottom(next.len(), next.dimensions.height());
+
+    if next.is_empty() || next_viewport.top() < previous_viewport.top() {
+      return RenderOperation::Full { clear: true };
+    }
+
     if diff.changed.first < previous_viewport.top() {
       return RenderOperation::Full { clear: true };
     }
@@ -376,6 +389,8 @@ impl Renderer {
       if index > 0 {
         write!(stdout, "\r\n")?;
       }
+
+      queue!(stdout, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
 
       write!(stdout, "{line}")?;
     }
@@ -545,7 +560,53 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2Jbar\r\nbaz\x1b[?2026l",
+      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
+    );
+  }
+
+  #[test]
+  fn full_render_clips_to_height_when_clearing() {
+    let mut stdout = Vec::new();
+
+    Renderer::full_render(
+      &mut stdout,
+      &Frame::new(
+        vec!["foo".into(), "bar".into(), "baz".into()],
+        Dimensions {
+          height: 2,
+          width: 80,
+        },
+      ),
+      true,
+    )
+    .unwrap();
+
+    assert_eq!(
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
+    );
+  }
+
+  #[test]
+  fn full_render_without_clear_prepares_lines() {
+    let mut stdout = Vec::new();
+
+    Renderer::full_render(
+      &mut stdout,
+      &Frame::new(
+        vec!["foo".into(), "bar".into()],
+        Dimensions {
+          height: 10,
+          width: 80,
+        },
+      ),
+      false,
+    )
+    .unwrap();
+
+    assert_eq!(
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[?2026h\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
     );
   }
 
@@ -617,7 +678,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2Jqux\r\nbar\r\nbaz\x1b[?2026l",
+      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
     );
   }
 
@@ -648,7 +709,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2Jfoo\r\nbar\x1b[?2026l",
+      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
     );
   }
 
@@ -679,7 +740,90 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2Jfoo\r\nbar\x1b[?2026l",
+      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
+    );
+  }
+
+  #[test]
+  fn redraws_screen_when_shrink_moves_viewport_up() {
+    let frame = Frame::new(
+      vec![
+        "foo".into(),
+        "bar".into(),
+        "baz".into(),
+        "qux".into(),
+        "quux".into(),
+      ],
+      Dimensions {
+        height: 3,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(5, 3),
+      )),
+    };
+
+    let mut stdout = Vec::new();
+
+    subject
+      .draw_rendered(
+        &mut stdout,
+        vec!["foo".into(), "bar".into(), "bob".into(), "qux".into()],
+        80,
+        3,
+      )
+      .unwrap();
+
+    assert_eq!(
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbob\r\n\x1b[1G\x1b[2Kqux\x1b[?2026l",
+    );
+
+    assert_eq!(
+      subject.presented.as_ref().unwrap().viewport,
+      Viewport::anchored_to_bottom(4, 3),
+    );
+  }
+
+  #[test]
+  fn redraws_screen_when_frame_becomes_empty() {
+    let frame = Frame::new(
+      vec!["foo".into()],
+      Dimensions {
+        height: 24,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(1, 24),
+      )),
+    };
+
+    let mut stdout = Vec::new();
+
+    subject
+      .draw_rendered(&mut stdout, Vec::new(), 80, 24)
+      .unwrap();
+
+    assert_eq!(
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[?2026l",
+    );
+
+    assert_eq!(
+      subject.presented.as_ref().unwrap().frame.lines,
+      Vec::<String>::new(),
     );
   }
 
@@ -720,6 +864,9 @@ mod tests {
 
     Renderer::write_lines(&mut stdout, &["foo".into(), "bar".into()]).unwrap();
 
-    assert_eq!(String::from_utf8(stdout).unwrap(), "foo\r\nbar");
+    assert_eq!(
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar",
+    );
   }
 }
