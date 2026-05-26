@@ -8,11 +8,9 @@ pub(crate) struct ToolCallBuilder {
 }
 
 impl ToolCallBuilder {
-  pub(crate) fn argument_delta(self, argument_delta: &str) -> Self {
-    Self {
-      arguments: self.arguments.argument_delta(argument_delta),
-      ..self
-    }
+  pub(crate) fn argument_delta(&mut self, argument_delta: &str) -> &mut Self {
+    self.arguments.argument_delta(argument_delta);
+    self
   }
 
   pub(crate) fn finish(self) -> Result<RawToolCall> {
@@ -23,17 +21,13 @@ impl ToolCallBuilder {
     ))
   }
 
-  pub(crate) fn id(self, id: String) -> Self {
-    Self {
-      id: Some(id),
-      ..self
-    }
+  pub(crate) fn id(&mut self, id: String) -> &mut Self {
+    self.id = Some(id);
+    self
   }
 
-  pub(crate) fn name(self, name: String) -> Self {
-    Self {
-      name: Some(name),
-      ..self
-    }
+  pub(crate) fn name(&mut self, name: String) -> &mut Self {
+    self.name = Some(name);
+    self
   }
 }
