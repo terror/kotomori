@@ -383,29 +383,24 @@ impl Renderer {
 mod tests {
   use super::*;
 
-  fn frame(lines: &[&str], width: u16, height: u16) -> Frame {
-    Frame::new(
-      lines.iter().map(|line| (*line).into()).collect(),
-      Dimensions { height, width },
-    )
-  }
+  #[test]
+  fn appending_lines_scrolls() {
+    let frame = Frame::new(
+      vec!["foo".into()],
+      Dimensions {
+        height: 24,
+        width: 80,
+      },
+    );
 
-  fn renderer(lines: &[&str], width: u16, height: u16) -> Renderer {
-    let frame = frame(lines, width, height);
-
-    Renderer {
+    let mut subject = Renderer {
       max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
-        Viewport::anchored_to_bottom(lines.len(), usize::from(height)),
+        Viewport::anchored_to_bottom(1, 24),
       )),
-    }
-  }
-
-  #[test]
-  fn appending_lines_scrolls() {
-    let mut subject = renderer(&["foo"], 80, 24);
+    };
 
     let mut stdout = Vec::new();
 
@@ -421,7 +416,22 @@ mod tests {
 
   #[test]
   fn appending_past_viewport_scrolls_instead_of_redrawing() {
-    let mut subject = renderer(&["foo", "bar"], 80, 1);
+    let frame = Frame::new(
+      vec!["foo".into(), "bar".into()],
+      Dimensions {
+        height: 1,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(2, 1),
+      )),
+    };
 
     let mut stdout = Vec::new();
 
@@ -442,7 +452,23 @@ mod tests {
 
   #[test]
   fn finishing_moves_cursor_to_last_rendered_line() {
-    let mut subject = renderer(&["foo", "bar", "baz"], 80, 24);
+    let frame = Frame::new(
+      vec!["foo".into(), "bar".into(), "baz".into()],
+      Dimensions {
+        height: 24,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(3, 24),
+      )),
+    };
+
     subject.presented.as_mut().unwrap().cursor = Cursor::new(1);
 
     let mut stdout = Vec::new();
@@ -457,8 +483,18 @@ mod tests {
   fn full_render_can_clear_screen_and_scrollback() {
     let mut stdout = Vec::new();
 
-    Renderer::full_render(&mut stdout, &frame(&["bar", "baz"], 80, 10), true)
-      .unwrap();
+    Renderer::full_render(
+      &mut stdout,
+      &Frame::new(
+        vec!["bar".into(), "baz".into()],
+        Dimensions {
+          height: 10,
+          width: 80,
+        },
+      ),
+      true,
+    )
+    .unwrap();
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
@@ -468,7 +504,22 @@ mod tests {
 
   #[test]
   fn redraws_only_changed_line() {
-    let mut subject = renderer(&["foo", "bar", "baz"], 80, 24);
+    let frame = Frame::new(
+      vec!["foo".into(), "bar".into(), "baz".into()],
+      Dimensions {
+        height: 24,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(3, 24),
+      )),
+    };
 
     let mut stdout = Vec::new();
 
@@ -489,7 +540,22 @@ mod tests {
 
   #[test]
   fn redraws_screen_when_changed_line_is_above_viewport() {
-    let mut subject = renderer(&["foo", "bar", "baz"], 80, 2);
+    let frame = Frame::new(
+      vec!["foo".into(), "bar".into(), "baz".into()],
+      Dimensions {
+        height: 2,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(3, 2),
+      )),
+    };
 
     let mut stdout = Vec::new();
 
@@ -510,7 +576,22 @@ mod tests {
 
   #[test]
   fn redraws_screen_when_height_changes() {
-    let mut subject = renderer(&["foo"], 80, 24);
+    let frame = Frame::new(
+      vec!["foo".into()],
+      Dimensions {
+        height: 24,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(1, 24),
+      )),
+    };
 
     let mut stdout = Vec::new();
 
@@ -526,7 +607,22 @@ mod tests {
 
   #[test]
   fn redraws_screen_when_width_changes() {
-    let mut subject = renderer(&["foo"], 80, 24);
+    let frame = Frame::new(
+      vec!["foo".into()],
+      Dimensions {
+        height: 24,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(1, 24),
+      )),
+    };
 
     let mut stdout = Vec::new();
 
@@ -542,7 +638,22 @@ mod tests {
 
   #[test]
   fn removes_deleted_tail_lines() {
-    let mut subject = renderer(&["foo", "bar", "baz"], 80, 24);
+    let frame = Frame::new(
+      vec!["foo".into(), "bar".into(), "baz".into()],
+      Dimensions {
+        height: 24,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(3, 24),
+      )),
+    };
 
     let mut stdout = Vec::new();
 
