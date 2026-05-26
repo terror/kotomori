@@ -8,19 +8,16 @@ pub(crate) struct ToolCallBuilder {
 }
 
 impl ToolCallBuilder {
-  pub(crate) fn argument_fragment(
-    self,
-    argument_fragment: Option<&str>,
-  ) -> Self {
+  pub(crate) fn argument_fragment(self, argument_fragment: &str) -> Self {
     Self {
       arguments: self.arguments.argument_fragment(argument_fragment),
       ..self
     }
   }
 
-  pub(crate) fn arguments(self, arguments: Option<Value>) -> Self {
+  pub(crate) fn arguments(self, arguments: Value) -> Self {
     Self {
-      arguments: self.arguments.arguments(arguments),
+      arguments: ToolCallArguments::Value(arguments),
       ..self
     }
   }
@@ -33,16 +30,16 @@ impl ToolCallBuilder {
     ))
   }
 
-  pub(crate) fn id(self, id: Option<String>) -> Self {
+  pub(crate) fn id(self, id: String) -> Self {
     Self {
-      id: id.or(self.id),
+      id: Some(id),
       ..self
     }
   }
 
-  pub(crate) fn name(self, name: Option<String>) -> Self {
+  pub(crate) fn name(self, name: String) -> Self {
     Self {
-      name: name.or(self.name),
+      name: Some(name),
       ..self
     }
   }

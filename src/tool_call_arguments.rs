@@ -9,27 +9,13 @@ pub(crate) enum ToolCallArguments {
 }
 
 impl ToolCallArguments {
-  pub(crate) fn argument_fragment(
-    self,
-    argument_fragment: Option<&str>,
-  ) -> Self {
-    let Some(argument_fragment) = argument_fragment else {
-      return self;
-    };
-
+  pub(crate) fn argument_fragment(self, argument_fragment: &str) -> Self {
     match self {
       Self::Empty | Self::Value(_) => Self::Fragments(argument_fragment.into()),
       Self::Fragments(mut argument_fragments) => {
         argument_fragments.push_str(argument_fragment);
         Self::Fragments(argument_fragments)
       }
-    }
-  }
-
-  pub(crate) fn arguments(self, arguments: Option<Value>) -> Self {
-    match arguments {
-      Some(arguments) => Self::Value(arguments),
-      None => self,
     }
   }
 

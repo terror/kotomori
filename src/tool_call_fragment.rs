@@ -1,14 +1,9 @@
 use super::*;
 
 pub(crate) enum ToolCallFragment<I> {
-  Finish {
-    index: I,
-  },
-  Update {
-    argument_fragment: Option<String>,
-    arguments: Option<Value>,
-    id: Option<String>,
-    index: I,
-    name: Option<String>,
-  },
+  ArgumentFragment { argument_fragment: String, index: I },
+  Arguments { arguments: Value, index: I },
+  Finish { index: I },
+  Id { id: String, index: I },
+  Name { index: I, name: String },
 }
