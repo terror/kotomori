@@ -23,6 +23,8 @@ use {
   },
   effect::Effect,
   event::Event,
+  execution_limit::ExecutionLimit,
+  executor::Executor,
   footer::Footer,
   framed_lines::FramedLines,
   futures_util::StreamExt,
@@ -53,10 +55,11 @@ use {
     collections::BTreeMap,
     env,
     fmt::{self, Debug, Display, Formatter},
-    io::{self, Stdout, Write},
+    io::{self, Read, Stdout, Write},
     iter::once,
     path::PathBuf,
-    process::{self, Output, Stdio},
+    process::{self, Stdio},
+    fs::{self, File},
     str::{self, FromStr},
     sync::{Arc, LazyLock, Mutex},
     thread,
@@ -66,8 +69,10 @@ use {
   style::Style,
   terminal::Terminal,
   tokio::{
+    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    time::{interval, sleep},
+    task,
+    time::{interval, sleep, timeout},
   },
   tool::Tool,
   tool_action_tense::ToolActionTense,
@@ -106,6 +111,8 @@ mod component;
 mod composer;
 mod effect;
 mod event;
+mod execution_limit;
+mod executor;
 mod footer;
 mod framed_lines;
 mod header;

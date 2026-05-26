@@ -56,7 +56,7 @@ impl Agent {
       for tool_call in output.tool_calls {
         messages.push(tool_call.message());
 
-        let result = tool_call.kind.execute();
+        let result = tool_call.kind.execute().await;
 
         messages.push(Message::tool_result(
           tool_call.id.clone(),
@@ -176,7 +176,7 @@ mod tests {
       [
         Event::AgentToolCall(ToolInvocation {
           id: "foo".into(),
-          kind: ToolInvocationKind::CommandTool(CommandTool {
+          kind: ToolInvocationKind::Command(CommandTool {
             arguments: vec!["bar".into()],
             cwd: None,
             program: "echo".into(),

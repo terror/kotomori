@@ -9,6 +9,19 @@ pub(crate) struct ToolResult {
 }
 
 impl ToolResult {
+  pub(crate) fn command(
+    exit_status: Option<i32>,
+    stdout: String,
+    error: String,
+  ) -> Self {
+    Self {
+      content: None,
+      error: (!error.is_empty()).then_some(error),
+      exit_status,
+      stdout: (!stdout.is_empty()).then_some(stdout),
+    }
+  }
+
   pub(crate) fn content(content: String) -> Self {
     Self {
       content: Some(content),
@@ -27,31 +40,11 @@ impl ToolResult {
     }
   }
 
-  fn from_output(output: &Output) -> Self {
-    let error = String::from_utf8_lossy(&output.stderr).into_owned();
-
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-
-    Self {
-      content: None,
-      error: (!error.is_empty()).then_some(error),
-      exit_status: output.status.code(),
-      stdout: (!stdout.is_empty()).then_some(stdout),
-    }
-  }
-
   pub(crate) fn is_error(&self) -> bool {
     self.error.is_some() || self.exit_status.is_some_and(|status| status != 0)
   }
 
   pub(crate) fn message_content(&self) -> String {
     serde_json::to_string(self).expect("failed to serialize tool result")
-  }
-
-  pub(crate) fn output(result: io::Result<Output>) -> Self {
-    match result {
-      Ok(output) => Self::from_output(&output),
-      Err(error) => Self::error(&error),
-    }
   }
 }
