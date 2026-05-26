@@ -9,6 +9,8 @@ pub(crate) struct App {
 }
 
 impl App {
+  const TICK_INTERVAL: Duration = Duration::from_millis(120);
+
   fn drain_pending_events(&mut self) {
     while let Ok(event) = self.event_receiver.try_recv() {
       self.handle_event(event);
@@ -103,7 +105,7 @@ impl App {
     let sender = self.event_sender.clone();
 
     tokio::spawn(async move {
-      let mut interval = interval(Duration::from_millis(120));
+      let mut interval = interval(Self::TICK_INTERVAL);
 
       loop {
         interval.tick().await;
