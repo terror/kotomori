@@ -23,6 +23,13 @@ impl State {
         }
       }
       Action::Edit(input) => self.composer.input(input),
+      Action::Interrupt => {
+        if self.transcript.is_agent_active() {
+          self.transcript.interrupt();
+
+          return vec![Effect::InterruptAgent];
+        }
+      }
       Action::Quit => self.quit(),
       Action::SelectNextCommand => {
         if self.composer.selected_command().is_some() {
@@ -62,7 +69,7 @@ impl State {
         self.transcript.push_tool_result(&id, result);
       }
       Event::Error(error) => self.transcript.error(error),
-      Event::Tick => self.transcript.tick(),
+      Event::Tick(elapsed) => self.transcript.tick(elapsed),
     }
 
     Vec::new()
@@ -173,13 +180,14 @@ mod tests {
         vec![
           Span::styled("✦", Style::CyanBold),
           Span::styled(" Working...", Style::Gray),
+          Span::styled(" (0s • esc to interrupt)", Style::DarkGray),
         ]
         .into(),
         Line::blank(),
       ])
     );
 
-    state.handle_event(Event::Tick);
+    state.handle_event(Event::Tick(Duration::from_millis(120)));
 
     assert!(
       state.transcript().render(80).ends_with(&[
@@ -187,6 +195,7 @@ mod tests {
         vec![
           Span::styled("✧", Style::CyanBold),
           Span::styled(" Working...", Style::Gray),
+          Span::styled(" (0s • esc to interrupt)", Style::DarkGray),
         ]
         .into(),
         Line::blank(),
@@ -194,7 +203,7 @@ mod tests {
     );
 
     state.handle_event(Event::AgentDone);
-    state.handle_event(Event::Tick);
+    state.handle_event(Event::Tick(Duration::from_millis(120)));
 
     assert!(
       !state
@@ -307,6 +316,34 @@ mod tests {
           Message::new(Role::User, "baz"),
         ]
       }]
+    );
+  }
+
+  #[test]
+  fn interrupt_stops_active_agent() {
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::new(Role::User, "foo")]
+      }]
+    );
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Interrupt)),
+      vec![Effect::InterruptAgent]
+    );
+
+    assert!(!state.transcript().is_agent_active());
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Interrupt)),
+      Vec::new()
     );
   }
 

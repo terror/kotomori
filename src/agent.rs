@@ -1,13 +1,20 @@
 use super::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct Agent {
   event_sender: UnboundedSender<Event>,
   model: Model,
   provider: Arc<dyn Provider>,
+  task: Option<task::JoinHandle<()>>,
 }
 
 impl Agent {
+  pub(crate) fn interrupt(&mut self) {
+    if let Some(task) = self.task.take() {
+      task.abort();
+    }
+  }
+
   pub(crate) fn new(
     event_sender: UnboundedSender<Event>,
     model: Model,
@@ -18,17 +25,25 @@ impl Agent {
       event_sender,
       model,
       provider,
+      task: None,
     })
   }
 
-  pub(crate) fn spawn(&self, messages: Vec<Message>) {
-    let agent = self.clone();
+  pub(crate) fn spawn(&mut self, messages: Vec<Message>) {
+    self.interrupt();
 
-    tokio::spawn(async move {
+    let agent = Self {
+      event_sender: self.event_sender.clone(),
+      model: self.model.clone(),
+      provider: self.provider.clone(),
+      task: None,
+    };
+
+    self.task = Some(tokio::spawn(async move {
       if let Err(error) = agent.stream(messages).await {
         let _ = agent.event_sender.send(Event::Error(error.to_string()));
       }
-    });
+    }));
   }
 
   async fn stream(&self, mut messages: Vec<Message>) -> Result {
@@ -129,6 +144,7 @@ mod tests {
       provider: Arc::new(LoopProvider {
         requests: requests.clone(),
       }),
+      task: None,
     };
 
     agent

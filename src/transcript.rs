@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug, Default)]
 pub(crate) struct Transcript {
   active_agent_message: Option<String>,
+  active_elapsed: Duration,
   active_frame: usize,
   entries: Vec<TranscriptEntry>,
 }
@@ -12,11 +13,13 @@ impl Transcript {
 
   pub(crate) fn clear(&mut self) {
     self.active_agent_message = None;
+    self.active_elapsed = Duration::ZERO;
     self.entries.clear();
   }
 
   pub(crate) fn error(&mut self, error: String) {
     self.active_agent_message = None;
+    self.active_elapsed = Duration::ZERO;
     self.entries.push(TranscriptEntry::Agent(error));
   }
 
@@ -42,6 +45,12 @@ impl Transcript {
     }
 
     self.entries.push(TranscriptEntry::Agent(message));
+  }
+
+  pub(crate) fn interrupt(&mut self) {
+    self.finish_agent_message();
+    self.active_elapsed = Duration::ZERO;
+    self.entries.push(TranscriptEntry::Interrupted);
   }
 
   pub(crate) fn is_agent_active(&self) -> bool {
@@ -90,6 +99,7 @@ impl Transcript {
   pub(crate) fn send(&mut self, input: String) {
     self.entries.push(TranscriptEntry::User(input));
     self.active_agent_message = Some(String::new());
+    self.active_elapsed = Duration::ZERO;
     self.active_frame = 0;
   }
 
@@ -97,8 +107,9 @@ impl Transcript {
     Self::FRAMES[frame % Self::FRAMES.len()]
   }
 
-  pub(crate) fn tick(&mut self) {
+  pub(crate) fn tick(&mut self, elapsed: Duration) {
     if self.is_agent_active() {
+      self.active_elapsed = self.active_elapsed.saturating_add(elapsed);
       self.active_frame = self.active_frame.wrapping_add(1);
     }
   }
@@ -116,6 +127,17 @@ impl Component for Transcript {
               .chain(content.lines().map(|line| Line::raw(format!(" {line}"))))
               .chain(once(Line::blank())),
           );
+        }
+        TranscriptEntry::Interrupted => {
+          lines.extend([
+            Line::blank(),
+            vec![Span::styled(
+              "■ Conversation interrupted, tell the model what to do differently.",
+              Style::RedBold,
+            )]
+            .into(),
+            Line::blank(),
+          ]);
         }
         TranscriptEntry::Tool { invocation, result } => {
           lines.extend(
@@ -139,6 +161,10 @@ impl Component for Transcript {
           vec![
             Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
             Span::styled(" Working...", Style::Gray),
+            Span::styled(
+              format!(" ({} • esc to interrupt)", self.active_elapsed.format()),
+              Style::DarkGray,
+            ),
           ]
           .into(),
           Line::blank(),
@@ -173,8 +199,13 @@ mod tests {
 
     transcript.send("foo".into());
 
-    for _ in 0..4 {
-      transcript.tick();
+    for elapsed in [
+      Duration::from_secs(30),
+      Duration::from_secs(30),
+      Duration::from_secs(30),
+      Duration::from_secs(21),
+    ] {
+      transcript.tick(elapsed);
     }
 
     assert!(
@@ -183,6 +214,7 @@ mod tests {
         vec![
           Span::styled("✶", Style::CyanBold),
           Span::styled(" Working...", Style::Gray),
+          Span::styled(" (1m 51s • esc to interrupt)", Style::DarkGray),
         ]
         .into(),
         Line::blank(),
@@ -196,6 +228,28 @@ mod tests {
       Line::raw(" bar"),
       Line::blank(),
     ]));
+  }
+
+  #[test]
+  fn interrupted_rendering() {
+    let mut transcript = Transcript::default();
+
+    transcript.send("foo".into());
+    transcript.interrupt();
+
+    assert!(
+      transcript.render(80).ends_with(&[
+        Line::blank(),
+        vec![Span::styled(
+          "■ Conversation interrupted, tell the model what to do differently.",
+          Style::RedBold,
+        )]
+        .into(),
+        Line::blank(),
+      ])
+    );
+
+    assert_eq!(transcript.messages(), vec![Message::new(Role::User, "foo")]);
   }
 
   #[test]

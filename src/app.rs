@@ -17,8 +17,11 @@ impl App {
     }
   }
 
-  fn handle_effect(&self, effect: Effect) {
+  fn handle_effect(&mut self, effect: Effect) {
     match effect {
+      Effect::InterruptAgent => {
+        self.agent.interrupt();
+      }
       Effect::RunAgent { messages } => {
         self.agent.spawn(messages);
       }
@@ -112,7 +115,7 @@ impl App {
       loop {
         interval.tick().await;
 
-        if sender.send(Event::Tick).is_err() {
+        if sender.send(Event::Tick(Self::TICK_INTERVAL)).is_err() {
           return;
         }
       }

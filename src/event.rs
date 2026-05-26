@@ -8,5 +8,5 @@ pub(crate) enum Event {
   AgentToolCall(ToolInvocation),
   AgentToolResult { id: String, result: ToolResult },
   Error(String),
-  Tick,
+  Tick(Duration),
 }
