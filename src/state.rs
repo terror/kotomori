@@ -56,9 +56,10 @@ impl State {
       Event::AgentDone => self.transcript.finish_agent_message(),
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
       Event::AgentToolCall(tool_call) => {
-        self
-          .transcript
-          .push_agent_delta(&tool_call.progressive_tense());
+        self.transcript.push_tool_call(tool_call);
+      }
+      Event::AgentToolResult { id, result } => {
+        self.transcript.push_tool_result(id, result);
       }
       Event::Error(error) => self.transcript.error(error),
       Event::Tick => self.transcript.tick(),
@@ -195,7 +196,13 @@ mod tests {
     state.handle_event(Event::AgentDone);
     state.handle_event(Event::Tick);
 
-    assert_eq!(state.transcript().render(80).last(), Some(&Line::raw("")));
+    assert!(
+      !state
+        .transcript()
+        .render(80)
+        .iter()
+        .any(|line| line.to_string().contains("Working"))
+    );
   }
 
   #[test]
@@ -336,6 +343,77 @@ mod tests {
         messages: vec![Message::new(Role::User, "foo\nbar")]
       }]
     );
+  }
+
+  #[test]
+  fn tool_calls_are_rendered_without_polluting_agent_text() {
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+    })
+    .unwrap();
+
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::CommandTool(CommandTool {
+        arguments: vec!["baz".into()],
+        cwd: None,
+        program: "bar".into(),
+      }),
+    };
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_event(Event::AgentDelta("qux".into()));
+    state.handle_event(Event::AgentToolCall(invocation.clone()));
+
+    assert_eq!(
+      state.transcript().messages(),
+      &[
+        Message::new(Role::User, "foo"),
+        Message::new(Role::Agent, "qux"),
+        invocation.message(),
+      ],
+    );
+
+    assert!(
+      state
+        .transcript()
+        .render(80)
+        .iter()
+        .any(|line| line.to_string() == " Running bar baz")
+    );
+
+    let result = ToolResult {
+      content: None,
+      error: None,
+      exit_status: Some(0),
+      stdout: Some("baz\n".into()),
+    };
+
+    state.handle_event(Event::AgentToolResult {
+      id: "foo".into(),
+      result: result.clone(),
+    });
+
+    assert_eq!(
+      state.transcript().messages(),
+      &[
+        Message::new(Role::User, "foo"),
+        Message::new(Role::Agent, "qux"),
+        invocation.message(),
+        Message::tool_result("foo", result.message_content(), false),
+      ],
+    );
+
+    let lines = state
+      .transcript()
+      .render(80)
+      .into_iter()
+      .map(|line| line.to_string())
+      .collect::<Vec<_>>();
+
+    assert!(lines.iter().any(|line| line == " Ran bar baz"));
+    assert!(!lines.iter().any(|line| line.contains("stdout")));
   }
 
   #[test]

@@ -1,5 +1,60 @@
 use super::*;
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(crate) struct ToolResult {
+  pub(crate) content: Option<String>,
+  pub(crate) error: Option<String>,
+  pub(crate) exit_status: Option<i32>,
+  pub(crate) stdout: Option<String>,
+}
+
+impl ToolResult {
+  fn content(content: String) -> Self {
+    Self {
+      content: Some(content),
+      error: None,
+      exit_status: None,
+      stdout: None,
+    }
+  }
+
+  fn error(error: &impl Display) -> Self {
+    Self {
+      content: None,
+      error: Some(error.to_string()),
+      exit_status: None,
+      stdout: None,
+    }
+  }
+
+  fn from_output(output: &std::process::Output) -> Self {
+    let error = String::from_utf8_lossy(&output.stderr).into_owned();
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+
+    Self {
+      content: None,
+      error: (!error.is_empty()).then_some(error),
+      exit_status: output.status.code(),
+      stdout: (!stdout.is_empty()).then_some(stdout),
+    }
+  }
+
+  pub(crate) fn is_error(&self) -> bool {
+    self.error.is_some() || self.exit_status.is_some_and(|status| status != 0)
+  }
+
+  pub(crate) fn message_content(&self) -> String {
+    serde_json::to_string(self).expect("failed to serialize tool result")
+  }
+
+  fn output(result: io::Result<std::process::Output>) -> Self {
+    match result {
+      Ok(output) => Self::from_output(&output),
+      Err(error) => Self::error(&error),
+    }
+  }
+}
+
 macro_rules! define_tools {
   (
     $(
@@ -15,7 +70,7 @@ macro_rules! define_tools {
     ),* $(,)?
   ) => {
     $(
-      #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq)]
+      #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
       #[serde(deny_unknown_fields)]
       pub(crate) struct $tool {
         $(
@@ -92,6 +147,52 @@ define_tools! {
   },
 }
 
+impl ApplyPatchTool {
+  pub(crate) fn execute(&self) -> ToolResult {
+    let mut command = std::process::Command::new("apply_patch");
+
+    if let Some(cwd) = &self.cwd {
+      command.current_dir(cwd);
+    }
+
+    let mut child = match command
+      .stdin(std::process::Stdio::piped())
+      .stdout(std::process::Stdio::piped())
+      .stderr(std::process::Stdio::piped())
+      .spawn()
+    {
+      Ok(child) => child,
+      Err(error) => return ToolResult::error(&error),
+    };
+
+    let Some(mut stdin) = child.stdin.take() else {
+      return ToolResult::error(&"failed to open apply_patch stdin");
+    };
+
+    if let Err(error) = stdin.write_all(self.patch.as_bytes()) {
+      return ToolResult::error(&error);
+    }
+
+    drop(stdin);
+
+    ToolResult::output(child.wait_with_output())
+  }
+}
+
+impl CommandTool {
+  pub(crate) fn execute(&self) -> ToolResult {
+    let mut command = std::process::Command::new(&self.program);
+
+    command.args(&self.arguments);
+
+    if let Some(cwd) = &self.cwd {
+      command.current_dir(cwd);
+    }
+
+    ToolResult::output(command.output())
+  }
+}
+
 impl Display for CommandTool {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
     if self.arguments.is_empty() {
@@ -102,9 +203,168 @@ impl Display for CommandTool {
   }
 }
 
+impl ListFilesTool {
+  pub(crate) fn execute(&self) -> ToolResult {
+    let mut command = std::process::Command::new("rg");
+
+    command.arg("--files");
+
+    if let Some(cwd) = &self.cwd {
+      command.current_dir(cwd);
+    }
+
+    ToolResult::output(command.output())
+  }
+}
+
+impl ReadFileTool {
+  pub(crate) fn execute(&self) -> ToolResult {
+    match std::fs::read_to_string(&self.path) {
+      Ok(content) => ToolResult::content(content),
+      Err(error) => ToolResult::error(&error),
+    }
+  }
+}
+
+impl SearchFilesTool {
+  pub(crate) fn execute(&self) -> ToolResult {
+    let mut command = std::process::Command::new("rg");
+
+    command.args(&self.arguments);
+
+    if let Some(cwd) = &self.cwd {
+      command.current_dir(cwd);
+    }
+
+    ToolResult::output(command.output())
+  }
+}
+
+impl ToolInvocationKind {
+  pub(crate) fn execute(&self) -> ToolResult {
+    match self {
+      Self::ApplyPatchTool(tool) => tool.execute(),
+      Self::CommandTool(tool) => tool.execute(),
+      Self::ListFilesTool(tool) => tool.execute(),
+      Self::ReadFileTool(tool) => tool.execute(),
+      Self::SearchFilesTool(tool) => tool.execute(),
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  static TEMP_INDEX: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+  fn tempdir() -> PathBuf {
+    let path = env::temp_dir().join(format!(
+      "kotomori-tools-test-{}-{}",
+      std::process::id(),
+      TEMP_INDEX.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+    ));
+
+    let _ = std::fs::remove_dir_all(&path);
+    std::fs::create_dir_all(&path).unwrap();
+
+    path
+  }
+
+  #[test]
+  fn command_execute() {
+    assert_eq!(
+      CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "echo".into(),
+      }
+      .execute(),
+      ToolResult {
+        content: None,
+        error: None,
+        exit_status: Some(0),
+        stdout: Some("bar\n".into()),
+      },
+    );
+  }
+
+  #[test]
+  fn command_execute_error() {
+    let result = CommandTool {
+      arguments: vec!["-c".into(), "echo bar >&2; exit 42".into()],
+      cwd: None,
+      program: "sh".into(),
+    }
+    .execute();
+
+    assert_eq!(
+      result,
+      ToolResult {
+        content: None,
+        error: Some("bar\n".into()),
+        exit_status: Some(42),
+        stdout: None,
+      },
+    );
+  }
+
+  #[test]
+  fn list_files_execute() {
+    let cwd = tempdir();
+
+    std::fs::write(cwd.join("foo"), "bar").unwrap();
+    std::fs::write(cwd.join("baz"), "qux").unwrap();
+
+    let result = ListFilesTool { cwd: Some(cwd) }.execute();
+    let stdout = result.stdout.unwrap();
+    let mut files = stdout.lines().collect::<Vec<_>>();
+    files.sort_unstable();
+
+    assert_eq!(result.error, None);
+    assert_eq!(result.exit_status, Some(0));
+    assert_eq!(files, ["baz", "foo"]);
+  }
+
+  #[test]
+  fn read_file_execute() {
+    let cwd = tempdir();
+    let path = cwd.join("foo");
+
+    std::fs::write(&path, "bar").unwrap();
+
+    assert_eq!(
+      ReadFileTool { path }.execute(),
+      ToolResult {
+        content: Some("bar".into()),
+        error: None,
+        exit_status: None,
+        stdout: None,
+      },
+    );
+  }
+
+  #[test]
+  fn search_files_execute() {
+    let cwd = tempdir();
+
+    std::fs::write(cwd.join("foo"), "bar").unwrap();
+
+    assert_eq!(
+      SearchFilesTool {
+        arguments: vec!["bar".into()],
+        cwd: Some(cwd),
+      }
+      .execute(),
+      ToolResult {
+        content: None,
+        error: None,
+        exit_status: Some(0),
+        stdout: Some("foo:bar\n".into()),
+      },
+    );
+  }
 
   #[test]
   fn tool_parameters_are_derived_from_type() {
@@ -125,6 +385,24 @@ mod tests {
         "required": ["arguments", "program"],
         "additionalProperties": false,
       }),
+    );
+  }
+
+  #[test]
+  fn tool_invocation_kind_execute() {
+    assert_eq!(
+      ToolInvocationKind::CommandTool(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "echo".into(),
+      })
+      .execute(),
+      ToolResult {
+        content: None,
+        error: None,
+        exit_status: Some(0),
+        stdout: Some("bar\n".into()),
+      },
     );
   }
 }

@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug, Clone)]
 pub(crate) struct OpenAi {
   client: crate::openai::Client<crate::openai::OpenAIConfig>,
+  reasoning_effort: Option<crate::openai::ReasoningEffort>,
 }
 
 impl OpenAi {
@@ -13,6 +14,17 @@ impl OpenAi {
   pub(crate) fn with_config(config: crate::openai::OpenAIConfig) -> Self {
     Self {
       client: crate::openai::Client::with_config(config),
+      reasoning_effort: None,
+    }
+  }
+
+  pub(crate) fn with_reasoning_effort(
+    self,
+    reasoning_effort: crate::openai::ReasoningEffort,
+  ) -> Self {
+    Self {
+      reasoning_effort: Some(reasoning_effort),
+      ..self
     }
   }
 }
@@ -23,7 +35,10 @@ impl Provider for OpenAi {
     let mut stream = self
       .client
       .chat()
-      .create_stream((&request).try_into()?)
+      .create_stream(
+        request
+          .openai_chat_completion_request(self.reasoning_effort.clone())?,
+      )
       .await?;
 
     let mut tool_calls = ToolCallStream::<u32>::default();

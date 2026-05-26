@@ -29,6 +29,24 @@ impl Request {
   pub(crate) fn new(model: Model, messages: Vec<Message>) -> Self {
     Self { messages, model }
   }
+
+  pub(crate) fn openai_chat_completion_request(
+    &self,
+    reasoning_effort: Option<openai::ReasoningEffort>,
+  ) -> Result<openai::CreateChatCompletionRequest> {
+    let mut request = openai::CreateChatCompletionRequestArgs::default();
+
+    request
+      .model(self.model_name())
+      .messages(self.messages().map(Into::into).collect::<Vec<_>>())
+      .tools(TOOLS.iter().map(Into::into).collect::<Vec<_>>());
+
+    if let Some(reasoning_effort) = reasoning_effort {
+      request.reasoning_effort(reasoning_effort);
+    }
+
+    Ok(request.build()?)
+  }
 }
 
 impl From<&Request> for anthropic::MessageCreateParams {
@@ -58,13 +76,7 @@ impl TryFrom<&Request> for openai::CreateChatCompletionRequest {
   type Error = Error;
 
   fn try_from(request: &Request) -> Result<Self> {
-    Ok(
-      openai::CreateChatCompletionRequestArgs::default()
-        .model(request.model_name())
-        .messages(request.messages().map(Into::into).collect::<Vec<_>>())
-        .tools(TOOLS.iter().map(Into::into).collect::<Vec<_>>())
-        .build()?,
-    )
+    request.openai_chat_completion_request(None)
   }
 }
 
@@ -107,6 +119,21 @@ mod tests {
     assert_eq!(
       request.last_user_message().unwrap().content().unwrap(),
       "baz"
+    );
+  }
+
+  #[test]
+  fn openai_chat_completion_request_can_set_reasoning_effort() {
+    let request = Request::new(
+      "fake:foo".parse().unwrap(),
+      vec![Message::new(Role::User, "bar")],
+    )
+    .openai_chat_completion_request(Some(openai::ReasoningEffort::None))
+    .unwrap();
+
+    assert_eq!(
+      serde_json::to_value(request).unwrap()["reasoning_effort"],
+      "none",
     );
   }
 }

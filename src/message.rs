@@ -14,6 +14,10 @@ impl Message {
     }
   }
 
+  pub(crate) fn kind(&self) -> &MessageKind {
+    &self.kind
+  }
+
   pub(crate) fn new(role: Role, content: impl Into<String>) -> Self {
     Self {
       kind: MessageKind::Text {
@@ -23,6 +27,7 @@ impl Message {
     }
   }
 
+  #[cfg(test)]
   pub(crate) fn role(&self) -> Role {
     match &self.kind {
       MessageKind::Text { role, .. } => *role,
@@ -31,7 +36,6 @@ impl Message {
     }
   }
 
-  #[allow(dead_code)]
   pub(crate) fn tool_result(
     id: impl Into<String>,
     content: impl Into<String>,

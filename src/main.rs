@@ -42,7 +42,7 @@ use {
   request::Request,
   role::Role,
   schemars::JsonSchema,
-  serde::{Deserialize, de::DeserializeOwned},
+  serde::{Deserialize, Serialize, de::DeserializeOwned},
   serde_json::{Value, json},
   span::Span,
   state::State,
@@ -57,7 +57,7 @@ use {
     path::PathBuf,
     process,
     str::{self, FromStr},
-    sync::{Arc, LazyLock},
+    sync::{Arc, LazyLock, Mutex},
     thread,
     time::Duration,
   },
@@ -80,7 +80,7 @@ use {
   tool_invocation_kind::ToolInvocationKind,
   tools::{
     ApplyPatchTool, CommandTool, ListFilesTool, ReadFileTool, SearchFilesTool,
-    TOOLS,
+    TOOLS, ToolResult,
   },
   transcript::Transcript,
   unicode_width::UnicodeWidthChar,
@@ -126,6 +126,7 @@ mod openai {
       ChatCompletionRequestUserMessageContent, ChatCompletionTool,
       ChatCompletionTools, CreateChatCompletionRequest,
       CreateChatCompletionRequestArgs, FunctionCall, FunctionObject,
+      ReasoningEffort,
     },
   };
 }

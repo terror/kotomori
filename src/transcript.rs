@@ -5,6 +5,8 @@ pub(crate) struct Transcript {
   active_agent_message: Option<String>,
   active_frame: usize,
   messages: Vec<Message>,
+  tool_invocations: BTreeMap<String, ToolInvocation>,
+  tool_results: BTreeMap<String, ToolResult>,
 }
 
 impl Transcript {
@@ -13,6 +15,8 @@ impl Transcript {
   pub(crate) fn clear(&mut self) {
     self.active_agent_message = None;
     self.messages.clear();
+    self.tool_invocations.clear();
+    self.tool_results.clear();
   }
 
   pub(crate) fn error(&mut self, error: String) {
@@ -21,7 +25,9 @@ impl Transcript {
   }
 
   pub(crate) fn finish_agent_message(&mut self) {
-    if let Some(message) = self.active_agent_message.take() {
+    if let Some(message) = self.active_agent_message.take()
+      && !message.is_empty()
+    {
       self.messages.push(Message::new(Role::Agent, message));
     }
   }
@@ -39,6 +45,8 @@ impl Transcript {
       active_agent_message: None,
       active_frame: 0,
       messages: Vec::new(),
+      tool_invocations: BTreeMap::new(),
+      tool_results: BTreeMap::new(),
     }
   }
 
@@ -49,7 +57,26 @@ impl Transcript {
   pub(crate) fn push_agent_delta(&mut self, delta: &str) {
     if let Some(message) = &mut self.active_agent_message {
       message.push_str(delta);
+    } else {
+      self.active_agent_message = Some(delta.into());
     }
+  }
+
+  pub(crate) fn push_tool_call(&mut self, invocation: ToolInvocation) {
+    self.finish_agent_message();
+    self.messages.push(invocation.message());
+    self
+      .tool_invocations
+      .insert(invocation.id.clone(), invocation);
+  }
+
+  pub(crate) fn push_tool_result(&mut self, id: String, result: ToolResult) {
+    self.messages.push(Message::tool_result(
+      id.clone(),
+      result.message_content(),
+      result.is_error(),
+    ));
+    self.tool_results.insert(id, result);
   }
 
   pub(crate) fn send(&mut self, input: String) {
@@ -74,21 +101,39 @@ impl Component for Transcript {
     let mut lines = Vec::new();
 
     for message in self.messages() {
-      match message.role() {
-        Role::Agent => {
+      match message.kind() {
+        MessageKind::Text {
+          content,
+          role: Role::Agent,
+        } => {
           lines.extend(
             once(Line::blank())
-              .chain(
-                message
-                  .content()
-                  .unwrap_or_default()
-                  .lines()
-                  .map(|line| Line::raw(format!(" {line}"))),
-              )
+              .chain(content.lines().map(|line| Line::raw(format!(" {line}"))))
               .chain(once(Line::blank())),
           );
         }
-        Role::User => lines.extend(message.render(width)),
+        MessageKind::Text {
+          content: _,
+          role: Role::User,
+        } => lines.extend(message.render(width)),
+        MessageKind::ToolUse { id, .. } => {
+          let Some(invocation) = self.tool_invocations.get(id) else {
+            continue;
+          };
+
+          let title = match self.tool_results.get(id) {
+            Some(result) if result.is_error() => invocation.failed_tense(),
+            Some(_) => invocation.completed_tense(),
+            None => invocation.progressive_tense(),
+          };
+
+          lines.extend([
+            Line::blank(),
+            Line::raw(format!(" {title}")),
+            Line::blank(),
+          ]);
+        }
+        MessageKind::ToolResult { .. } => {}
       }
     }
 

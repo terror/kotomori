@@ -8,13 +8,52 @@ pub(crate) struct ToolInvocation {
 
 impl ToolInvocation {
   fn action(&self, tense: ToolActionTense) -> &'static str {
-    match tense {
-      ToolActionTense::Progressive => match &self.kind {
-        ToolInvocationKind::ListFilesTool(_) => "Listing",
-        ToolInvocationKind::ReadFileTool(_) => "Reading",
-        ToolInvocationKind::SearchFilesTool(_) => "Searching",
-        _ => "Running",
+    match &self.kind {
+      ToolInvocationKind::ApplyPatchTool(_) => match tense {
+        ToolActionTense::Completed => "Applied",
+        ToolActionTense::Failed => "Failed applying",
+        ToolActionTense::Progressive => "Applying",
       },
+      ToolInvocationKind::CommandTool(_) => match tense {
+        ToolActionTense::Completed => "Ran",
+        ToolActionTense::Failed => "Failed running",
+        ToolActionTense::Progressive => "Running",
+      },
+      ToolInvocationKind::ListFilesTool(_) => match tense {
+        ToolActionTense::Completed => "Listed",
+        ToolActionTense::Failed => "Failed listing",
+        ToolActionTense::Progressive => "Listing",
+      },
+      ToolInvocationKind::ReadFileTool(_) => match tense {
+        ToolActionTense::Completed => "Read",
+        ToolActionTense::Failed => "Failed reading",
+        ToolActionTense::Progressive => "Reading",
+      },
+      ToolInvocationKind::SearchFilesTool(_) => match tense {
+        ToolActionTense::Completed => "Searched",
+        ToolActionTense::Failed => "Failed searching",
+        ToolActionTense::Progressive => "Searching",
+      },
+    }
+  }
+
+  fn arguments(&self) -> Value {
+    match &self.kind {
+      ToolInvocationKind::ApplyPatchTool(tool) => {
+        serde_json::to_value(tool).expect("failed to serialize tool arguments")
+      }
+      ToolInvocationKind::CommandTool(tool) => {
+        serde_json::to_value(tool).expect("failed to serialize tool arguments")
+      }
+      ToolInvocationKind::ListFilesTool(tool) => {
+        serde_json::to_value(tool).expect("failed to serialize tool arguments")
+      }
+      ToolInvocationKind::ReadFileTool(tool) => {
+        serde_json::to_value(tool).expect("failed to serialize tool arguments")
+      }
+      ToolInvocationKind::SearchFilesTool(tool) => {
+        serde_json::to_value(tool).expect("failed to serialize tool arguments")
+      }
     }
   }
 
@@ -28,6 +67,14 @@ impl ToolInvocation {
     }
   }
 
+  pub(crate) fn completed_tense(&self) -> String {
+    self.title(ToolActionTense::Completed)
+  }
+
+  pub(crate) fn failed_tense(&self) -> String {
+    self.title(ToolActionTense::Failed)
+  }
+
   pub(crate) fn from_raw<T>(call: RawToolCall) -> Result<ToolInvocationKind>
   where
     T: Into<ToolInvocationKind> + DeserializeOwned,
@@ -37,6 +84,20 @@ impl ToolInvocation {
         .with_context(|| format!("failed to decode `{}` arguments", call.name))?
         .into(),
     )
+  }
+
+  pub(crate) fn message(&self) -> Message {
+    Message::tool_use(self.id.clone(), self.name(), self.arguments())
+  }
+
+  fn name(&self) -> &'static str {
+    match &self.kind {
+      ToolInvocationKind::ApplyPatchTool(_) => "apply_patch",
+      ToolInvocationKind::CommandTool(_) => "command",
+      ToolInvocationKind::ListFilesTool(_) => "list_files",
+      ToolInvocationKind::ReadFileTool(_) => "read_file",
+      ToolInvocationKind::SearchFilesTool(_) => "search_files",
+    }
   }
 
   pub(crate) fn progressive_tense(&self) -> String {
