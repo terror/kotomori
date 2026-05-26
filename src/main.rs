@@ -30,6 +30,7 @@ use {
   hint::Hint,
   line::Line,
   message::Message,
+  message_kind::MessageKind,
   model::Model,
   options::Options,
   provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
@@ -91,8 +92,9 @@ mod agent;
 mod anthropic {
   pub(crate) use anthropic_sdk::{
     Anthropic, AuthMethod, ClientConfig, ContentBlock, ContentBlockDelta,
-    MessageContent, MessageCreateBuilder, MessageCreateParams, MessageParam,
-    MessageStreamEvent, Role, Tool, types::ToolInputSchema,
+    ContentBlockParam, MessageContent, MessageCreateBuilder,
+    MessageCreateParams, MessageParam, MessageStreamEvent, Role, Tool,
+    types::ToolInputSchema,
   };
 }
 mod app;
@@ -108,19 +110,22 @@ mod header;
 mod hint;
 mod line;
 mod message;
+mod message_kind;
 mod model;
 mod openai {
   pub(crate) use async_openai::{
     Client,
     config::OpenAIConfig,
     types::chat::{
-      ChatCompletionMessageToolCallChunk,
-      ChatCompletionRequestAssistantMessage,
+      ChatCompletionMessageToolCall, ChatCompletionMessageToolCallChunk,
+      ChatCompletionMessageToolCalls, ChatCompletionRequestAssistantMessage,
       ChatCompletionRequestAssistantMessageContent,
-      ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
+      ChatCompletionRequestMessage, ChatCompletionRequestToolMessage,
+      ChatCompletionRequestToolMessageContent,
+      ChatCompletionRequestUserMessage,
       ChatCompletionRequestUserMessageContent, ChatCompletionTool,
       ChatCompletionTools, CreateChatCompletionRequest,
-      CreateChatCompletionRequestArgs, FunctionObject,
+      CreateChatCompletionRequestArgs, FunctionCall, FunctionObject,
     },
   };
 }

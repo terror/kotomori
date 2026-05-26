@@ -74,13 +74,14 @@ impl Component for Transcript {
     let mut lines = Vec::new();
 
     for message in self.messages() {
-      match message.role {
+      match message.role() {
         Role::Agent => {
           lines.extend(
             once(Line::blank())
               .chain(
                 message
-                  .content
+                  .content()
+                  .unwrap_or_default()
                   .lines()
                   .map(|line| Line::raw(format!(" {line}"))),
               )
