@@ -8,11 +8,11 @@ pub(crate) struct ToolCallBuilder {
 }
 
 impl ToolCallBuilder {
-  pub(crate) fn argument_delta(self, argument_delta: &str) -> Result<Self> {
-    Ok(Self {
-      arguments: self.arguments.argument_delta(argument_delta)?,
+  pub(crate) fn argument_delta(self, argument_delta: &str) -> Self {
+    Self {
+      arguments: self.arguments.argument_delta(argument_delta),
       ..self
-    })
+    }
   }
 
   pub(crate) fn finish(self) -> Result<RawToolCall> {
