@@ -56,12 +56,9 @@ impl State {
       Event::AgentDone => self.transcript.finish_agent_message(),
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
       Event::AgentToolCall(tool_call) => {
-        self.transcript.push_agent_delta(
-          &TryInto::<ToolInvocation>::try_into(tool_call).map_or_else(
-            |error| error.to_string(),
-            |invocation| invocation.progressive_tense(),
-          ),
-        );
+        self
+          .transcript
+          .push_agent_delta(&tool_call.progressive_tense());
       }
       Event::Error(error) => self.transcript.error(error),
       Event::Tick => self.transcript.tick(),
