@@ -24,7 +24,7 @@ impl Ollama {
 
 #[async_trait]
 impl Provider for Ollama {
-  async fn stream(&self, request: Request, sink: ProviderSink) -> Result {
+  async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result {
     self.openai.stream(request, sink).await
   }
 }

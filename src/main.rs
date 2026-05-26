@@ -63,7 +63,7 @@ use {
     path::PathBuf,
     process::{self, Stdio},
     str::{self, FromStr},
-    sync::{Arc, LazyLock, Mutex},
+    sync::{Arc, LazyLock},
     thread,
     time::Duration,
   },

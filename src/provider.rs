@@ -11,5 +11,5 @@ pub(crate) use {
 
 #[async_trait]
 pub(crate) trait Provider: fmt::Debug + Send + Sync {
-  async fn stream(&self, request: Request, sink: ProviderSink) -> Result;
+  async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result;
 }
