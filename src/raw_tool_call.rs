@@ -32,11 +32,14 @@ impl TryInto<ToolInvocation> for RawToolCall {
 
   fn try_into(self) -> Result<ToolInvocation> {
     let name = self.name.clone();
+    let id = self.id.clone();
 
-    inventory::iter::<RegisteredTool>
-      .into_iter()
+    let kind = tools::TOOLS
+      .iter()
       .find(|tool| tool.name == name)
       .with_context(|| format!("unknown tool `{name}`"))?
-      .invocation(self)
+      .invocation(self)?;
+
+    Ok(ToolInvocation { id, kind })
   }
 }

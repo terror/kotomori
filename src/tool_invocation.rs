@@ -18,7 +18,7 @@ impl ToolInvocation {
     }
   }
 
-  fn command(&self) -> Option<&tool::command::Command> {
+  fn command(&self) -> Option<&tools::CommandTool> {
     match &self.kind {
       ToolInvocationKind::Command(command) => Some(command),
       ToolInvocationKind::ApplyPatch(_)
@@ -26,6 +26,17 @@ impl ToolInvocation {
       | ToolInvocationKind::ReadFile(_)
       | ToolInvocationKind::SearchFiles(_) => None,
     }
+  }
+
+  pub(crate) fn from_raw<T>(call: RawToolCall) -> Result<ToolInvocationKind>
+  where
+    T: Into<ToolInvocationKind> + DeserializeOwned,
+  {
+    Ok(
+      serde_json::from_value::<T>(call.arguments)
+        .with_context(|| format!("failed to decode `{}` arguments", call.name))?
+        .into(),
+    )
   }
 
   pub(crate) fn progressive_tense(&self) -> String {
@@ -103,5 +114,118 @@ impl Display for ToolInvocation {
         }
       }
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn parses_apply_patch_tool_call() {
+    let invocation: ToolInvocation =
+      RawToolCall::new("foo", "apply_patch", json!({"patch": "bar"}))
+        .try_into()
+        .unwrap();
+
+    assert_eq!(
+      invocation,
+      ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::ApplyPatch(tools::ApplyPatchTool {
+          cwd: None,
+          patch: "bar".into(),
+        }),
+      },
+    );
+  }
+
+  #[test]
+  fn parses_command_tool_call() {
+    let invocation: ToolInvocation = RawToolCall::new(
+      "foo",
+      "command",
+      json!({"program": "bar", "arguments": ["baz"], "cwd": null}),
+    )
+    .try_into()
+    .unwrap();
+
+    assert_eq!(
+      invocation,
+      ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::Command(tools::CommandTool {
+          arguments: vec!["baz".into()],
+          cwd: None,
+          program: "bar".into(),
+        }),
+      },
+    );
+  }
+
+  #[test]
+  fn parses_list_files_tool_call() {
+    let invocation: ToolInvocation =
+      RawToolCall::new("foo", "list_files", json!({"cwd": "bar"}))
+        .try_into()
+        .unwrap();
+
+    assert_eq!(
+      invocation,
+      ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::ListFiles(tools::ListFilesTool {
+          cwd: Some("bar".into()),
+        }),
+      },
+    );
+  }
+
+  #[test]
+  fn parses_read_file_tool_call() {
+    let invocation: ToolInvocation =
+      RawToolCall::new("foo", "read_file", json!({"path": "bar"}))
+        .try_into()
+        .unwrap();
+
+    assert_eq!(
+      invocation,
+      ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::ReadFile(tools::ReadFileTool {
+          path: "bar".into(),
+        }),
+      },
+    );
+  }
+
+  #[test]
+  fn parses_search_files_tool_call() {
+    let invocation: ToolInvocation = RawToolCall::new(
+      "foo",
+      "search_files",
+      json!({"arguments": ["foo"], "cwd": "bar"}),
+    )
+    .try_into()
+    .unwrap();
+
+    assert_eq!(
+      invocation,
+      ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::SearchFiles(tools::SearchFilesTool {
+          arguments: vec!["foo".into()],
+          cwd: Some("bar".into()),
+        }),
+      },
+    );
+  }
+
+  #[test]
+  fn unknown_tool_errors() {
+    let result: Result<ToolInvocation> =
+      RawToolCall::new("foo", "bar", json!({})).try_into();
+
+    assert_eq!(result.unwrap_err().to_string(), "unknown tool `bar`",);
   }
 }

@@ -40,7 +40,7 @@ use {
   renderer::Renderer,
   request::Request,
   role::Role,
-  serde::de::DeserializeOwned,
+  serde::{Deserialize, de::DeserializeOwned},
   serde_json::{Value, json},
   span::Span,
   state::State,
@@ -55,7 +55,7 @@ use {
     path::PathBuf,
     process,
     str::{self, FromStr},
-    sync::Arc,
+    sync::{Arc, LazyLock},
     thread,
     time::Duration,
   },
@@ -66,7 +66,7 @@ use {
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     time::{interval, sleep},
   },
-  tool::RegisteredTool,
+  tool::Tool,
   tool_action_tense::ToolActionTense,
   tool_call_arguments::ToolCallArguments,
   tool_call_builder::ToolCallBuilder,
@@ -139,6 +139,7 @@ mod tool_call_stream;
 mod tool_call_stream_event;
 mod tool_invocation;
 mod tool_invocation_kind;
+mod tools;
 mod transcript;
 mod view;
 
