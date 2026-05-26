@@ -70,6 +70,8 @@ impl Transcript {
     self
       .tool_invocations
       .insert(invocation.id.clone(), invocation);
+
+    self.active_agent_message = Some(String::new());
   }
 
   pub(crate) fn push_tool_result(&mut self, id: String, result: ToolResult) {
@@ -80,6 +82,7 @@ impl Transcript {
     ));
 
     self.tool_results.insert(id, result);
+    self.active_agent_message = Some(String::new());
   }
 
   pub(crate) fn send(&mut self, input: String) {
@@ -100,6 +103,7 @@ impl Transcript {
 }
 
 impl Component for Transcript {
+  #[allow(clippy::too_many_lines)]
   fn render(&self, width: u16) -> Vec<Line> {
     let mut lines = Vec::new();
 
@@ -124,17 +128,160 @@ impl Component for Transcript {
             continue;
           };
 
-          let title = match self.tool_results.get(id) {
-            Some(result) if result.is_error() => invocation.failed_tense(),
-            Some(_) => invocation.completed_tense(),
-            None => invocation.progressive_tense(),
+          let result = self.tool_results.get(id);
+
+          let (symbol, symbol_style, title) = match result {
+            Some(result) if result.is_error() => {
+              ("●", Style::RedBold, invocation.failed_tense())
+            }
+            Some(_) => ("●", Style::GreenBold, invocation.completed_tense()),
+            None => ("●", Style::CyanBold, invocation.progressive_tense()),
           };
 
-          lines.extend([
-            Line::blank(),
-            Line::raw(format!(" {title}")),
-            Line::blank(),
-          ]);
+          lines.push(Line::blank());
+          lines.push(
+            vec![
+              Span::raw(" "),
+              Span::styled(symbol, symbol_style),
+              Span::raw(" "),
+              Span::raw(title),
+            ]
+            .into(),
+          );
+
+          let mut details = match &invocation.kind {
+            ToolInvocationKind::ApplyPatch(tool) => {
+              vec![("patch", format!("{} lines", tool.patch.lines().count()))]
+            }
+            ToolInvocationKind::Command(_)
+            | ToolInvocationKind::ListFiles(_)
+            | ToolInvocationKind::ReadFile(_)
+            | ToolInvocationKind::SearchFiles(_) => Vec::new(),
+          };
+
+          match &invocation.kind {
+            ToolInvocationKind::ApplyPatch(tool) => {
+              if let Some(cwd) = &tool.cwd {
+                details.push(("cwd", cwd.display().to_string()));
+              }
+            }
+            ToolInvocationKind::Command(tool) => {
+              if let Some(cwd) = &tool.cwd {
+                details.push(("cwd", cwd.display().to_string()));
+              }
+            }
+            ToolInvocationKind::ListFiles(_)
+            | ToolInvocationKind::ReadFile(_)
+            | ToolInvocationKind::SearchFiles(_) => {}
+          }
+
+          if let Some(result) = result
+            && let Some(exit_status) = result.exit_status
+            && exit_status != 0
+          {
+            details.push(("exit", exit_status.to_string()));
+          }
+
+          for (label, value) in details {
+            lines.push(
+              vec![
+                Span::styled("   │ ", Style::DarkGray),
+                Span::styled(format!("{label} "), Style::DarkGray),
+                Span::raw(value),
+              ]
+              .into(),
+            );
+          }
+
+          if let Some(result) = result {
+            let mut output = String::new();
+
+            if let Some(stdout) = &result.stdout {
+              output.push_str(stdout);
+            }
+
+            if let Some(content) = &result.content {
+              if !output.is_empty() && !output.ends_with('\n') {
+                output.push('\n');
+              }
+
+              output.push_str(content);
+            }
+
+            if let Some(error) = &result.error {
+              if !output.is_empty() && !output.ends_with('\n') {
+                output.push('\n');
+              }
+
+              output.push_str(error);
+            }
+
+            let output_lines = output
+              .lines()
+              .filter(|line| !line.is_empty())
+              .collect::<Vec<_>>();
+
+            let output_width = usize::from(width.saturating_sub(5).max(8));
+            let output_limit = 3usize;
+
+            for line in output_lines.iter().take(output_limit) {
+              let mut preview = String::new();
+              let mut preview_width = 0usize;
+              let mut truncated = false;
+
+              for c in line.chars() {
+                let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
+
+                if preview_width.saturating_add(char_width) > output_width {
+                  truncated = true;
+                  break;
+                }
+
+                preview.push(c);
+                preview_width = preview_width.saturating_add(char_width);
+              }
+
+              if truncated {
+                while preview_width.saturating_add(3) > output_width {
+                  let Some(c) = preview.pop() else {
+                    break;
+                  };
+
+                  preview_width = preview_width
+                    .saturating_sub(UnicodeWidthChar::width(c).unwrap_or(0));
+                }
+
+                preview.push_str("...");
+              }
+
+              lines.push(
+                vec![
+                  Span::styled("   │ ", Style::DarkGray),
+                  Span::styled(preview, Style::DarkGray),
+                ]
+                .into(),
+              );
+            }
+
+            let omitted = output_lines.len().saturating_sub(output_limit);
+
+            if omitted > 0 {
+              let noun = if omitted == 1 { "line" } else { "lines" };
+
+              lines.push(
+                vec![
+                  Span::styled("   │ ", Style::DarkGray),
+                  Span::styled(
+                    format!("... {omitted} more {noun}"),
+                    Style::DarkGray,
+                  ),
+                ]
+                .into(),
+              );
+            }
+          }
+
+          lines.push(Line::blank());
         }
         MessageKind::ToolResult { .. } => {}
       }
@@ -142,8 +289,11 @@ impl Component for Transcript {
 
     match self.active_agent_message.as_deref() {
       Some("") => {
+        if !lines.last().is_some_and(|line| line == &Line::blank()) {
+          lines.push(Line::blank());
+        }
+
         lines.extend([
-          Line::blank(),
           vec![
             Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
             Span::styled(" Working...", Style::Gray),
@@ -153,9 +303,14 @@ impl Component for Transcript {
         ]);
       }
       Some(message) => {
+        if !lines.last().is_some_and(|line| line == &Line::blank()) {
+          lines.push(Line::blank());
+        }
+
         lines.extend(
-          once(Line::blank())
-            .chain(message.lines().map(|line| Line::raw(format!(" {line}"))))
+          message
+            .lines()
+            .map(|line| Line::raw(format!(" {line}")))
             .chain(once(Line::blank())),
         );
       }
