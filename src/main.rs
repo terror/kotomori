@@ -27,6 +27,7 @@ use {
   cursor::Cursor,
   diff::Diff,
   dimensions::Dimensions,
+  duration_ext::DurationExt,
   effect::Effect,
   event::Event,
   execution_limit::ExecutionLimit,
@@ -124,6 +125,7 @@ mod component;
 mod composer;
 mod diff;
 mod dimensions;
+mod duration_ext;
 mod effect;
 mod event;
 mod execution_limit;

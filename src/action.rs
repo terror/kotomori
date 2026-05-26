@@ -4,6 +4,7 @@ use super::*;
 pub(crate) enum Action {
   CompleteCommand,
   Edit(Input),
+  Interrupt,
   Quit,
   SelectNextCommand,
   SelectPreviousCommand,
@@ -22,6 +23,7 @@ impl Action {
           ..Default::default()
         })
       }
+      KeyCode::Esc => Self::Interrupt,
       KeyCode::Enter if key.modifiers.is_empty() => Self::Submit,
       KeyCode::Tab => Self::CompleteCommand,
       KeyCode::Down => Self::SelectNextCommand,
@@ -46,6 +48,14 @@ mod tests {
         key: Key::Enter,
         ..Default::default()
       })
+    );
+  }
+
+  #[test]
+  fn esc_interrupts() {
+    assert_eq!(
+      Action::from_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+      Action::Interrupt
     );
   }
 }
