@@ -1,122 +1,59 @@
 use super::*;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct ChangedRange {
-  first: usize,
-  last: usize,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct Dimensions {
-  height: u16,
-  width: u16,
-}
-
 #[derive(Debug)]
 pub(crate) struct Renderer {
-  hardware_cursor_row: usize,
   max_lines_rendered: usize,
-  previous: Vec<String>,
-  previous_height: u16,
-  previous_viewport_top: usize,
-  previous_width: u16,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct Viewport {
-  hardware_cursor_row: usize,
-  previous_top: usize,
-  top: usize,
+  presented: Option<PresentedFrame>,
 }
 
 impl Renderer {
-  fn changed_range(
-    previous: &[String],
-    rendered: &[String],
-  ) -> Option<ChangedRange> {
-    let mut changed = None;
-
-    for index in 0..previous.len().max(rendered.len()) {
-      let previous = previous.get(index).map_or("", String::as_str);
-      let rendered = rendered.get(index).map_or("", String::as_str);
-
-      if previous != rendered {
-        changed = Some(match changed {
-          Some(ChangedRange { first, .. }) => {
-            ChangedRange { first, last: index }
-          }
-          None => ChangedRange {
-            first: index,
-            last: index,
-          },
-        });
-      }
-    }
-
-    changed
-  }
-
-  fn clear_deleted_lines(
-    &mut self,
+  fn clear_deleted_tail(
+    &self,
     stdout: &mut impl Write,
-    rendered: Vec<String>,
-    dimensions: Dimensions,
-    previous_viewport_top: usize,
-    changed: ChangedRange,
-  ) -> Result {
-    let target_row = rendered.len().saturating_sub(1);
+    next: &Frame,
+    diff: Diff,
+    previous_viewport: Viewport,
+  ) -> Result<PresentedFrame> {
+    let presented = self.presented.as_ref().unwrap();
 
-    if target_row < previous_viewport_top && !rendered.is_empty() {
-      self.full_render(stdout, rendered, dimensions, true)?;
-      return Ok(());
-    }
-
-    let extra_lines = self.previous.len().saturating_sub(rendered.len());
-
-    if extra_lines > usize::from(dimensions.height) {
-      self.full_render(stdout, rendered, dimensions, true)?;
-      return Ok(());
-    }
+    let target_row = next.last_row();
 
     write!(stdout, "\x1b[?2026h")?;
 
     Self::move_by(
       stdout,
-      Self::line_diff(
-        self.hardware_cursor_row,
-        previous_viewport_top,
+      presented.cursor.diff_to(
+        previous_viewport,
         target_row,
-        previous_viewport_top,
+        previous_viewport,
       ),
     )?;
 
     write!(stdout, "\r")?;
 
-    if extra_lines > 0 {
+    if diff.deleted_tail_len() > 0 {
       Self::move_down(stdout, 1)?;
     }
 
-    for index in changed.first..=changed.last {
-      if index > changed.first {
+    for index in diff.changed.first..=diff.changed.last {
+      if index > diff.changed.first {
         Self::move_down(stdout, 1)?;
       }
 
       write!(stdout, "\r")?;
+
       queue!(stdout, Clear(ClearType::CurrentLine))?;
     }
 
-    Self::move_up(stdout, extra_lines)?;
+    Self::move_up(stdout, diff.deleted_tail_len())?;
 
     write!(stdout, "\x1b[?2026l")?;
 
-    self.hardware_cursor_row = target_row;
-    self.max_lines_rendered = self.max_lines_rendered.max(rendered.len());
-    self.previous = rendered;
-    self.previous_height = dimensions.height;
-    self.previous_viewport_top = previous_viewport_top;
-    self.previous_width = dimensions.width;
-
-    Ok(())
+    Ok(PresentedFrame::new(
+      Cursor::new(target_row),
+      next.clone(),
+      previous_viewport,
+    ))
   }
 
   pub(crate) fn draw(
@@ -141,115 +78,6 @@ impl Renderer {
     Ok(())
   }
 
-  fn draw_changed_lines(
-    &mut self,
-    stdout: &mut impl Write,
-    rendered: Vec<String>,
-    dimensions: Dimensions,
-    viewport: Viewport,
-    changed: ChangedRange,
-  ) -> Result {
-    let appended = rendered.len() > self.previous.len()
-      && changed.first == self.previous.len();
-    let append_start = appended && changed.first > 0;
-    let height = usize::from(dimensions.height);
-    let previous_viewport_bottom = viewport
-      .previous_top
-      .saturating_add(height.saturating_sub(1));
-    let move_target_row = if append_start {
-      changed.first.saturating_sub(1)
-    } else {
-      changed.first
-    };
-    let mut hardware_cursor_row = viewport.hardware_cursor_row;
-    let mut previous_viewport_top = viewport.previous_top;
-    let mut viewport_top = viewport.top;
-
-    write!(stdout, "\x1b[?2026h")?;
-
-    if move_target_row > previous_viewport_bottom {
-      let current_screen_row =
-        hardware_cursor_row.saturating_sub(previous_viewport_top);
-      let move_to_bottom =
-        height.saturating_sub(1).saturating_sub(current_screen_row);
-      Self::move_down(stdout, move_to_bottom)?;
-
-      let scroll = move_target_row.saturating_sub(previous_viewport_bottom);
-
-      for _ in 0..scroll {
-        write!(stdout, "\r\n")?;
-      }
-
-      previous_viewport_top = previous_viewport_top.saturating_add(scroll);
-      viewport_top = viewport_top.saturating_add(scroll);
-      hardware_cursor_row = move_target_row;
-    }
-
-    Self::move_by(
-      stdout,
-      Self::line_diff(
-        hardware_cursor_row,
-        previous_viewport_top,
-        move_target_row,
-        viewport_top,
-      ),
-    )?;
-
-    if append_start {
-      write!(stdout, "\r\n")?;
-    } else {
-      write!(stdout, "\r")?;
-    }
-
-    let render_end = changed.last.min(rendered.len().saturating_sub(1));
-
-    for (index, line) in rendered
-      .iter()
-      .enumerate()
-      .take(render_end.saturating_add(1))
-      .skip(changed.first)
-    {
-      if index > changed.first {
-        write!(stdout, "\r\n")?;
-      }
-
-      queue!(stdout, Clear(ClearType::CurrentLine))?;
-
-      write!(stdout, "{line}")?;
-    }
-
-    let mut final_cursor_row = render_end;
-
-    if self.previous.len() > rendered.len() {
-      if render_end < rendered.len().saturating_sub(1) {
-        let move_down = rendered.len().saturating_sub(1) - render_end;
-        Self::move_down(stdout, move_down)?;
-        final_cursor_row = rendered.len().saturating_sub(1);
-      }
-
-      let extra_lines = self.previous.len().saturating_sub(rendered.len());
-
-      for _ in rendered.len()..self.previous.len() {
-        write!(stdout, "\r\n")?;
-        queue!(stdout, Clear(ClearType::CurrentLine))?;
-      }
-
-      Self::move_up(stdout, extra_lines)?;
-    }
-
-    write!(stdout, "\x1b[?2026l")?;
-
-    self.hardware_cursor_row = final_cursor_row;
-    self.max_lines_rendered = self.max_lines_rendered.max(rendered.len());
-    self.previous = rendered;
-    self.previous_height = dimensions.height;
-    self.previous_viewport_top = previous_viewport_top
-      .max(final_cursor_row.saturating_add(1).saturating_sub(height));
-    self.previous_width = dimensions.width;
-
-    Ok(())
-  }
-
   fn draw_rendered(
     &mut self,
     stdout: &mut impl Write,
@@ -257,105 +85,53 @@ impl Renderer {
     width: u16,
     height: u16,
   ) -> Result {
-    let dimensions = Dimensions { height, width };
-    let width_changed =
-      self.previous_width != 0 && self.previous_width != width;
-    let height_changed =
-      self.previous_height != 0 && self.previous_height != height;
+    let next = Frame::new(rendered, Dimensions { height, width });
 
-    let previous_buffer_height = if self.previous_height > 0 {
-      self
-        .previous_viewport_top
-        .saturating_add(usize::from(self.previous_height))
+    let op = self.render_op(&next);
+
+    let presented = match op {
+      RenderOp::Full { clear } => Self::full_render(stdout, &next, clear)?,
+      RenderOp::Noop => self.present_noop(&next),
+      RenderOp::Patch { diff } => self.patch_render(stdout, next, diff)?,
+    };
+
+    self.max_lines_rendered = if matches!(op, RenderOp::Full { clear: true }) {
+      presented.frame.len()
     } else {
-      usize::from(height)
+      self.max_lines_rendered.max(presented.frame.len())
     };
 
-    let previous_viewport_top = if height_changed {
-      previous_buffer_height.saturating_sub(usize::from(height))
-    } else {
-      self.previous_viewport_top
-    };
+    self.presented = Some(presented);
 
-    if self.previous.is_empty() && !width_changed && !height_changed {
-      self.full_render(stdout, rendered, dimensions, false)?;
-      return Ok(());
-    }
-
-    if width_changed || height_changed && !Self::is_termux_session() {
-      self.full_render(stdout, rendered, dimensions, true)?;
-      return Ok(());
-    }
-
-    if rendered.len() < self.max_lines_rendered
-      && env::var_os("KOTOMORI_CLEAR_ON_SHRINK").is_some()
-    {
-      self.full_render(stdout, rendered, dimensions, true)?;
-      return Ok(());
-    }
-
-    let Some(changed) = Self::changed_range(&self.previous, &rendered) else {
-      self.previous = rendered;
-      self.previous_height = height;
-      self.previous_viewport_top = previous_viewport_top;
-      self.previous_width = width;
-      return Ok(());
-    };
-
-    if changed.first >= rendered.len() {
-      self.clear_deleted_lines(
-        stdout,
-        rendered,
-        dimensions,
-        previous_viewport_top,
-        changed,
-      )?;
-      return Ok(());
-    }
-
-    if changed.first < previous_viewport_top {
-      self.full_render(stdout, rendered, dimensions, true)?;
-      return Ok(());
-    }
-
-    self.draw_changed_lines(
-      stdout,
-      rendered,
-      dimensions,
-      Viewport {
-        hardware_cursor_row: self.hardware_cursor_row,
-        previous_top: previous_viewport_top,
-        top: previous_viewport_top,
-      },
-      changed,
-    )
+    Ok(())
   }
 
   pub(crate) fn finish(&mut self, stdout: &mut impl Write) -> Result {
-    if self.previous.is_empty() {
+    let Some(presented) = &self.presented else {
       return Ok(());
-    }
-
-    let target_row = self.previous.len().saturating_sub(1);
+    };
 
     Self::move_by(
       stdout,
-      isize::try_from(target_row).unwrap_or(isize::MAX)
-        - isize::try_from(self.hardware_cursor_row).unwrap_or(isize::MAX),
+      presented.cursor.diff_to(
+        presented.viewport,
+        presented.frame.last_row(),
+        presented.viewport,
+      ),
     )?;
 
-    self.hardware_cursor_row = target_row;
+    if let Some(presented) = &mut self.presented {
+      presented.cursor = Cursor::new(presented.frame.last_row());
+    }
 
     Ok(())
   }
 
   fn full_render(
-    &mut self,
     stdout: &mut impl Write,
-    rendered: Vec<String>,
-    dimensions: Dimensions,
+    next: &Frame,
     clear: bool,
-  ) -> Result {
+  ) -> Result<PresentedFrame> {
     write!(stdout, "\x1b[?2026h")?;
 
     if clear {
@@ -367,44 +143,15 @@ impl Renderer {
       )?;
     }
 
-    Self::write_lines(stdout, &rendered)?;
+    Self::write_lines(stdout, &next.lines)?;
 
     write!(stdout, "\x1b[?2026l")?;
 
-    self.hardware_cursor_row = rendered.len().saturating_sub(1);
-    self.max_lines_rendered = if clear {
-      rendered.len()
-    } else {
-      self.max_lines_rendered.max(rendered.len())
-    };
-    self.previous = rendered;
-    self.previous_height = dimensions.height;
-    self.previous_viewport_top = self
-      .previous
-      .len()
-      .max(usize::from(dimensions.height))
-      .saturating_sub(usize::from(dimensions.height));
-    self.previous_width = dimensions.width;
-
-    Ok(())
+    Ok(PresentedFrame::from_full_render(next.clone()))
   }
 
   fn is_termux_session() -> bool {
     env::var_os("TERMUX_VERSION").is_some()
-  }
-
-  fn line_diff(
-    hardware_cursor_row: usize,
-    previous_viewport_top: usize,
-    target_row: usize,
-    viewport_top: usize,
-  ) -> isize {
-    let current_screen_row =
-      hardware_cursor_row.saturating_sub(previous_viewport_top);
-    let target_screen_row = target_row.saturating_sub(viewport_top);
-
-    isize::try_from(target_screen_row).unwrap_or(isize::MAX)
-      - isize::try_from(current_screen_row).unwrap_or(isize::MAX)
   }
 
   fn move_by(stdout: &mut impl Write, diff: isize) -> Result {
@@ -435,13 +182,183 @@ impl Renderer {
 
   pub(crate) fn new() -> Self {
     Self {
-      hardware_cursor_row: 0,
       max_lines_rendered: 0,
-      previous: Vec::new(),
-      previous_height: 0,
-      previous_viewport_top: 0,
-      previous_width: 0,
+      presented: None,
     }
+  }
+
+  fn patch_render(
+    &self,
+    stdout: &mut impl Write,
+    next: Frame,
+    diff: Diff,
+  ) -> Result<PresentedFrame> {
+    let previous_viewport = self.previous_viewport(&next);
+
+    if diff.is_pure_tail_delete() {
+      return self.clear_deleted_tail(stdout, &next, diff, previous_viewport);
+    }
+
+    let presented = self.presented.as_ref().unwrap();
+
+    let writable_range = diff.writable_range().unwrap();
+
+    let append_start = next.len() > presented.frame.len()
+      && diff.changed.first == presented.frame.len();
+
+    let append_start = append_start && diff.changed.first > 0;
+
+    let move_target_row = if append_start {
+      diff.changed.first.saturating_sub(1)
+    } else {
+      diff.changed.first
+    };
+
+    let mut cursor = presented.cursor;
+    let mut next_viewport = previous_viewport;
+    let mut previous_viewport = previous_viewport;
+
+    write!(stdout, "\x1b[?2026h")?;
+
+    if move_target_row > previous_viewport.bottom() {
+      let move_to_bottom = previous_viewport
+        .height()
+        .saturating_sub(1)
+        .saturating_sub(previous_viewport.screen_row(cursor.row()));
+
+      Self::move_down(stdout, move_to_bottom)?;
+
+      let scroll = move_target_row.saturating_sub(previous_viewport.bottom());
+
+      for _ in 0..scroll {
+        write!(stdout, "\r\n")?;
+      }
+
+      cursor = Cursor::new(move_target_row);
+      next_viewport = next_viewport.scrolled_down(scroll);
+      previous_viewport = previous_viewport.scrolled_down(scroll);
+    }
+
+    Self::move_by(
+      stdout,
+      cursor.diff_to(previous_viewport, move_target_row, next_viewport),
+    )?;
+
+    if append_start {
+      write!(stdout, "\r\n")?;
+    } else {
+      write!(stdout, "\r")?;
+    }
+
+    for (index, line) in next
+      .lines
+      .iter()
+      .enumerate()
+      .take(writable_range.end().saturating_add(1))
+      .skip(*writable_range.start())
+    {
+      if index > *writable_range.start() {
+        write!(stdout, "\r\n")?;
+      }
+
+      queue!(stdout, Clear(ClearType::CurrentLine))?;
+
+      write!(stdout, "{line}")?;
+    }
+
+    let mut cursor = Cursor::new(*writable_range.end());
+
+    if diff.deleted_tail_len() > 0 {
+      if cursor.row() < next.last_row() {
+        let move_down = next.last_row() - cursor.row();
+        Self::move_down(stdout, move_down)?;
+        cursor = Cursor::new(next.last_row());
+      }
+
+      for _ in next.len()..presented.frame.len() {
+        write!(stdout, "\r\n")?;
+        queue!(stdout, Clear(ClearType::CurrentLine))?;
+      }
+
+      Self::move_up(stdout, diff.deleted_tail_len())?;
+    }
+
+    write!(stdout, "\x1b[?2026l")?;
+
+    Ok(PresentedFrame::new(cursor, next, next_viewport))
+  }
+
+  fn present_noop(&self, next: &Frame) -> PresentedFrame {
+    let presented = self.presented.as_ref().unwrap();
+
+    PresentedFrame::new(
+      presented.cursor,
+      next.clone(),
+      self.previous_viewport(next),
+    )
+  }
+
+  fn previous_viewport(&self, next: &Frame) -> Viewport {
+    let presented = self.presented.as_ref().unwrap();
+
+    let height = next.dimensions.height();
+
+    if presented.frame.dimensions.height == next.dimensions.height {
+      Viewport::new(presented.viewport.top(), height)
+    } else {
+      Viewport::anchored_to_bottom(
+        presented
+          .viewport
+          .top()
+          .saturating_add(presented.frame.dimensions.height()),
+        height,
+      )
+    }
+  }
+
+  fn render_op(&self, next: &Frame) -> RenderOp {
+    let Some(presented) = &self.presented else {
+      return RenderOp::Full { clear: false };
+    };
+
+    if presented.frame.dimensions.width != next.dimensions.width {
+      return RenderOp::Full { clear: true };
+    }
+
+    if presented.frame.dimensions.height != next.dimensions.height
+      && !Self::is_termux_session()
+    {
+      return RenderOp::Full { clear: true };
+    }
+
+    if next.len() < self.max_lines_rendered
+      && env::var_os("KOTOMORI_CLEAR_ON_SHRINK").is_some()
+    {
+      return RenderOp::Full { clear: true };
+    }
+
+    let Some(diff) = Diff::between(&presented.frame, next) else {
+      return RenderOp::Noop;
+    };
+
+    let previous_viewport = self.previous_viewport(next);
+
+    if diff.changed.first < previous_viewport.top() {
+      return RenderOp::Full { clear: true };
+    }
+
+    if diff.is_pure_tail_delete()
+      && next.last_row() < previous_viewport.top()
+      && !next.is_empty()
+    {
+      return RenderOp::Full { clear: true };
+    }
+
+    if diff.deleted_tail_len() > next.dimensions.height() {
+      return RenderOp::Full { clear: true };
+    }
+
+    RenderOp::Patch { diff }
   }
 
   fn write_lines(stdout: &mut impl Write, lines: &[String]) -> Result {
@@ -461,16 +378,29 @@ impl Renderer {
 mod tests {
   use super::*;
 
+  fn frame(lines: &[&str], width: u16, height: u16) -> Frame {
+    Frame::new(
+      lines.iter().map(|line| (*line).into()).collect(),
+      Dimensions { height, width },
+    )
+  }
+
+  fn renderer(lines: &[&str], width: u16, height: u16) -> Renderer {
+    let frame = frame(lines, width, height);
+
+    Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(lines.len(), usize::from(height)),
+      )),
+    }
+  }
+
   #[test]
   fn appending_lines_scrolls() {
-    let mut subject = Renderer {
-      hardware_cursor_row: 0,
-      max_lines_rendered: 1,
-      previous: vec!["foo".into()],
-      previous_height: 24,
-      previous_viewport_top: 0,
-      previous_width: 80,
-    };
+    let mut subject = renderer(&["foo"], 80, 24);
 
     let mut stdout = Vec::new();
 
@@ -485,58 +415,44 @@ mod tests {
   }
 
   #[test]
-  fn changed_range_finds_first_and_last_change() {
+  fn appending_past_viewport_scrolls_instead_of_redrawing() {
+    let mut subject = renderer(&["foo", "bar"], 80, 1);
+
+    let mut stdout = Vec::new();
+
+    subject
+      .draw_rendered(
+        &mut stdout,
+        vec!["foo".into(), "bar".into(), "baz".into()],
+        80,
+        1,
+      )
+      .unwrap();
+
     assert_eq!(
-      Renderer::changed_range(
-        &["foo".into(), "bar".into(), "baz".into()],
-        &["foo".into(), "qux".into(), "baz".into(), "bob".into()],
-      ),
-      Some(ChangedRange { first: 1, last: 3 }),
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[?2026h\r\n\x1b[2Kbaz\x1b[?2026l",
     );
   }
 
   #[test]
   fn finishing_moves_cursor_to_last_rendered_line() {
-    let mut subject = Renderer {
-      hardware_cursor_row: 1,
-      max_lines_rendered: 3,
-      previous: vec!["foo".into(), "bar".into(), "baz".into()],
-      previous_height: 24,
-      previous_viewport_top: 0,
-      previous_width: 80,
-    };
+    let mut subject = renderer(&["foo", "bar", "baz"], 80, 24);
+    subject.presented.as_mut().unwrap().cursor = Cursor::new(1);
 
     let mut stdout = Vec::new();
 
     subject.finish(&mut stdout).unwrap();
 
     assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[1B");
-    assert_eq!(subject.hardware_cursor_row, 2);
+    assert_eq!(subject.presented.unwrap().cursor, Cursor::new(2));
   }
 
   #[test]
   fn full_render_can_clear_screen_and_scrollback() {
-    let mut subject = Renderer {
-      hardware_cursor_row: 0,
-      max_lines_rendered: 0,
-      previous: vec!["foo".into()],
-      previous_height: 10,
-      previous_viewport_top: 0,
-      previous_width: 80,
-    };
-
     let mut stdout = Vec::new();
 
-    subject
-      .full_render(
-        &mut stdout,
-        vec!["bar".into(), "baz".into()],
-        Dimensions {
-          height: 10,
-          width: 80,
-        },
-        true,
-      )
+    Renderer::full_render(&mut stdout, &frame(&["bar", "baz"], 80, 10), true)
       .unwrap();
 
     assert_eq!(
@@ -546,22 +462,8 @@ mod tests {
   }
 
   #[test]
-  fn line_diff_accounts_for_viewport() {
-    assert_eq!(Renderer::line_diff(10, 8, 12, 8), 2);
-    assert_eq!(Renderer::line_diff(12, 8, 10, 8), -2);
-    assert_eq!(Renderer::line_diff(12, 10, 14, 12), 0);
-  }
-
-  #[test]
   fn redraws_only_changed_line() {
-    let mut subject = Renderer {
-      hardware_cursor_row: 2,
-      max_lines_rendered: 3,
-      previous: vec!["foo".into(), "bar".into(), "baz".into()],
-      previous_height: 24,
-      previous_viewport_top: 0,
-      previous_width: 80,
-    };
+    let mut subject = renderer(&["foo", "bar", "baz"], 80, 24);
 
     let mut stdout = Vec::new();
 
@@ -582,14 +484,7 @@ mod tests {
 
   #[test]
   fn redraws_screen_when_changed_line_is_above_viewport() {
-    let mut subject = Renderer {
-      hardware_cursor_row: 2,
-      max_lines_rendered: 3,
-      previous: vec!["foo".into(), "bar".into(), "baz".into()],
-      previous_height: 2,
-      previous_viewport_top: 1,
-      previous_width: 80,
-    };
+    let mut subject = renderer(&["foo", "bar", "baz"], 80, 2);
 
     let mut stdout = Vec::new();
 
@@ -610,14 +505,7 @@ mod tests {
 
   #[test]
   fn redraws_screen_when_height_changes() {
-    let mut subject = Renderer {
-      hardware_cursor_row: 0,
-      max_lines_rendered: 1,
-      previous: vec!["foo".into()],
-      previous_height: 24,
-      previous_viewport_top: 0,
-      previous_width: 80,
-    };
+    let mut subject = renderer(&["foo"], 80, 24);
 
     let mut stdout = Vec::new();
 
@@ -633,14 +521,7 @@ mod tests {
 
   #[test]
   fn redraws_screen_when_width_changes() {
-    let mut subject = Renderer {
-      hardware_cursor_row: 0,
-      max_lines_rendered: 1,
-      previous: vec!["foo".into()],
-      previous_height: 24,
-      previous_viewport_top: 0,
-      previous_width: 80,
-    };
+    let mut subject = renderer(&["foo"], 80, 24);
 
     let mut stdout = Vec::new();
 
@@ -656,14 +537,7 @@ mod tests {
 
   #[test]
   fn removes_deleted_tail_lines() {
-    let mut subject = Renderer {
-      hardware_cursor_row: 2,
-      max_lines_rendered: 3,
-      previous: vec!["foo".into(), "bar".into(), "baz".into()],
-      previous_height: 24,
-      previous_viewport_top: 0,
-      previous_width: 80,
-    };
+    let mut subject = renderer(&["foo", "bar", "baz"], 80, 24);
 
     let mut stdout = Vec::new();
 

@@ -5,6 +5,7 @@ use {
   app::App,
   arguments::Arguments,
   async_trait::async_trait,
+  changed_range::ChangedRange,
   clap::{Args, Parser},
   command::Command,
   component::Component,
@@ -23,11 +24,14 @@ use {
       enable_raw_mode,
     },
   },
+  diff::Diff,
+  dimensions::Dimensions,
   effect::Effect,
   event::Event,
   execution_limit::ExecutionLimit,
   executor::Executor,
   footer::Footer,
+  frame::Frame,
   framed_lines::FramedLines,
   futures_util::StreamExt,
   header::Header,
@@ -37,11 +41,13 @@ use {
   message_kind::MessageKind,
   model::Model,
   options::Options,
+  presented_frame::PresentedFrame,
   provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
   provider_output::ProviderOutput,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
+  render_op::RenderOp,
   renderer::Renderer,
   request::Request,
   role::Role,
@@ -69,6 +75,7 @@ use {
   strum::{EnumIter, IntoEnumIterator},
   style::Style,
   terminal::Terminal,
+  terminal_cursor::Cursor,
   tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
@@ -95,6 +102,7 @@ use {
   transcript_tool_invocation::TranscriptToolInvocation,
   unicode_width::UnicodeWidthChar,
   view::View,
+  viewport::Viewport,
 };
 
 mod action;
@@ -109,14 +117,18 @@ mod anthropic {
 }
 mod app;
 mod arguments;
+mod changed_range;
 mod command;
 mod component;
 mod composer;
+mod diff;
+mod dimensions;
 mod effect;
 mod event;
 mod execution_limit;
 mod executor;
 mod footer;
+mod frame;
 mod framed_lines;
 mod header;
 mod hint;
@@ -143,10 +155,12 @@ mod openai {
   };
 }
 mod options;
+mod presented_frame;
 mod provider;
 mod provider_output;
 mod provider_sink;
 mod raw_tool_call;
+mod render_op;
 mod renderer;
 mod request;
 mod role;
@@ -154,6 +168,7 @@ mod span;
 mod state;
 mod style;
 mod terminal;
+mod terminal_cursor;
 mod tool;
 mod tool_action_tense;
 mod tool_call_arguments;
@@ -170,6 +185,7 @@ mod transcript;
 mod transcript_entry;
 mod transcript_tool_invocation;
 mod view;
+mod viewport;
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 
