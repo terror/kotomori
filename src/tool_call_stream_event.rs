@@ -15,23 +15,30 @@ impl ToolCallStreamEvent for anthropic::MessageStreamEvent {
         content_block: anthropic::ContentBlock::ToolUse { id, input, name },
         index,
       } => vec![
-        ToolCallUpdate::Id { id, index },
-        ToolCallUpdate::Name { index, name },
-        ToolCallUpdate::Arguments {
-          arguments: input,
+        ToolCallUpdate {
           index,
+          kind: ToolCallUpdateKind::Id(id),
+        },
+        ToolCallUpdate {
+          index,
+          kind: ToolCallUpdateKind::Name(name),
+        },
+        ToolCallUpdate {
+          index,
+          kind: ToolCallUpdateKind::Arguments(input),
         },
       ],
       Self::ContentBlockDelta {
         delta: anthropic::ContentBlockDelta::InputJsonDelta { partial_json },
         index,
-      } => vec![ToolCallUpdate::ArgumentDelta {
-        argument_delta: partial_json,
+      } => vec![ToolCallUpdate {
         index,
+        kind: ToolCallUpdateKind::ArgumentDelta(partial_json),
       }],
-      Self::ContentBlockStop { index } => {
-        vec![ToolCallUpdate::Finish { index }]
-      }
+      Self::ContentBlockStop { index } => vec![ToolCallUpdate {
+        index,
+        kind: ToolCallUpdateKind::Finish,
+      }],
       _ => Vec::new(),
     }
   }
@@ -44,24 +51,24 @@ impl ToolCallStreamEvent for openai::ChatCompletionMessageToolCallChunk {
     let mut updates = Vec::new();
 
     if let Some(id) = self.id {
-      updates.push(ToolCallUpdate::Id {
-        id,
+      updates.push(ToolCallUpdate {
         index: self.index,
+        kind: ToolCallUpdateKind::Id(id),
       });
     }
 
     if let Some(function) = self.function {
       if let Some(name) = function.name {
-        updates.push(ToolCallUpdate::Name {
+        updates.push(ToolCallUpdate {
           index: self.index,
-          name,
+          kind: ToolCallUpdateKind::Name(name),
         });
       }
 
       if let Some(argument_delta) = function.arguments {
-        updates.push(ToolCallUpdate::ArgumentDelta {
-          argument_delta,
+        updates.push(ToolCallUpdate {
           index: self.index,
+          kind: ToolCallUpdateKind::ArgumentDelta(argument_delta),
         });
       }
     }

@@ -74,6 +74,7 @@ use {
   tool_call_stream::ToolCallStream,
   tool_call_stream_event::ToolCallStreamEvent,
   tool_call_update::ToolCallUpdate,
+  tool_call_update_kind::ToolCallUpdateKind,
   tool_invocation::ToolInvocation,
   tool_invocation_kind::ToolInvocationKind,
   tools::{
@@ -142,6 +143,7 @@ mod tool_call_builder;
 mod tool_call_stream;
 mod tool_call_stream_event;
 mod tool_call_update;
+mod tool_call_update_kind;
 mod tool_invocation;
 mod tool_invocation_kind;
 mod tools;

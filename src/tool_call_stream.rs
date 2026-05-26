@@ -17,51 +17,52 @@ impl<I: Ord> ToolCallStream<I> {
     &mut self,
     update: ToolCallUpdate<I>,
   ) -> Result<Vec<RawToolCall>> {
-    match update {
-      ToolCallUpdate::ArgumentDelta {
-        argument_delta,
-        index,
-      } => {
+    match update.kind {
+      ToolCallUpdateKind::ArgumentDelta(argument_delta) => {
         let tool_call = self
           .calls
-          .remove(&index)
+          .remove(&update.index)
           .unwrap_or_default()
           .argument_delta(&argument_delta)?;
 
-        self.calls.insert(index, tool_call);
+        self.calls.insert(update.index, tool_call);
 
         Ok(Vec::new())
       }
-      ToolCallUpdate::Arguments { arguments, index } => {
+      ToolCallUpdateKind::Arguments(arguments) => {
         let tool_call = self
           .calls
-          .remove(&index)
+          .remove(&update.index)
           .unwrap_or_default()
           .arguments(arguments);
 
-        self.calls.insert(index, tool_call);
+        self.calls.insert(update.index, tool_call);
 
         Ok(Vec::new())
       }
-      ToolCallUpdate::Finish { index } => self
+      ToolCallUpdateKind::Finish => self
         .calls
-        .remove(&index)
+        .remove(&update.index)
         .map(ToolCallBuilder::finish)
         .transpose()
         .map(Option::into_iter)
         .map(Iterator::collect),
-      ToolCallUpdate::Id { id, index } => {
-        let tool_call = self.calls.remove(&index).unwrap_or_default().id(id);
+      ToolCallUpdateKind::Id(id) => {
+        let tool_call =
+          self.calls.remove(&update.index).unwrap_or_default().id(id);
 
-        self.calls.insert(index, tool_call);
+        self.calls.insert(update.index, tool_call);
 
         Ok(Vec::new())
       }
-      ToolCallUpdate::Name { index, name } => {
-        let tool_call =
-          self.calls.remove(&index).unwrap_or_default().name(name);
+      ToolCallUpdateKind::Name(name) => {
+        let tool_call = self
+          .calls
+          .remove(&update.index)
+          .unwrap_or_default()
+          .name(name);
 
-        self.calls.insert(index, tool_call);
+        self.calls.insert(update.index, tool_call);
 
         Ok(Vec::new())
       }
@@ -111,44 +112,44 @@ mod tests {
     let mut stream = ToolCallStream::default();
 
     stream
-      .push(ToolCallUpdate::Id {
-        id: "foo".into(),
+      .push(ToolCallUpdate {
         index: 0,
+        kind: ToolCallUpdateKind::Id("foo".into()),
       })
       .unwrap();
 
     stream
-      .push(ToolCallUpdate::Name {
+      .push(ToolCallUpdate {
         index: 0,
-        name: "read_file".into(),
+        kind: ToolCallUpdateKind::Name("read_file".into()),
       })
       .unwrap();
 
     stream
-      .push(ToolCallUpdate::Arguments {
-        arguments: json!({"path": "foo"}),
+      .push(ToolCallUpdate {
         index: 0,
+        kind: ToolCallUpdateKind::Arguments(json!({"path": "foo"})),
       })
       .unwrap();
 
     stream
-      .push(ToolCallUpdate::Id {
-        id: "bar".into(),
+      .push(ToolCallUpdate {
         index: 1,
+        kind: ToolCallUpdateKind::Id("bar".into()),
       })
       .unwrap();
 
     stream
-      .push(ToolCallUpdate::Name {
+      .push(ToolCallUpdate {
         index: 1,
-        name: "read_file".into(),
+        kind: ToolCallUpdateKind::Name("read_file".into()),
       })
       .unwrap();
 
     stream
-      .push(ToolCallUpdate::Arguments {
-        arguments: json!({"path": "bar"}),
+      .push(ToolCallUpdate {
         index: 1,
+        kind: ToolCallUpdateKind::Arguments(json!({"path": "bar"})),
       })
       .unwrap();
 
@@ -156,8 +157,14 @@ mod tests {
       stream
         .push_event(Event {
           updates: vec![
-            ToolCallUpdate::Finish { index: 0 },
-            ToolCallUpdate::Finish { index: 1 },
+            ToolCallUpdate {
+              index: 0,
+              kind: ToolCallUpdateKind::Finish,
+            },
+            ToolCallUpdate {
+              index: 1,
+              kind: ToolCallUpdateKind::Finish,
+            },
           ],
         })
         .unwrap(),
