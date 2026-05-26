@@ -264,7 +264,9 @@ mod tests {
         id: "foo".into(),
         kind: ToolInvocationKind::ReadFile(ReadFileTool {
           cwd: None,
+          end_line: None,
           path: "bar".into(),
+          start_line: None,
         }),
       },
     );
