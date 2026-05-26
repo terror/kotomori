@@ -10,9 +10,9 @@ impl ToolInvocation {
   fn action(&self, tense: ToolActionTense) -> &'static str {
     match tense {
       ToolActionTense::Progressive => match &self.kind {
-        ToolInvocationKind::ListFiles(_) => "Listing",
-        ToolInvocationKind::ReadFile(_) => "Reading",
-        ToolInvocationKind::SearchFiles(_) => "Searching",
+        ToolInvocationKind::ListFilesTool(_) => "Listing",
+        ToolInvocationKind::ReadFileTool(_) => "Reading",
+        ToolInvocationKind::SearchFilesTool(_) => "Searching",
         _ => "Running",
       },
     }
@@ -20,11 +20,11 @@ impl ToolInvocation {
 
   fn command(&self) -> Option<&CommandTool> {
     match &self.kind {
-      ToolInvocationKind::Command(command) => Some(command),
-      ToolInvocationKind::ApplyPatch(_)
-      | ToolInvocationKind::ListFiles(_)
-      | ToolInvocationKind::ReadFile(_)
-      | ToolInvocationKind::SearchFiles(_) => None,
+      ToolInvocationKind::CommandTool(command) => Some(command),
+      ToolInvocationKind::ApplyPatchTool(_)
+      | ToolInvocationKind::ListFilesTool(_)
+      | ToolInvocationKind::ReadFileTool(_)
+      | ToolInvocationKind::SearchFilesTool(_) => None,
     }
   }
 
@@ -45,16 +45,16 @@ impl ToolInvocation {
 
   fn subject(&self) -> String {
     match &self.kind {
-      ToolInvocationKind::ApplyPatch(_) => "apply_patch".into(),
-      ToolInvocationKind::Command(_) => self
+      ToolInvocationKind::ApplyPatchTool(_) => "apply_patch".into(),
+      ToolInvocationKind::CommandTool(_) => self
         .command()
         .map_or_else(|| "command".into(), ToString::to_string),
-      ToolInvocationKind::ListFiles(tool) => tool.cwd.as_ref().map_or_else(
+      ToolInvocationKind::ListFilesTool(tool) => tool.cwd.as_ref().map_or_else(
         || "files".into(),
         |cwd| format!("files in {}", cwd.display()),
       ),
-      ToolInvocationKind::ReadFile(tool) => tool.path.display().to_string(),
-      ToolInvocationKind::SearchFiles(tool) => {
+      ToolInvocationKind::ReadFileTool(tool) => tool.path.display().to_string(),
+      ToolInvocationKind::SearchFilesTool(tool) => {
         let query = if tool.arguments.is_empty() {
           "files".into()
         } else {
@@ -77,25 +77,25 @@ impl ToolInvocation {
 impl Display for ToolInvocation {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
     match &self.kind {
-      ToolInvocationKind::ApplyPatch(_) => write!(f, "apply_patch"),
-      ToolInvocationKind::Command(_) => {
+      ToolInvocationKind::ApplyPatchTool(_) => write!(f, "apply_patch"),
+      ToolInvocationKind::CommandTool(_) => {
         if let Some(command) = self.command() {
           write!(f, "{command}")
         } else {
           write!(f, "command")
         }
       }
-      ToolInvocationKind::ListFiles(tool) => {
+      ToolInvocationKind::ListFilesTool(tool) => {
         if let Some(cwd) = &tool.cwd {
           write!(f, "list files in {}", cwd.display())
         } else {
           write!(f, "list files")
         }
       }
-      ToolInvocationKind::ReadFile(tool) => {
+      ToolInvocationKind::ReadFileTool(tool) => {
         write!(f, "read {}", tool.path.display())
       }
-      ToolInvocationKind::SearchFiles(tool) => {
+      ToolInvocationKind::SearchFilesTool(tool) => {
         if tool.arguments.is_empty() {
           if let Some(cwd) = &tool.cwd {
             write!(f, "search files in {}", cwd.display())
@@ -132,7 +132,7 @@ mod tests {
       invocation,
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::ApplyPatch(ApplyPatchTool {
+        kind: ToolInvocationKind::ApplyPatchTool(ApplyPatchTool {
           cwd: None,
           patch: "bar".into(),
         }),
@@ -154,7 +154,7 @@ mod tests {
       invocation,
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::Command(CommandTool {
+        kind: ToolInvocationKind::CommandTool(CommandTool {
           arguments: vec!["baz".into()],
           cwd: None,
           program: "bar".into(),
@@ -174,7 +174,7 @@ mod tests {
       invocation,
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::ListFiles(ListFilesTool {
+        kind: ToolInvocationKind::ListFilesTool(ListFilesTool {
           cwd: Some("bar".into()),
         }),
       },
@@ -192,7 +192,9 @@ mod tests {
       invocation,
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::ReadFile(ReadFileTool { path: "bar".into() }),
+        kind: ToolInvocationKind::ReadFileTool(ReadFileTool {
+          path: "bar".into()
+        }),
       },
     );
   }
@@ -211,7 +213,7 @@ mod tests {
       invocation,
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
+        kind: ToolInvocationKind::SearchFilesTool(SearchFilesTool {
           arguments: vec!["foo".into()],
           cwd: Some("bar".into()),
         }),

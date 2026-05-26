@@ -40,6 +40,7 @@ use {
   renderer::Renderer,
   request::Request,
   role::Role,
+  schemars::JsonSchema,
   serde::{Deserialize, de::DeserializeOwned},
   serde_json::{Value, json},
   span::Span,
