@@ -9,7 +9,7 @@ impl Ollama {
   pub(crate) fn new() -> Self {
     Self {
       openai: OpenAi::with_config(
-        OpenAIConfig::new()
+        crate::openai::OpenAIConfig::new()
           .with_api_base(format!(
             "{}/v1",
             env::var("OLLAMA_HOST")

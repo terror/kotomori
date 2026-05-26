@@ -1,7 +1,7 @@
 use super::*;
 
 pub(crate) struct Anthropic {
-  client: anthropic_sdk::Anthropic,
+  client: crate::anthropic::Anthropic,
 }
 
 impl Anthropic {
@@ -14,10 +14,10 @@ impl Anthropic {
       .unwrap_or_default();
 
     Ok(Self {
-      client: anthropic_sdk::Anthropic::with_config(
-        anthropic_sdk::ClientConfig::new(api_key)
+      client: crate::anthropic::Anthropic::with_config(
+        crate::anthropic::ClientConfig::new(api_key)
           .with_base_url(base_url)
-          .with_auth_method(AuthMethod::Anthropic),
+          .with_auth_method(crate::anthropic::AuthMethod::Anthropic),
       )?,
     })
   }
@@ -38,15 +38,21 @@ impl Provider for Anthropic {
       .create_stream((&request).into())
       .await?;
 
+    let mut tool_calls = ToolCallStream::<usize>::default();
+
     while let Some(event) = stream.next().await {
       let event = event?;
 
       match event {
-        types::MessageStreamEvent::ContentBlockDelta {
-          delta: types::ContentBlockDelta::TextDelta { text },
+        crate::anthropic::MessageStreamEvent::ContentBlockDelta {
+          delta: crate::anthropic::ContentBlockDelta::TextDelta { text },
           ..
         } if !text.is_empty() => sink.delta(text)?,
-        _ => {}
+        event => {
+          for tool_call in tool_calls.push_event(event)? {
+            sink.tool_call(tool_call)?;
+          }
+        }
       }
     }
 

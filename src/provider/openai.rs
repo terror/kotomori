@@ -2,17 +2,17 @@ use super::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct OpenAi {
-  client: async_openai::Client<OpenAIConfig>,
+  client: crate::openai::Client<crate::openai::OpenAIConfig>,
 }
 
 impl OpenAi {
   pub(crate) fn new() -> Self {
-    Self::with_config(OpenAIConfig::new())
+    Self::with_config(crate::openai::OpenAIConfig::new())
   }
 
-  pub(crate) fn with_config(config: OpenAIConfig) -> Self {
+  pub(crate) fn with_config(config: crate::openai::OpenAIConfig) -> Self {
     Self {
-      client: async_openai::Client::with_config(config),
+      client: crate::openai::Client::with_config(config),
     }
   }
 }
@@ -26,17 +26,25 @@ impl Provider for OpenAi {
       .create_stream((&request).try_into()?)
       .await?;
 
-    while let Some(response) = stream.next().await {
-      let response = response?;
+    let mut tool_calls = ToolCallStream::<u32>::default();
 
-      for content in response
-        .choices
-        .into_iter()
-        .filter_map(|choice| choice.delta.content)
-        .filter(|content| !content.is_empty())
-      {
-        sink.delta(content)?;
+    while let Some(response) = stream.next().await {
+      for choice in response?.choices {
+        match choice.delta.content {
+          Some(content) if !content.is_empty() => sink.delta(content)?,
+          _ => {}
+        }
+
+        for chunk in choice.delta.tool_calls.unwrap_or_default() {
+          for tool_call in tool_calls.push_event(chunk)? {
+            sink.tool_call(tool_call)?;
+          }
+        }
       }
+    }
+
+    for tool_call in tool_calls.finish_all()? {
+      sink.tool_call(tool_call)?;
     }
 
     Ok(())

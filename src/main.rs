@@ -1,20 +1,9 @@
 use {
   action::Action,
   agent::Agent,
-  anthropic_sdk::{AuthMethod, types},
   anyhow::{Context, Error, bail},
   app::App,
   arguments::Arguments,
-  async_openai::{
-    config::OpenAIConfig,
-    types::chat::{
-      ChatCompletionRequestAssistantMessage,
-      ChatCompletionRequestAssistantMessageContent,
-      ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
-      ChatCompletionRequestUserMessageContent, CreateChatCompletionRequest,
-      CreateChatCompletionRequestArgs,
-    },
-  },
   async_trait::async_trait,
   clap::{Args, Parser},
   command::Command,
@@ -46,15 +35,20 @@ use {
   provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
+  raw_tool_call::RawToolCall,
   refresh::Refresh,
   renderer::Renderer,
   request::Request,
   role::Role,
+  schemars::JsonSchema,
+  serde::{Deserialize, de::DeserializeOwned},
+  serde_json::{Value, json},
   span::Span,
   state::State,
   std::{
     backtrace::BacktraceStatus,
     cmp::Ordering,
+    collections::BTreeMap,
     env,
     fmt::{self, Debug, Display, Formatter},
     io::{self, Stdout, Write},
@@ -62,7 +56,7 @@ use {
     path::PathBuf,
     process,
     str::{self, FromStr},
-    sync::Arc,
+    sync::{Arc, LazyLock},
     thread,
     time::Duration,
   },
@@ -73,6 +67,20 @@ use {
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     time::{interval, sleep},
   },
+  tool::Tool,
+  tool_action_tense::ToolActionTense,
+  tool_call_arguments::ToolCallArguments,
+  tool_call_builder::ToolCallBuilder,
+  tool_call_stream::ToolCallStream,
+  tool_call_stream_event::ToolCallStreamEvent,
+  tool_call_update::ToolCallUpdate,
+  tool_call_update_kind::ToolCallUpdateKind,
+  tool_invocation::ToolInvocation,
+  tool_invocation_kind::ToolInvocationKind,
+  tools::{
+    ApplyPatchTool, CommandTool, ListFilesTool, ReadFileTool, SearchFilesTool,
+    TOOLS,
+  },
   transcript::Transcript,
   unicode_width::UnicodeWidthChar,
   view::View,
@@ -80,6 +88,13 @@ use {
 
 mod action;
 mod agent;
+mod anthropic {
+  pub(crate) use anthropic_sdk::{
+    Anthropic, AuthMethod, ClientConfig, ContentBlock, ContentBlockDelta,
+    MessageContent, MessageCreateBuilder, MessageCreateParams, MessageParam,
+    MessageStreamEvent, Role, Tool, types::ToolInputSchema,
+  };
+}
 mod app;
 mod arguments;
 mod command;
@@ -94,9 +109,25 @@ mod hint;
 mod line;
 mod message;
 mod model;
+mod openai {
+  pub(crate) use async_openai::{
+    Client,
+    config::OpenAIConfig,
+    types::chat::{
+      ChatCompletionMessageToolCallChunk,
+      ChatCompletionRequestAssistantMessage,
+      ChatCompletionRequestAssistantMessageContent,
+      ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
+      ChatCompletionRequestUserMessageContent, ChatCompletionTool,
+      ChatCompletionTools, CreateChatCompletionRequest,
+      CreateChatCompletionRequestArgs, FunctionObject,
+    },
+  };
+}
 mod options;
 mod provider;
 mod provider_sink;
+mod raw_tool_call;
 mod refresh;
 mod renderer;
 mod request;
@@ -105,6 +136,17 @@ mod span;
 mod state;
 mod style;
 mod terminal;
+mod tool;
+mod tool_action_tense;
+mod tool_call_arguments;
+mod tool_call_builder;
+mod tool_call_stream;
+mod tool_call_stream_event;
+mod tool_call_update;
+mod tool_call_update_kind;
+mod tool_invocation;
+mod tool_invocation_kind;
+mod tools;
 mod transcript;
 mod view;
 

@@ -53,8 +53,13 @@ impl State {
   pub(crate) fn handle_event(&mut self, event: Event) -> Vec<Effect> {
     match event {
       Event::Action(action) => return self.handle_action(action),
-      Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
       Event::AgentDone => self.transcript.finish_agent_message(),
+      Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
+      Event::AgentToolCall(tool_call) => {
+        self
+          .transcript
+          .push_agent_delta(&tool_call.progressive_tense());
+      }
       Event::Error(error) => self.transcript.error(error),
       Event::Tick => self.transcript.tick(),
     }
