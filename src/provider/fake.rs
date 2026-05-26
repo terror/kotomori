@@ -8,7 +8,7 @@ impl Provider for Fake {
   async fn stream(&self, request: Request, sink: ProviderSink) -> Result {
     let input = request
       .last_user_message()
-      .map(|message| message.content.as_str())
+      .and_then(Message::content)
       .unwrap_or_default();
 
     let response = format!("queued for {}: {input}", request.model());

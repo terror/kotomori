@@ -11,7 +11,7 @@ impl Request {
     self
       .messages()
       .rev()
-      .find(|message| message.role == Role::User)
+      .find(|message| message.user_content().is_some())
   }
 
   pub(crate) fn messages(&self) -> impl DoubleEndedIterator<Item = &Message> {
@@ -35,7 +35,6 @@ impl From<&Request> for anthropic::MessageCreateParams {
   fn from(request: &Request) -> Self {
     request
       .messages()
-      .map(anthropic::MessageParam::from)
       .fold(
         anthropic::MessageCreateBuilder::new(
           request.model_name(),
@@ -44,7 +43,11 @@ impl From<&Request> for anthropic::MessageCreateParams {
             .and_then(|max_tokens| max_tokens.parse::<u32>().ok())
             .unwrap_or(4096),
         ),
-        |builder, message| builder.message(message.role, message.content),
+        |builder, message| {
+          let message = anthropic::MessageParam::from(message);
+
+          builder.message(message.role, message.content)
+        },
       )
       .tools(TOOLS.iter().map(Into::into).collect::<Vec<_>>())
       .build()
@@ -84,7 +87,7 @@ mod tests {
     assert_eq!(
       request
         .messages()
-        .map(|message| (message.role, message.content.as_str()))
+        .map(|message| (message.role(), message.content().unwrap()))
         .collect::<Vec<_>>(),
       vec![(Role::User, "foo"), (Role::Agent, "bar")],
     );
@@ -101,6 +104,9 @@ mod tests {
       ],
     );
 
-    assert_eq!(request.last_user_message().unwrap().content, "baz");
+    assert_eq!(
+      request.last_user_message().unwrap().content().unwrap(),
+      "baz"
+    );
   }
 }
