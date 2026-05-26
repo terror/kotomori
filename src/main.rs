@@ -90,6 +90,7 @@ use {
     TOOLS,
   },
   transcript::Transcript,
+  transcript_tool_invocation::TranscriptToolInvocation,
   unicode_width::UnicodeWidthChar,
   view::View,
 };
@@ -165,6 +166,7 @@ mod tool_invocation_kind;
 mod tool_result;
 mod tools;
 mod transcript;
+mod transcript_tool_invocation;
 mod view;
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
