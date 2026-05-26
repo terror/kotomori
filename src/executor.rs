@@ -44,7 +44,7 @@ impl Executor {
 
     let mut child = match command.spawn() {
       Ok(child) => child,
-      Err(error) => return ToolResult::error(&error),
+      Err(error) => return ToolResult::error(error),
     };
 
     let stdout = child
@@ -69,18 +69,18 @@ impl Executor {
 
     let status = match status {
       Ok(Ok(status)) => status,
-      Ok(Err(error)) => return ToolResult::error(&error),
+      Ok(Err(error)) => return ToolResult::error(error),
       Err(_) => return self.timeout_result(child, stdout, stderr).await,
     };
 
     let stdout = match Self::collect_output(stdout).await {
       Ok(stdout) => stdout,
-      Err(error) => return ToolResult::error(&error),
+      Err(error) => return ToolResult::error(error),
     };
 
     let stderr = match Self::collect_output(stderr).await {
       Ok(stderr) => stderr,
-      Err(error) => return ToolResult::error(&error),
+      Err(error) => return ToolResult::error(error),
     };
 
     ToolResult::command(status.code(), stdout, stderr)
@@ -103,8 +103,8 @@ impl Executor {
     match timeout(limits.timeout, async { Ok::<_, Error>(read.await??) }).await
     {
       Ok(Ok(content)) => ToolResult::content(content),
-      Ok(Err(error)) => ToolResult::error(&error),
-      Err(_) => ToolResult::error(&format!(
+      Ok(Err(error)) => ToolResult::error(error),
+      Err(_) => ToolResult::error(format!(
         "tool timed out after {} seconds",
         limits.timeout.as_secs()
       )),
@@ -241,7 +241,7 @@ mod tests {
 
     std::fs::remove_file(path).unwrap();
 
-    assert_eq!(result.content.unwrap(), "foo b...");
+    assert_eq!(result.output().unwrap(), "foo b...");
   }
 
   #[tokio::test]

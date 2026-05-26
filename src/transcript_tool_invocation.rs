@@ -34,7 +34,7 @@ impl<'a> TranscriptToolInvocation<'a> {
 
     if let Some(exit_status) = self
       .result
-      .and_then(|result| result.exit_status)
+      .and_then(ToolResult::exit_status)
       .filter(|exit_status| *exit_status != 0)
     {
       details.push(("exit", exit_status.to_string()));
@@ -48,25 +48,6 @@ impl<'a> TranscriptToolInvocation<'a> {
     result: Option<&'a ToolResult>,
   ) -> Self {
     Self { invocation, result }
-  }
-
-  fn output(&self) -> Option<String> {
-    let result = self.result?;
-
-    let parts = [
-      result.stdout.as_deref(),
-      result.content.as_deref(),
-      result.error.as_deref(),
-    ];
-
-    let output = parts
-      .into_iter()
-      .flatten()
-      .filter(|part| !part.is_empty())
-      .collect::<Vec<_>>()
-      .join("\n");
-
-    (!output.is_empty()).then_some(output)
   }
 
   fn output_line(value: impl Into<String>) -> Line {
@@ -143,7 +124,7 @@ impl Component for TranscriptToolInvocation<'_> {
       .into()
     }));
 
-    if let Some(output) = self.output() {
+    if let Some(output) = self.result.and_then(ToolResult::output) {
       let output_width = usize::from(width.saturating_sub(5).max(8));
 
       let output_lines = output

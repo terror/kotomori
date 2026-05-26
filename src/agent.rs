@@ -58,11 +58,7 @@ impl Agent {
 
         let result = tool_call.kind.execute().await;
 
-        messages.push(Message::tool_result(
-          tool_call.id.clone(),
-          result.message_content(),
-          result.is_error(),
-        ));
+        messages.push(result.message(tool_call.id.clone()));
 
         self.event_sender.send(Event::AgentToolResult {
           id: tool_call.id,
@@ -138,12 +134,7 @@ mod tests {
 
     let requests = requests.lock().unwrap();
 
-    let tool_result = ToolResult {
-      content: None,
-      error: None,
-      exit_status: Some(0),
-      stdout: Some("bar\n".into()),
-    };
+    let tool_result = ToolResult::command(Some(0), "bar\n", "");
 
     assert_eq!(
       *requests,
@@ -160,7 +151,7 @@ mod tests {
               "program": "echo",
             }),
           ),
-          Message::tool_result("foo", tool_result.message_content(), false),
+          tool_result.message("foo"),
         ],
       ],
     );

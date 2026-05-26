@@ -75,11 +75,7 @@ impl Transcript {
   }
 
   pub(crate) fn push_tool_result(&mut self, id: String, result: ToolResult) {
-    self.messages.push(Message::tool_result(
-      id.clone(),
-      result.message_content(),
-      result.is_error(),
-    ));
+    self.messages.push(result.message(id.clone()));
 
     self.tool_results.insert(id, result);
 
