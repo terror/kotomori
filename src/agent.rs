@@ -75,8 +75,7 @@ impl Agent {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use std::sync::Mutex;
+  use {super::*, std::sync::Mutex};
 
   #[derive(Debug)]
   struct LoopProvider {
