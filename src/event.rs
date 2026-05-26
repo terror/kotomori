@@ -6,6 +6,7 @@ pub(crate) enum Event {
   AgentDelta(String),
   AgentDone,
   AgentToolCall(ToolInvocation),
+  AgentToolResult { id: String, result: ToolResult },
   Error(String),
   Tick,
 }

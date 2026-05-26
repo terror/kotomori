@@ -56,9 +56,10 @@ impl State {
       Event::AgentDone => self.transcript.finish_agent_message(),
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
       Event::AgentToolCall(tool_call) => {
-        self
-          .transcript
-          .push_agent_delta(&tool_call.progressive_tense());
+        self.transcript.push_tool_call(tool_call);
+      }
+      Event::AgentToolResult { id, result } => {
+        self.transcript.push_tool_result(id, result);
       }
       Event::Error(error) => self.transcript.error(error),
       Event::Tick => self.transcript.tick(),
@@ -77,7 +78,7 @@ impl State {
       composer: Composer::new(options.prompt.as_deref().unwrap_or_default())
         .footer(Footer::try_from(&options.model)?),
       should_quit: false,
-      transcript: Transcript::new(),
+      transcript: Transcript::default(),
     })
   }
 
@@ -195,7 +196,13 @@ mod tests {
     state.handle_event(Event::AgentDone);
     state.handle_event(Event::Tick);
 
-    assert_eq!(state.transcript().render(80).last(), Some(&Line::raw("")));
+    assert!(
+      !state
+        .transcript()
+        .render(80)
+        .iter()
+        .any(|line| line.to_string().contains("Working"))
+    );
   }
 
   #[test]

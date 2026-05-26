@@ -16,7 +16,8 @@ impl Ollama {
               .unwrap_or_else(|_| "http://localhost:11434".into())
           ))
           .with_api_key("ollama"),
-      ),
+      )
+      .with_reasoning_effort(crate::openai::ReasoningEffort::None),
     }
   }
 }

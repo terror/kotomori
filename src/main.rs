@@ -10,7 +10,9 @@ use {
   component::Component,
   composer::Composer,
   crossterm::{
-    cursor::{Hide, MoveDown, MoveToColumn, MoveToNextLine, MoveUp, Show},
+    cursor::{
+      Hide, MoveDown, MoveTo, MoveToColumn, MoveToNextLine, MoveUp, Show,
+    },
     event::{
       self as crossterm_event, Event as CrosstermEvent, KeyCode, KeyEvent,
       KeyEventKind, KeyModifiers,
@@ -23,6 +25,8 @@ use {
   },
   effect::Effect,
   event::Event,
+  execution_limit::ExecutionLimit,
+  executor::Executor,
   footer::Footer,
   framed_lines::FramedLines,
   futures_util::StreamExt,
@@ -34,6 +38,7 @@ use {
   model::Model,
   options::Options,
   provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
+  provider_output::ProviderOutput,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
@@ -42,7 +47,7 @@ use {
   request::Request,
   role::Role,
   schemars::JsonSchema,
-  serde::{Deserialize, de::DeserializeOwned},
+  serde::{Deserialize, Serialize, de::DeserializeOwned},
   serde_json::{Value, json},
   span::Span,
   state::State,
@@ -52,12 +57,13 @@ use {
     collections::BTreeMap,
     env,
     fmt::{self, Debug, Display, Formatter},
-    io::{self, Stdout, Write},
+    fs::File,
+    io::{self, Read, Stdout, Write},
     iter::once,
     path::PathBuf,
-    process,
+    process::{self, Stdio},
     str::{self, FromStr},
-    sync::{Arc, LazyLock},
+    sync::{Arc, LazyLock, Mutex},
     thread,
     time::Duration,
   },
@@ -65,8 +71,10 @@ use {
   style::Style,
   terminal::Terminal,
   tokio::{
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    time::{interval, sleep},
+    task,
+    time::{interval, sleep, timeout},
   },
   tool::Tool,
   tool_action_tense::ToolActionTense,
@@ -78,11 +86,13 @@ use {
   tool_call_update_kind::ToolCallUpdateKind,
   tool_invocation::ToolInvocation,
   tool_invocation_kind::ToolInvocationKind,
+  tool_result::ToolResult,
   tools::{
     ApplyPatchTool, CommandTool, ListFilesTool, ReadFileTool, SearchFilesTool,
     TOOLS,
   },
   transcript::Transcript,
+  transcript_tool_invocation::TranscriptToolInvocation,
   unicode_width::UnicodeWidthChar,
   view::View,
 };
@@ -104,6 +114,8 @@ mod component;
 mod composer;
 mod effect;
 mod event;
+mod execution_limit;
+mod executor;
 mod footer;
 mod framed_lines;
 mod header;
@@ -126,11 +138,13 @@ mod openai {
       ChatCompletionRequestUserMessageContent, ChatCompletionTool,
       ChatCompletionTools, CreateChatCompletionRequest,
       CreateChatCompletionRequestArgs, FunctionCall, FunctionObject,
+      ReasoningEffort,
     },
   };
 }
 mod options;
 mod provider;
+mod provider_output;
 mod provider_sink;
 mod raw_tool_call;
 mod refresh;
@@ -151,8 +165,10 @@ mod tool_call_update;
 mod tool_call_update_kind;
 mod tool_invocation;
 mod tool_invocation_kind;
+mod tool_result;
 mod tools;
 mod transcript;
+mod transcript_tool_invocation;
 mod view;
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;

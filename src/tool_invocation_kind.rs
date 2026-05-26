@@ -1,11 +1,67 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(untagged)]
 pub(crate) enum ToolInvocationKind {
-  ApplyPatchTool(ApplyPatchTool),
-  CommandTool(CommandTool),
-  ListFilesTool(ListFilesTool),
-  ReadFileTool(ReadFileTool),
-  SearchFilesTool(SearchFilesTool),
+  ApplyPatch(ApplyPatchTool),
+  Command(CommandTool),
+  ListFiles(ListFilesTool),
+  ReadFile(ReadFileTool),
+  SearchFiles(SearchFilesTool),
+}
+
+impl ToolInvocationKind {
+  pub(crate) fn arguments(&self) -> Value {
+    serde_json::to_value(self).expect("failed to serialize tool arguments")
+  }
+
+  pub(crate) async fn execute(&self) -> ToolResult {
+    let executor = Executor::default();
+
+    match self {
+      Self::ApplyPatch(tool) => {
+        let mut command = tokio::process::Command::new("apply_patch");
+
+        if let Some(cwd) = &tool.cwd {
+          command.current_dir(cwd);
+        }
+
+        executor.execute(command, Some(tool.patch.clone())).await
+      }
+      Self::Command(tool) => {
+        let mut command = tokio::process::Command::new(&tool.program);
+
+        command.args(&tool.arguments);
+
+        if let Some(cwd) = &tool.cwd {
+          command.current_dir(cwd);
+        }
+
+        executor.execute(command, None).await
+      }
+      Self::ListFiles(tool) => {
+        let mut command = tokio::process::Command::new("rg");
+
+        command.arg("--files");
+
+        if let Some(cwd) = &tool.cwd {
+          command.current_dir(cwd);
+        }
+
+        executor.execute(command, None).await
+      }
+      Self::ReadFile(tool) => executor.read_file(tool.path.clone()).await,
+      Self::SearchFiles(tool) => {
+        let mut command = tokio::process::Command::new("rg");
+
+        command.args(&tool.arguments);
+
+        if let Some(cwd) = &tool.cwd {
+          command.current_dir(cwd);
+        }
+
+        executor.execute(command, None).await
+      }
+    }
+  }
 }

@@ -109,4 +109,21 @@ mod tests {
       "baz"
     );
   }
+
+  #[test]
+  fn openai_reasoning_effort_can_be_overridden() {
+    let mut request =
+      openai::CreateChatCompletionRequest::try_from(&Request::new(
+        "fake:foo".parse().unwrap(),
+        vec![Message::new(Role::User, "bar")],
+      ))
+      .unwrap();
+
+    request.reasoning_effort = Some(openai::ReasoningEffort::None);
+
+    assert_eq!(
+      serde_json::to_value(request).unwrap()["reasoning_effort"],
+      "none",
+    );
+  }
 }

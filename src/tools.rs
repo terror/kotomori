@@ -3,7 +3,7 @@ use super::*;
 macro_rules! define_tools {
   (
     $(
-      $tool:ident {
+      $tool:ident => $variant:ident {
         name: $name:literal,
         description: $description:literal,
         fields: {
@@ -15,7 +15,7 @@ macro_rules! define_tools {
     ),* $(,)?
   ) => {
     $(
-      #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq)]
+      #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
       #[serde(deny_unknown_fields)]
       pub(crate) struct $tool {
         $(
@@ -25,7 +25,7 @@ macro_rules! define_tools {
 
       impl From<$tool> for ToolInvocationKind {
         fn from(tool: $tool) -> Self {
-          Self::$tool(tool)
+          Self::$variant(tool)
         }
       }
     )*
@@ -51,7 +51,7 @@ macro_rules! define_tools {
 }
 
 define_tools! {
-  ApplyPatchTool {
+  ApplyPatchTool => ApplyPatch {
     name: "apply_patch",
     description: "Apply a unified patch to the workspace.",
     fields: {
@@ -59,7 +59,7 @@ define_tools! {
       patch: String,
     },
   },
-  CommandTool {
+  CommandTool => Command {
     name: "command",
     description: "Run a command and capture stdout, stderr, and exit status. Do not use this to list project files; use list_files instead.",
     fields: {
@@ -68,21 +68,21 @@ define_tools! {
       program: String,
     },
   },
-  ListFilesTool {
+  ListFilesTool => ListFiles {
     name: "list_files",
     description: "List project files while respecting .gitignore and other standard ignore rules.",
     fields: {
       cwd: Option<PathBuf>,
     },
   },
-  ReadFileTool {
+  ReadFileTool => ReadFile {
     name: "read_file",
     description: "Read a UTF-8 text file.",
     fields: {
       path: PathBuf,
     },
   },
-  SearchFilesTool {
+  SearchFilesTool => SearchFiles {
     name: "search_files",
     description: "Search files with ripgrep.",
     fields: {

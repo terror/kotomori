@@ -1,10 +1,12 @@
 use super::*;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct Transcript {
   active_agent_message: Option<String>,
   active_frame: usize,
   messages: Vec<Message>,
+  tool_invocations: BTreeMap<String, ToolInvocation>,
+  tool_results: BTreeMap<String, ToolResult>,
 }
 
 impl Transcript {
@@ -13,6 +15,8 @@ impl Transcript {
   pub(crate) fn clear(&mut self) {
     self.active_agent_message = None;
     self.messages.clear();
+    self.tool_invocations.clear();
+    self.tool_results.clear();
   }
 
   pub(crate) fn error(&mut self, error: String) {
@@ -21,7 +25,9 @@ impl Transcript {
   }
 
   pub(crate) fn finish_agent_message(&mut self) {
-    if let Some(message) = self.active_agent_message.take() {
+    if let Some(message) = self.active_agent_message.take()
+      && !message.is_empty()
+    {
       self.messages.push(Message::new(Role::Agent, message));
     }
   }
@@ -34,14 +40,6 @@ impl Transcript {
     &self.messages
   }
 
-  pub(crate) fn new() -> Self {
-    Self {
-      active_agent_message: None,
-      active_frame: 0,
-      messages: Vec::new(),
-    }
-  }
-
   pub(crate) fn push_agent(&mut self, content: impl Into<String>) {
     self.messages.push(Message::new(Role::Agent, content));
   }
@@ -49,7 +47,29 @@ impl Transcript {
   pub(crate) fn push_agent_delta(&mut self, delta: &str) {
     if let Some(message) = &mut self.active_agent_message {
       message.push_str(delta);
+    } else {
+      self.active_agent_message = Some(delta.into());
     }
+  }
+
+  pub(crate) fn push_tool_call(&mut self, invocation: ToolInvocation) {
+    self.finish_agent_message();
+
+    self.messages.push(invocation.message());
+
+    self
+      .tool_invocations
+      .insert(invocation.id.clone(), invocation);
+
+    self.active_agent_message = Some(String::new());
+  }
+
+  pub(crate) fn push_tool_result(&mut self, id: String, result: ToolResult) {
+    self.messages.push(result.message(id.clone()));
+
+    self.tool_results.insert(id, result);
+
+    self.active_agent_message = Some(String::new());
   }
 
   pub(crate) fn send(&mut self, input: String) {
@@ -74,28 +94,44 @@ impl Component for Transcript {
     let mut lines = Vec::new();
 
     for message in self.messages() {
-      match message.role() {
-        Role::Agent => {
+      match message.kind() {
+        MessageKind::Text {
+          content,
+          role: Role::Agent,
+        } => {
           lines.extend(
             once(Line::blank())
-              .chain(
-                message
-                  .content()
-                  .unwrap_or_default()
-                  .lines()
-                  .map(|line| Line::raw(format!(" {line}"))),
-              )
+              .chain(content.lines().map(|line| Line::raw(format!(" {line}"))))
               .chain(once(Line::blank())),
           );
         }
-        Role::User => lines.extend(message.render(width)),
+        MessageKind::Text {
+          content: _,
+          role: Role::User,
+        } => lines.extend(message.render(width)),
+        MessageKind::ToolUse { id, .. } => {
+          let Some(invocation) = self.tool_invocations.get(id) else {
+            continue;
+          };
+
+          let transcript_tool_invocation = TranscriptToolInvocation::new(
+            invocation,
+            self.tool_results.get(id),
+          );
+
+          lines.extend(transcript_tool_invocation.render(width));
+        }
+        MessageKind::ToolResult { .. } => {}
       }
     }
 
     match self.active_agent_message.as_deref() {
       Some("") => {
+        if !lines.last().is_some_and(|line| line == &Line::blank()) {
+          lines.push(Line::blank());
+        }
+
         lines.extend([
-          Line::blank(),
           vec![
             Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
             Span::styled(" Working...", Style::Gray),
@@ -105,9 +141,14 @@ impl Component for Transcript {
         ]);
       }
       Some(message) => {
+        if !lines.last().is_some_and(|line| line == &Line::blank()) {
+          lines.push(Line::blank());
+        }
+
         lines.extend(
-          once(Line::blank())
-            .chain(message.lines().map(|line| Line::raw(format!(" {line}"))))
+          message
+            .lines()
+            .map(|line| Line::raw(format!(" {line}")))
             .chain(once(Line::blank())),
         );
       }
@@ -124,7 +165,7 @@ mod tests {
 
   #[test]
   fn active_rendering() {
-    let mut transcript = Transcript::new();
+    let mut transcript = Transcript::default();
 
     transcript.send("foo".into());
 
