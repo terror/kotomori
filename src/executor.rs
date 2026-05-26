@@ -292,7 +292,7 @@ impl Executor {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use {super::*, tempfile::NamedTempFile};
 
   #[tokio::test]
   async fn collect_output_lossy_returns_output() {
@@ -311,23 +311,18 @@ mod tests {
       truncated_marker: "...",
     });
 
-    let path = env::temp_dir().join(format!(
-      "kotomori-{}-read-file-output-is-capped",
-      process::id()
-    ));
+    let file = NamedTempFile::new().unwrap();
 
-    fs::write(&path, "foo bar baz").unwrap();
+    fs::write(file.path(), "foo bar baz").unwrap();
 
     let result = executor
       .read_file(&ReadFileTool {
         cwd: None,
         end_line: None,
-        path: path.clone(),
+        path: file.path().to_owned(),
         start_line: None,
       })
       .await;
-
-    fs::remove_file(path).unwrap();
 
     assert_eq!(result.output().unwrap(), "foo b...");
   }
@@ -340,23 +335,18 @@ mod tests {
       truncated_marker: "...",
     });
 
-    let path = env::temp_dir().join(format!(
-      "kotomori-{}-read-file-range-can-start-after-output-limit",
-      process::id()
-    ));
+    let file = NamedTempFile::new().unwrap();
 
-    fs::write(&path, "foo foo foo\nbar\n").unwrap();
+    fs::write(file.path(), "foo foo foo\nbar\n").unwrap();
 
     let result = executor
       .read_file(&ReadFileTool {
         cwd: None,
         end_line: Some(2),
-        path: path.clone(),
+        path: file.path().to_owned(),
         start_line: Some(2),
       })
       .await;
-
-    fs::remove_file(path).unwrap();
 
     assert_eq!(result.output().unwrap(), "bar\n");
   }
@@ -365,23 +355,18 @@ mod tests {
   async fn read_file_reads_line_range() {
     let executor = Executor::default();
 
-    let path = env::temp_dir().join(format!(
-      "kotomori-{}-read-file-reads-line-range",
-      process::id()
-    ));
+    let file = NamedTempFile::new().unwrap();
 
-    fs::write(&path, "foo\nbar\nbaz\nqux\n").unwrap();
+    fs::write(file.path(), "foo\nbar\nbaz\nqux\n").unwrap();
 
     let result = executor
       .read_file(&ReadFileTool {
         cwd: None,
         end_line: Some(3),
-        path: path.clone(),
+        path: file.path().to_owned(),
         start_line: Some(2),
       })
       .await;
-
-    fs::remove_file(path).unwrap();
 
     assert_eq!(result.output().unwrap(), "bar\nbaz\n");
   }
@@ -405,22 +390,17 @@ mod tests {
   async fn write_file_writes_content() {
     let executor = Executor::default();
 
-    let path = env::temp_dir().join(format!(
-      "kotomori-{}-write-file-writes-content",
-      process::id()
-    ));
+    let file = NamedTempFile::new().unwrap();
 
     let result = executor
       .write_file(&WriteFileTool {
         content: "bar".into(),
         cwd: None,
-        path: path.clone(),
+        path: file.path().to_owned(),
       })
       .await;
 
-    let content = fs::read_to_string(&path).unwrap();
-
-    fs::remove_file(path).unwrap();
+    let content = fs::read_to_string(file.path()).unwrap();
 
     assert_eq!(result.output().unwrap(), "wrote 3 bytes");
     assert_eq!(content, "bar");
