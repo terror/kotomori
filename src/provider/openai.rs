@@ -32,14 +32,12 @@ impl OpenAi {
 #[async_trait]
 impl Provider for OpenAi {
   async fn stream(&self, request: Request, sink: ProviderSink) -> Result {
-    let mut stream = self
-      .client
-      .chat()
-      .create_stream(
-        request
-          .openai_chat_completion_request(self.reasoning_effort.clone())?,
-      )
-      .await?;
+    let mut request =
+      crate::openai::CreateChatCompletionRequest::try_from(&request)?;
+
+    request.reasoning_effort.clone_from(&self.reasoning_effort);
+
+    let mut stream = self.client.chat().create_stream(request).await?;
 
     let mut tool_calls = ToolCallStream::<u32>::default();
 
