@@ -69,7 +69,7 @@ use {
   style::Style,
   terminal::Terminal,
   tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     task,
     time::{interval, sleep, timeout},

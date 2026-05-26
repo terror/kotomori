@@ -16,7 +16,7 @@ impl ToolInvocationKind {
   }
 
   pub(crate) async fn execute(&self) -> ToolResult {
-    let executor = Executor::new();
+    let executor = Executor::default();
 
     match self {
       Self::ApplyPatch(tool) => {
