@@ -26,7 +26,7 @@ impl<I: Ord> ToolCallStream<I> {
           .calls
           .remove(&index)
           .unwrap_or_default()
-          .argument_delta(&argument_delta);
+          .argument_delta(&argument_delta)?;
 
         self.calls.insert(index, tool_call);
 
