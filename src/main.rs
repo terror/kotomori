@@ -55,7 +55,7 @@ use {
     io::{self, Stdout, Write},
     iter::once,
     path::PathBuf,
-    process,
+    process::{self, Output, Stdio},
     str::{self, FromStr},
     sync::{Arc, LazyLock, Mutex},
     thread,
@@ -78,9 +78,10 @@ use {
   tool_call_update_kind::ToolCallUpdateKind,
   tool_invocation::ToolInvocation,
   tool_invocation_kind::ToolInvocationKind,
+  tool_result::ToolResult,
   tools::{
     ApplyPatchTool, CommandTool, ListFilesTool, ReadFileTool, SearchFilesTool,
-    TOOLS, ToolResult,
+    TOOLS,
   },
   transcript::Transcript,
   unicode_width::UnicodeWidthChar,
@@ -152,6 +153,7 @@ mod tool_call_update;
 mod tool_call_update_kind;
 mod tool_invocation;
 mod tool_invocation_kind;
+mod tool_result;
 mod tools;
 mod transcript;
 mod view;

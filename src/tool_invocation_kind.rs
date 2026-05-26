@@ -9,3 +9,15 @@ pub(crate) enum ToolInvocationKind {
   ReadFileTool(ReadFileTool),
   SearchFilesTool(SearchFilesTool),
 }
+
+impl ToolInvocationKind {
+  pub(crate) fn execute(&self) -> ToolResult {
+    match self {
+      Self::ApplyPatchTool(tool) => tool.execute(),
+      Self::CommandTool(tool) => tool.execute(),
+      Self::ListFilesTool(tool) => tool.execute(),
+      Self::ReadFileTool(tool) => tool.execute(),
+      Self::SearchFilesTool(tool) => tool.execute(),
+    }
+  }
+}
