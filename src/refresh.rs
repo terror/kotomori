@@ -1,7 +1,7 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Refresh {
   Append { from: usize },
-  FullAppend,
   Initial,
+  RedrawScreen,
   RedrawTail { from: usize },
 }

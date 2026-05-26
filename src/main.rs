@@ -10,7 +10,9 @@ use {
   component::Component,
   composer::Composer,
   crossterm::{
-    cursor::{Hide, MoveDown, MoveToColumn, MoveToNextLine, MoveUp, Show},
+    cursor::{
+      Hide, MoveDown, MoveTo, MoveToColumn, MoveToNextLine, MoveUp, Show,
+    },
     event::{
       self as crossterm_event, Event as CrosstermEvent, KeyCode, KeyEvent,
       KeyEventKind, KeyModifiers,

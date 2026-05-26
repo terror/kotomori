@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Renderer {
   previous: Vec<String>,
+  previous_height: u16,
   previous_width: u16,
 }
 
@@ -57,14 +58,15 @@ impl Renderer {
       Refresh::Append { from } => {
         self.append_lines(stdout, &rendered[from..])?;
       }
-      Refresh::FullAppend => self.append_lines(stdout, &rendered)?,
       Refresh::Initial => Self::write_lines(stdout, &rendered)?,
+      Refresh::RedrawScreen => Self::redraw_screen(stdout, &rendered, height)?,
       Refresh::RedrawTail { from } => {
         self.redraw_tail(stdout, &rendered, from)?;
       }
     }
 
     self.previous = rendered;
+    self.previous_height = height;
     self.previous_width = width;
 
     write!(stdout, "\x1b[?2026l")?;
@@ -127,8 +129,27 @@ impl Renderer {
   pub(crate) fn new() -> Self {
     Self {
       previous: Vec::new(),
+      previous_height: 0,
       previous_width: 0,
     }
+  }
+
+  fn redraw_screen(
+    stdout: &mut impl Write,
+    rendered: &[String],
+    height: u16,
+  ) -> Result {
+    queue!(stdout, MoveTo(0, 0), Clear(ClearType::All))?;
+
+    let height = usize::from(height);
+
+    if height > 0 {
+      let from = rendered.len().saturating_sub(height);
+
+      Self::write_lines(stdout, &rendered[from..])?;
+    }
+
+    Ok(())
   }
 
   fn redraw_tail(
@@ -155,11 +176,11 @@ impl Renderer {
       return Refresh::Initial;
     }
 
-    let first_changed_line = if self.previous_width == width {
-      self.first_changed_line(rendered)
-    } else {
-      0
-    };
+    if self.previous_width != width || self.previous_height != height {
+      return Refresh::RedrawScreen;
+    }
+
+    let first_changed_line = self.first_changed_line(rendered);
 
     if self.is_append_only(rendered, first_changed_line) {
       Refresh::Append {
@@ -170,7 +191,7 @@ impl Renderer {
         from: first_changed_line,
       }
     } else {
-      Refresh::FullAppend
+      Refresh::RedrawScreen
     }
   }
 
@@ -197,6 +218,7 @@ mod tests {
   fn appending_lines_scrolls() {
     let mut subject = Renderer {
       previous: vec!["foo".into()],
+      previous_height: 24,
       previous_width: 80,
     };
 
@@ -211,6 +233,7 @@ mod tests {
   fn initially_refreshes_with_initial() {
     let subject = Renderer {
       previous: Vec::new(),
+      previous_height: 0,
       previous_width: 0,
     };
 
@@ -221,6 +244,7 @@ mod tests {
   fn refreshes_with_append_when_render_extends_previous() {
     let subject = Renderer {
       previous: vec!["foo".into()],
+      previous_height: 24,
       previous_width: 80,
     };
 
@@ -234,6 +258,7 @@ mod tests {
   fn refreshes_with_redraw_tail_when_line_changes() {
     let subject = Renderer {
       previous: vec!["foo".into(), "bar".into()],
+      previous_height: 24,
       previous_width: 80,
     };
 
@@ -244,25 +269,61 @@ mod tests {
   }
 
   #[test]
-  fn refreshes_with_full_append_when_tail_cannot_be_redrawn() {
+  fn refreshes_with_redraw_screen_when_tail_cannot_be_redrawn() {
     let subject = Renderer {
       previous: vec!["foo".into(), "bar".into(), "baz".into()],
+      previous_height: 1,
       previous_width: 80,
     };
 
-    assert_eq!(subject.refresh(&["foo".into()], 80, 0), Refresh::FullAppend);
+    assert_eq!(
+      subject.refresh(&["foo".into()], 80, 1),
+      Refresh::RedrawScreen
+    );
   }
 
   #[test]
-  fn refreshes_with_redraw_tail_when_width_changes() {
+  fn refreshes_with_redraw_screen_when_width_changes() {
     let subject = Renderer {
       previous: vec!["foo".into()],
+      previous_height: 24,
       previous_width: 80,
     };
 
     assert_eq!(
       subject.refresh(&["foo".into(), "bar".into()], 81, 24),
-      Refresh::RedrawTail { from: 0 },
+      Refresh::RedrawScreen,
+    );
+  }
+
+  #[test]
+  fn refreshes_with_redraw_screen_when_height_changes() {
+    let subject = Renderer {
+      previous: vec!["foo".into()],
+      previous_height: 24,
+      previous_width: 80,
+    };
+
+    assert_eq!(
+      subject.refresh(&["foo".into(), "bar".into()], 80, 25),
+      Refresh::RedrawScreen,
+    );
+  }
+
+  #[test]
+  fn redrawing_screen_clips_to_height() {
+    let mut stdout = Vec::new();
+
+    Renderer::redraw_screen(
+      &mut stdout,
+      &["foo".into(), "bar".into(), "baz".into()],
+      2,
+    )
+    .unwrap();
+
+    assert_eq!(
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz",
     );
   }
 
