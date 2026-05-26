@@ -57,13 +57,11 @@ impl Agent {
         messages.push(tool_call.message());
 
         let result = tool_call.kind.execute();
-        let content = result.message_content();
-        let is_error = result.is_error();
 
         messages.push(Message::tool_result(
           tool_call.id.clone(),
-          content,
-          is_error,
+          result.message_content(),
+          result.is_error(),
         ));
 
         self.event_sender.send(Event::AgentToolResult {
