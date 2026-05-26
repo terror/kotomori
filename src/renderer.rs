@@ -140,12 +140,7 @@ impl Renderer {
     write!(stdout, "\x1b[?2026h")?;
 
     if clear {
-      queue!(
-        stdout,
-        MoveTo(0, 0),
-        Clear(ClearType::All),
-        Clear(ClearType::Purge)
-      )?;
+      queue!(stdout, MoveTo(0, 0), Clear(ClearType::All))?;
     }
 
     Self::write_lines(stdout, &next.lines)?;
@@ -157,6 +152,20 @@ impl Renderer {
 
   fn is_termux_session() -> bool {
     env::var_os("TERMUX_VERSION").is_some()
+  }
+
+  fn line_feed(
+    stdout: &mut impl Write,
+    viewport: &mut Viewport,
+    row: usize,
+  ) -> Result {
+    write!(stdout, "\r\n")?;
+
+    if viewport.screen_row(row) >= viewport.height().saturating_sub(1) {
+      *viewport = viewport.scrolled_down(1);
+    }
+
+    Ok(())
   }
 
   fn move_by(stdout: &mut impl Write, diff: isize) -> Result {
@@ -220,37 +229,31 @@ impl Renderer {
     };
 
     let mut cursor = presented.cursor;
-    let mut next_viewport = previous_viewport;
-    let mut previous_viewport = previous_viewport;
+    let mut viewport = previous_viewport;
 
     write!(stdout, "\x1b[?2026h")?;
 
-    if move_target_row > previous_viewport.bottom() {
-      let move_to_bottom = previous_viewport
+    if move_target_row > viewport.bottom() {
+      let move_to_bottom = viewport
         .height()
         .saturating_sub(1)
-        .saturating_sub(previous_viewport.screen_row(cursor.row()));
+        .saturating_sub(viewport.screen_row(cursor.row()));
 
       Self::move_down(stdout, move_to_bottom)?;
 
-      let scroll = move_target_row.saturating_sub(previous_viewport.bottom());
+      let bottom = viewport.bottom();
 
-      for _ in 0..scroll {
-        write!(stdout, "\r\n")?;
+      for row in bottom..move_target_row {
+        Self::line_feed(stdout, &mut viewport, row)?;
       }
 
       cursor = Cursor::new(move_target_row);
-      next_viewport = next_viewport.scrolled_down(scroll);
-      previous_viewport = previous_viewport.scrolled_down(scroll);
     }
 
-    Self::move_by(
-      stdout,
-      cursor.diff_to(previous_viewport, move_target_row, next_viewport),
-    )?;
+    Self::move_by(stdout, cursor.diff_to(viewport, move_target_row, viewport))?;
 
     if append_start {
-      write!(stdout, "\r\n")?;
+      Self::line_feed(stdout, &mut viewport, move_target_row)?;
     } else {
       write!(stdout, "\r")?;
     }
@@ -263,7 +266,7 @@ impl Renderer {
       .skip(*writable_range.start())
     {
       if index > *writable_range.start() {
-        write!(stdout, "\r\n")?;
+        Self::line_feed(stdout, &mut viewport, index.saturating_sub(1))?;
       }
 
       queue!(stdout, Clear(ClearType::CurrentLine))?;
@@ -281,16 +284,18 @@ impl Renderer {
       }
 
       for _ in next.len()..presented.frame.len() {
-        write!(stdout, "\r\n")?;
+        Self::line_feed(stdout, &mut viewport, cursor.row())?;
+        cursor = Cursor::new(cursor.row().saturating_add(1));
         queue!(stdout, Clear(ClearType::CurrentLine))?;
       }
 
       Self::move_up(stdout, diff.deleted_tail_len())?;
+      cursor = Cursor::new(next.last_row());
     }
 
     write!(stdout, "\x1b[?2026l")?;
 
-    Ok(PresentedFrame::new(cursor, next, next_viewport))
+    Ok(PresentedFrame::new(cursor, next, viewport))
   }
 
   fn present_no_operation(&self, next: &Frame) -> PresentedFrame {
@@ -448,6 +453,48 @@ mod tests {
       String::from_utf8(stdout).unwrap(),
       "\x1b[?2026h\r\n\x1b[2Kbaz\x1b[?2026l",
     );
+
+    assert_eq!(
+      subject.presented.as_ref().unwrap().viewport,
+      Viewport::anchored_to_bottom(3, 1),
+    );
+    assert_eq!(subject.presented.as_ref().unwrap().cursor, Cursor::new(2),);
+  }
+
+  #[test]
+  fn appending_blank_line_scrolls() {
+    let frame = Frame::new(
+      vec!["foo".into()],
+      Dimensions {
+        height: 1,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(1, 1),
+      )),
+    };
+
+    let mut stdout = Vec::new();
+
+    subject
+      .draw_rendered(&mut stdout, vec!["foo".into(), String::new()], 80, 1)
+      .unwrap();
+
+    assert_eq!(
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[?2026h\r\n\x1b[2K\x1b[?2026l",
+    );
+
+    assert_eq!(
+      subject.presented.as_ref().unwrap().viewport,
+      Viewport::anchored_to_bottom(2, 1),
+    );
   }
 
   #[test]
@@ -480,7 +527,7 @@ mod tests {
   }
 
   #[test]
-  fn full_render_can_clear_screen_and_scrollback() {
+  fn full_render_clears_screen() {
     let mut stdout = Vec::new();
 
     Renderer::full_render(
@@ -498,7 +545,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[3Jbar\r\nbaz\x1b[?2026l",
+      "\x1b[?2026h\x1b[1;1H\x1b[2Jbar\r\nbaz\x1b[?2026l",
     );
   }
 
@@ -570,7 +617,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[3Jqux\r\nbar\r\nbaz\x1b[?2026l",
+      "\x1b[?2026h\x1b[1;1H\x1b[2Jqux\r\nbar\r\nbaz\x1b[?2026l",
     );
   }
 
@@ -601,7 +648,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[3Jfoo\r\nbar\x1b[?2026l",
+      "\x1b[?2026h\x1b[1;1H\x1b[2Jfoo\r\nbar\x1b[?2026l",
     );
   }
 
@@ -632,7 +679,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[3Jfoo\r\nbar\x1b[?2026l",
+      "\x1b[?2026h\x1b[1;1H\x1b[2Jfoo\r\nbar\x1b[?2026l",
     );
   }
 

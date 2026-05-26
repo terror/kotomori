@@ -11,8 +11,8 @@ impl ChangedRange {
     let len = previous.len().max(next.len());
 
     let changed = |index| {
-      previous.get(index).map_or("", String::as_str)
-        != next.get(index).map_or("", String::as_str)
+      previous.get(index).map(String::as_str)
+        != next.get(index).map(String::as_str)
     };
 
     Some(Self {
@@ -129,10 +129,18 @@ mod tests {
   }
 
   #[test]
-  fn between_treats_missing_line_as_empty_string() {
+  fn between_detects_added_blank_tail() {
+    assert_eq!(
+      ChangedRange::between(&lines(&["foo"]), &lines(&["foo", ""])),
+      Some(ChangedRange { first: 1, last: 1 }),
+    );
+  }
+
+  #[test]
+  fn between_detects_removed_blank_tail() {
     assert_eq!(
       ChangedRange::between(&lines(&["foo", ""]), &lines(&["foo"])),
-      None,
+      Some(ChangedRange { first: 1, last: 1 }),
     );
   }
 }
