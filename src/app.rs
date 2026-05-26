@@ -9,6 +9,12 @@ pub(crate) struct App {
 }
 
 impl App {
+  fn drain_pending_events(&mut self) {
+    while let Ok(event) = self.event_receiver.try_recv() {
+      self.handle_event(event);
+    }
+  }
+
   fn handle_effect(&self, effect: Effect) {
     match effect {
       Effect::RunAgent { messages } => {
@@ -23,7 +29,7 @@ impl App {
     }
   }
 
-  fn listen(&self) {
+  fn listen_for_input(&self) {
     let sender = self.event_sender.clone();
 
     thread::spawn(move || {
@@ -71,8 +77,7 @@ impl App {
 
     let mut renderer = Renderer::new();
 
-    self.listen();
-    self.tick();
+    self.start_background_tasks();
 
     while !self.state.should_quit() {
       renderer.draw(terminal.stdout_mut(), &View::new(&self.state))?;
@@ -83,15 +88,18 @@ impl App {
 
       self.handle_event(event);
 
-      while let Ok(event) = self.event_receiver.try_recv() {
-        self.handle_event(event);
-      }
+      self.drain_pending_events();
     }
 
     Ok(())
   }
 
-  fn tick(&self) {
+  fn start_background_tasks(&self) {
+    self.listen_for_input();
+    self.start_tick_loop();
+  }
+
+  fn start_tick_loop(&self) {
     let sender = self.event_sender.clone();
 
     tokio::spawn(async move {
