@@ -147,7 +147,7 @@ impl Renderer {
 
     write!(stdout, "\x1b[?2026l")?;
 
-    Ok(PresentedFrame::from_full_render(next.clone()))
+    Ok(next.clone().into())
   }
 
   fn is_termux_session() -> bool {

@@ -8,7 +8,17 @@ pub(crate) struct PresentedFrame {
 }
 
 impl PresentedFrame {
-  pub(crate) fn from_full_render(frame: Frame) -> Self {
+  pub(crate) fn new(cursor: Cursor, frame: Frame, viewport: Viewport) -> Self {
+    Self {
+      cursor,
+      frame,
+      viewport,
+    }
+  }
+}
+
+impl From<Frame> for PresentedFrame {
+  fn from(frame: Frame) -> Self {
     Self {
       cursor: Cursor::new(frame.last_row()),
       viewport: Viewport::anchored_to_bottom(
@@ -16,14 +26,6 @@ impl PresentedFrame {
         frame.dimensions.height(),
       ),
       frame,
-    }
-  }
-
-  pub(crate) fn new(cursor: Cursor, frame: Frame, viewport: Viewport) -> Self {
-    Self {
-      cursor,
-      frame,
-      viewport,
     }
   }
 }
