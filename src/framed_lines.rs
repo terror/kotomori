@@ -23,16 +23,13 @@ impl Component for FramedLines {
 
     let border = "─".repeat(usize::from(width));
 
-    let mut rendered =
-      vec![vec![Span::styled(border.clone(), Style::DarkGray)].into()];
+    let border_line =
+      || vec![Span::styled(border.clone(), Style::DarkGray)].into();
 
-    for line in &self.lines {
-      rendered.extend(line.render(width));
-    }
-
-    rendered.push(vec![Span::styled(border, Style::DarkGray)].into());
-
-    rendered
+    once(border_line())
+      .chain(self.lines.iter().flat_map(|line| line.render(width)))
+      .chain(once(border_line()))
+      .collect()
   }
 }
 
@@ -41,7 +38,7 @@ mod tests {
   use super::*;
 
   #[test]
-  fn rendering() {
+  fn render_wraps_lines_between_borders() {
     assert_eq!(
       FramedLines::raw(["foobar"]).render(3),
       [
