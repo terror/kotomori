@@ -56,8 +56,10 @@ impl State {
       Event::AgentDone => self.transcript.finish_agent_message(),
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
       Event::AgentToolCall(tool_call) => {
-        let message = tool_call.invocation().map_or_else(
-          |_| tool_call.to_string(),
+        let fallback = tool_call.to_string();
+        let invocation: Result<ToolInvocation> = tool_call.try_into();
+        let message = invocation.map_or_else(
+          |_| fallback,
           |invocation| invocation.progressive_tense(),
         );
 

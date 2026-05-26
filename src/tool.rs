@@ -179,10 +179,13 @@ mod tests {
 
   #[test]
   fn parses_apply_patch_tool_call() {
-    assert_eq!(
+    let invocation: ToolInvocation =
       RawToolCall::new("foo", "apply_patch", json!({"patch": "bar"}))
-        .invocation()
-        .unwrap(),
+        .try_into()
+        .unwrap();
+
+    assert_eq!(
+      invocation,
       ToolInvocation {
         id: "foo".into(),
         kind: ToolInvocationKind::ApplyPatch(apply_patch::ApplyPatch {
@@ -195,14 +198,16 @@ mod tests {
 
   #[test]
   fn parses_command_tool_call() {
+    let invocation: ToolInvocation = RawToolCall::new(
+      "foo",
+      "command",
+      json!({"program": "bar", "arguments": ["baz"], "cwd": null}),
+    )
+    .try_into()
+    .unwrap();
+
     assert_eq!(
-      RawToolCall::new(
-        "foo",
-        "command",
-        json!({"program": "bar", "arguments": ["baz"], "cwd": null}),
-      )
-      .invocation()
-      .unwrap(),
+      invocation,
       ToolInvocation {
         id: "foo".into(),
         kind: ToolInvocationKind::Command(command::Command {
@@ -216,10 +221,13 @@ mod tests {
 
   #[test]
   fn parses_list_files_tool_call() {
-    assert_eq!(
+    let invocation: ToolInvocation =
       RawToolCall::new("foo", "list_files", json!({"cwd": "bar"}))
-        .invocation()
-        .unwrap(),
+        .try_into()
+        .unwrap();
+
+    assert_eq!(
+      invocation,
       ToolInvocation {
         id: "foo".into(),
         kind: ToolInvocationKind::ListFiles(list_files::ListFiles {
@@ -231,10 +239,13 @@ mod tests {
 
   #[test]
   fn parses_read_file_tool_call() {
-    assert_eq!(
+    let invocation: ToolInvocation =
       RawToolCall::new("foo", "read_file", json!({"path": "bar"}))
-        .invocation()
-        .unwrap(),
+        .try_into()
+        .unwrap();
+
+    assert_eq!(
+      invocation,
       ToolInvocation {
         id: "foo".into(),
         kind: ToolInvocationKind::ReadFile(read_file::ReadFile {
@@ -246,14 +257,16 @@ mod tests {
 
   #[test]
   fn parses_search_files_tool_call() {
+    let invocation: ToolInvocation = RawToolCall::new(
+      "foo",
+      "search_files",
+      json!({"arguments": ["foo"], "cwd": "bar"}),
+    )
+    .try_into()
+    .unwrap();
+
     assert_eq!(
-      RawToolCall::new(
-        "foo",
-        "search_files",
-        json!({"arguments": ["foo"], "cwd": "bar"}),
-      )
-      .invocation()
-      .unwrap(),
+      invocation,
       ToolInvocation {
         id: "foo".into(),
         kind: ToolInvocationKind::SearchFiles(search_files::SearchFiles {
@@ -279,12 +292,9 @@ mod tests {
 
   #[test]
   fn unknown_tool_errors() {
-    assert_eq!(
-      RawToolCall::new("foo", "bar", json!({}))
-        .invocation()
-        .unwrap_err()
-        .to_string(),
-      "unknown tool `bar`",
-    );
+    let result: Result<ToolInvocation> =
+      RawToolCall::new("foo", "bar", json!({})).try_into();
+
+    assert_eq!(result.unwrap_err().to_string(), "unknown tool `bar`",);
   }
 }
