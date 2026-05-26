@@ -14,10 +14,6 @@ impl Message {
     }
   }
 
-  pub(crate) fn kind(&self) -> &MessageKind {
-    &self.kind
-  }
-
   pub(crate) fn new(role: Role, content: impl Into<String>) -> Self {
     Self {
       kind: MessageKind::Text {
