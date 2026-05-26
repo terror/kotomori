@@ -31,7 +31,7 @@ impl OpenAi {
 
 #[async_trait]
 impl Provider for OpenAi {
-  async fn stream(&self, request: Request, sink: ProviderSink) -> Result {
+  async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result {
     let mut request =
       crate::openai::CreateChatCompletionRequest::try_from(&request)?;
 

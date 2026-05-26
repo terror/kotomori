@@ -31,7 +31,7 @@ impl Debug for Anthropic {
 
 #[async_trait]
 impl Provider for Anthropic {
-  async fn stream(&self, request: Request, sink: ProviderSink) -> Result {
+  async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result {
     let mut stream = self
       .client
       .messages()

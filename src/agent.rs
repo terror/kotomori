@@ -33,13 +33,13 @@ impl Agent {
 
   async fn stream(&self, mut messages: Vec<Message>) -> Result {
     loop {
-      let sink = ProviderSink::new(self.event_sender.clone());
+      let mut sink = ProviderSink::new(self.event_sender.clone());
 
       self
         .provider
         .stream(
           Request::new(self.model.clone(), messages.clone()),
-          sink.clone(),
+          &mut sink,
         )
         .await?;
 
@@ -76,6 +76,7 @@ impl Agent {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::sync::Mutex;
 
   #[derive(Debug)]
   struct LoopProvider {
@@ -84,7 +85,11 @@ mod tests {
 
   #[async_trait]
   impl Provider for LoopProvider {
-    async fn stream(&self, request: Request, sink: ProviderSink) -> Result {
+    async fn stream(
+      &self,
+      request: Request,
+      sink: &mut ProviderSink,
+    ) -> Result {
       let index = {
         let mut requests = self.requests.lock().unwrap();
 
