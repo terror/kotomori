@@ -12,7 +12,7 @@ impl ToolCallStreamEvent for anthropic::MessageStreamEvent {
   fn tool_call_updates(self) -> Vec<ToolCallUpdate<Self::Index>> {
     match self {
       Self::ContentBlockStart {
-        content_block: anthropic::ContentBlock::ToolUse { id, input, name },
+        content_block: anthropic::ContentBlock::ToolUse { id, name, .. },
         index,
       } => vec![
         ToolCallUpdate {
@@ -22,10 +22,6 @@ impl ToolCallStreamEvent for anthropic::MessageStreamEvent {
         ToolCallUpdate {
           index,
           kind: ToolCallUpdateKind::Name(name),
-        },
-        ToolCallUpdate {
-          index,
-          kind: ToolCallUpdateKind::Arguments(input),
         },
       ],
       Self::ContentBlockDelta {
@@ -74,5 +70,62 @@ impl ToolCallStreamEvent for openai::ChatCompletionMessageToolCallChunk {
     }
 
     updates
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn anthropic_tool_call_arguments_are_streamed_as_deltas() {
+    let mut stream = ToolCallStream::<usize>::default();
+
+    assert_eq!(
+      stream
+        .push_event(anthropic::MessageStreamEvent::ContentBlockStart {
+          content_block: anthropic::ContentBlock::ToolUse {
+            id: "foo".into(),
+            input: json!({}),
+            name: "read_file".into(),
+          },
+          index: 0,
+        })
+        .unwrap(),
+      Vec::new(),
+    );
+
+    assert_eq!(
+      stream
+        .push_event(anthropic::MessageStreamEvent::ContentBlockDelta {
+          delta: anthropic::ContentBlockDelta::InputJsonDelta {
+            partial_json: r#"{"path":"#.into(),
+          },
+          index: 0,
+        })
+        .unwrap(),
+      Vec::new(),
+    );
+
+    assert_eq!(
+      stream
+        .push_event(anthropic::MessageStreamEvent::ContentBlockDelta {
+          delta: anthropic::ContentBlockDelta::InputJsonDelta {
+            partial_json: r#""foo"}"#.into(),
+          },
+          index: 0,
+        })
+        .unwrap(),
+      Vec::new(),
+    );
+
+    assert_eq!(
+      stream
+        .push_event(anthropic::MessageStreamEvent::ContentBlockStop {
+          index: 0,
+        })
+        .unwrap(),
+      vec![RawToolCall::new("foo", "read_file", json!({"path": "foo"}))],
+    );
   }
 }
