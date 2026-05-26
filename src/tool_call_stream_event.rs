@@ -3,21 +3,21 @@ use super::*;
 pub(crate) trait ToolCallStreamEvent {
   type Index: Ord;
 
-  fn tool_call_fragments(self) -> Vec<ToolCallFragment<Self::Index>>;
+  fn tool_call_updates(self) -> Vec<ToolCallUpdate<Self::Index>>;
 }
 
 impl ToolCallStreamEvent for anthropic::MessageStreamEvent {
   type Index = usize;
 
-  fn tool_call_fragments(self) -> Vec<ToolCallFragment<Self::Index>> {
+  fn tool_call_updates(self) -> Vec<ToolCallUpdate<Self::Index>> {
     match self {
       Self::ContentBlockStart {
         content_block: anthropic::ContentBlock::ToolUse { id, input, name },
         index,
       } => vec![
-        ToolCallFragment::Id { id, index },
-        ToolCallFragment::Name { index, name },
-        ToolCallFragment::Arguments {
+        ToolCallUpdate::Id { id, index },
+        ToolCallUpdate::Name { index, name },
+        ToolCallUpdate::Arguments {
           arguments: input,
           index,
         },
@@ -25,12 +25,12 @@ impl ToolCallStreamEvent for anthropic::MessageStreamEvent {
       Self::ContentBlockDelta {
         delta: anthropic::ContentBlockDelta::InputJsonDelta { partial_json },
         index,
-      } => vec![ToolCallFragment::ArgumentFragment {
-        argument_fragment: partial_json,
+      } => vec![ToolCallUpdate::ArgumentDelta {
+        argument_delta: partial_json,
         index,
       }],
       Self::ContentBlockStop { index } => {
-        vec![ToolCallFragment::Finish { index }]
+        vec![ToolCallUpdate::Finish { index }]
       }
       _ => Vec::new(),
     }
@@ -40,11 +40,11 @@ impl ToolCallStreamEvent for anthropic::MessageStreamEvent {
 impl ToolCallStreamEvent for openai::ChatCompletionMessageToolCallChunk {
   type Index = u32;
 
-  fn tool_call_fragments(self) -> Vec<ToolCallFragment<Self::Index>> {
-    let mut fragments = Vec::new();
+  fn tool_call_updates(self) -> Vec<ToolCallUpdate<Self::Index>> {
+    let mut updates = Vec::new();
 
     if let Some(id) = self.id {
-      fragments.push(ToolCallFragment::Id {
+      updates.push(ToolCallUpdate::Id {
         id,
         index: self.index,
       });
@@ -52,20 +52,20 @@ impl ToolCallStreamEvent for openai::ChatCompletionMessageToolCallChunk {
 
     if let Some(function) = self.function {
       if let Some(name) = function.name {
-        fragments.push(ToolCallFragment::Name {
+        updates.push(ToolCallUpdate::Name {
           index: self.index,
           name,
         });
       }
 
-      if let Some(argument_fragment) = function.arguments {
-        fragments.push(ToolCallFragment::ArgumentFragment {
-          argument_fragment,
+      if let Some(argument_delta) = function.arguments {
+        updates.push(ToolCallUpdate::ArgumentDelta {
+          argument_delta,
           index: self.index,
         });
       }
     }
 
-    fragments
+    updates
   }
 }

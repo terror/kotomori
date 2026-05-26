@@ -8,9 +8,9 @@ pub(crate) struct ToolCallBuilder {
 }
 
 impl ToolCallBuilder {
-  pub(crate) fn argument_fragment(self, argument_fragment: &str) -> Self {
+  pub(crate) fn argument_delta(self, argument_delta: &str) -> Self {
     Self {
-      arguments: self.arguments.argument_fragment(argument_fragment),
+      arguments: self.arguments.argument_delta(argument_delta),
       ..self
     }
   }

@@ -70,9 +70,9 @@ use {
   tool_action_tense::ToolActionTense,
   tool_call_arguments::ToolCallArguments,
   tool_call_builder::ToolCallBuilder,
-  tool_call_fragment::ToolCallFragment,
   tool_call_stream::ToolCallStream,
   tool_call_stream_event::ToolCallStreamEvent,
+  tool_call_update::ToolCallUpdate,
   tool_invocation::ToolInvocation,
   tool_invocation_kind::ToolInvocationKind,
   tools::{
@@ -138,9 +138,9 @@ mod tool;
 mod tool_action_tense;
 mod tool_call_arguments;
 mod tool_call_builder;
-mod tool_call_fragment;
 mod tool_call_stream;
 mod tool_call_stream_event;
+mod tool_call_update;
 mod tool_invocation;
 mod tool_invocation_kind;
 mod tools;

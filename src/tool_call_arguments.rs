@@ -2,19 +2,19 @@ use super::*;
 
 #[derive(Default)]
 pub(crate) enum ToolCallArguments {
+  Deltas(String),
   #[default]
   Empty,
-  Fragments(String),
   Value(Value),
 }
 
 impl ToolCallArguments {
-  pub(crate) fn argument_fragment(self, argument_fragment: &str) -> Self {
+  pub(crate) fn argument_delta(self, argument_delta: &str) -> Self {
     match self {
-      Self::Empty | Self::Value(_) => Self::Fragments(argument_fragment.into()),
-      Self::Fragments(mut argument_fragments) => {
-        argument_fragments.push_str(argument_fragment);
-        Self::Fragments(argument_fragments)
+      Self::Empty | Self::Value(_) => Self::Deltas(argument_delta.into()),
+      Self::Deltas(mut argument_deltas) => {
+        argument_deltas.push_str(argument_delta);
+        Self::Deltas(argument_deltas)
       }
     }
   }
@@ -22,7 +22,7 @@ impl ToolCallArguments {
   pub(crate) fn finish(self) -> Result<Value> {
     match self {
       Self::Empty => Ok(json!({})),
-      Self::Fragments(arguments) => Ok(serde_json::from_str(&arguments)?),
+      Self::Deltas(arguments) => Ok(serde_json::from_str(&arguments)?),
       Self::Value(arguments) => Ok(arguments),
     }
   }

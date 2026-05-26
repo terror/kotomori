@@ -15,24 +15,24 @@ impl<I: Ord> ToolCallStream<I> {
 
   pub(crate) fn push(
     &mut self,
-    fragment: ToolCallFragment<I>,
+    update: ToolCallUpdate<I>,
   ) -> Result<Option<RawToolCall>> {
-    match fragment {
-      ToolCallFragment::ArgumentFragment {
-        argument_fragment,
+    match update {
+      ToolCallUpdate::ArgumentDelta {
+        argument_delta,
         index,
       } => {
         let tool_call = self
           .calls
           .remove(&index)
           .unwrap_or_default()
-          .argument_fragment(&argument_fragment);
+          .argument_delta(&argument_delta);
 
         self.calls.insert(index, tool_call);
 
         Ok(None)
       }
-      ToolCallFragment::Arguments { arguments, index } => {
+      ToolCallUpdate::Arguments { arguments, index } => {
         let tool_call = self
           .calls
           .remove(&index)
@@ -43,19 +43,19 @@ impl<I: Ord> ToolCallStream<I> {
 
         Ok(None)
       }
-      ToolCallFragment::Finish { index } => self
+      ToolCallUpdate::Finish { index } => self
         .calls
         .remove(&index)
         .map(ToolCallBuilder::finish)
         .transpose(),
-      ToolCallFragment::Id { id, index } => {
+      ToolCallUpdate::Id { id, index } => {
         let tool_call = self.calls.remove(&index).unwrap_or_default().id(id);
 
         self.calls.insert(index, tool_call);
 
         Ok(None)
       }
-      ToolCallFragment::Name { index, name } => {
+      ToolCallUpdate::Name { index, name } => {
         let tool_call =
           self.calls.remove(&index).unwrap_or_default().name(name);
 
@@ -74,9 +74,9 @@ impl<I: Ord> ToolCallStream<I> {
     E: ToolCallStreamEvent<Index = I>,
   {
     event
-      .tool_call_fragments()
+      .tool_call_updates()
       .into_iter()
-      .try_fold(None, |_, fragment| self.push(fragment))
+      .try_fold(None, |_, update| self.push(update))
   }
 }
 
