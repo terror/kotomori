@@ -79,6 +79,7 @@ define_tools! {
     name: "read_file",
     description: "Read a UTF-8 text file.",
     fields: {
+      cwd: Option<PathBuf>,
       path: PathBuf,
     },
   },
@@ -88,6 +89,15 @@ define_tools! {
     fields: {
       arguments: Vec<String>,
       cwd: Option<PathBuf>,
+    },
+  },
+  WriteFileTool => WriteFile {
+    name: "write_file",
+    description: "Write a UTF-8 text file.",
+    fields: {
+      content: String,
+      cwd: Option<PathBuf>,
+      path: PathBuf,
     },
   },
 }

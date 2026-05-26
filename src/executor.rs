@@ -6,6 +6,22 @@ pub(crate) struct Executor {
 }
 
 impl Executor {
+  async fn blocking<T>(
+    &self,
+    f: impl FnOnce() -> io::Result<T> + Send + 'static,
+  ) -> Result<T, Error>
+  where
+    T: Send + 'static,
+  {
+    match timeout(self.limits.timeout, task::spawn_blocking(f)).await {
+      Ok(result) => Ok(result??),
+      Err(_) => Err(Error::msg(format!(
+        "tool timed out after {} seconds",
+        self.limits.timeout.as_secs()
+      ))),
+    }
+  }
+
   async fn collect_output(
     output: Option<task::JoinHandle<io::Result<String>>>,
   ) -> Result<String, Error> {
@@ -86,28 +102,31 @@ impl Executor {
     ToolResult::command(status.code(), stdout, stderr)
   }
 
-  pub(crate) async fn read_file(&self, path: PathBuf) -> ToolResult {
+  pub(crate) async fn read_file(&self, tool: &ReadFileTool) -> ToolResult {
     let limits = self.limits;
 
-    let read = task::spawn_blocking(move || -> io::Result<String> {
-      let file = File::open(path)?;
+    match self
+      .blocking({
+        let path = tool
+          .cwd
+          .as_ref()
+          .map_or_else(|| tool.path.clone(), |cwd| cwd.join(&tool.path));
 
-      let mut file = file.take(limits.output_limit as u64 + 1);
-      let mut bytes = Vec::new();
+        move || {
+          let file = File::open(path)?;
 
-      file.read_to_end(&mut bytes)?;
+          let mut file = file.take(limits.output_limit as u64 + 1);
+          let mut bytes = Vec::new();
 
-      Ok(limits.decode(bytes))
-    });
+          file.read_to_end(&mut bytes)?;
 
-    match timeout(limits.timeout, async { Ok::<_, Error>(read.await??) }).await
+          Ok(limits.decode(bytes))
+        }
+      })
+      .await
     {
-      Ok(Ok(content)) => ToolResult::content(content),
-      Ok(Err(error)) => ToolResult::error(error),
-      Err(_) => ToolResult::error(format!(
-        "tool timed out after {} seconds",
-        limits.timeout.as_secs()
-      )),
+      Ok(content) => ToolResult::content(content),
+      Err(error) => ToolResult::error(error),
     }
   }
 
@@ -193,6 +212,27 @@ impl Executor {
     Self { limits }
   }
 
+  pub(crate) async fn write_file(&self, tool: &WriteFileTool) -> ToolResult {
+    let content = tool.content.clone();
+
+    let len = content.len();
+
+    match self
+      .blocking({
+        let path = tool
+          .cwd
+          .as_ref()
+          .map_or_else(|| tool.path.clone(), |cwd| cwd.join(&tool.path));
+
+        move || fs::write(path, content)
+      })
+      .await
+    {
+      Ok(()) => ToolResult::content(format!("wrote {len} bytes")),
+      Err(error) => ToolResult::error(error),
+    }
+  }
+
   async fn write_input<W>(
     mut stdin: W,
     input: impl AsRef<[u8]>,
@@ -235,13 +275,43 @@ mod tests {
       process::id()
     ));
 
-    std::fs::write(&path, "foo bar baz").unwrap();
+    fs::write(&path, "foo bar baz").unwrap();
 
-    let result = executor.read_file(path.clone()).await;
+    let result = executor
+      .read_file(&ReadFileTool {
+        cwd: None,
+        path: path.clone(),
+      })
+      .await;
 
-    std::fs::remove_file(path).unwrap();
+    fs::remove_file(path).unwrap();
 
     assert_eq!(result.output().unwrap(), "foo b...");
+  }
+
+  #[tokio::test]
+  async fn write_file_writes_content() {
+    let executor = Executor::default();
+
+    let path = env::temp_dir().join(format!(
+      "kotomori-{}-write-file-writes-content",
+      process::id()
+    ));
+
+    let result = executor
+      .write_file(&WriteFileTool {
+        content: "bar".into(),
+        cwd: None,
+        path: path.clone(),
+      })
+      .await;
+
+    let content = fs::read_to_string(&path).unwrap();
+
+    fs::remove_file(path).unwrap();
+
+    assert_eq!(result.output().unwrap(), "wrote 3 bytes");
+    assert_eq!(content, "bar");
   }
 
   #[tokio::test]

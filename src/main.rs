@@ -57,7 +57,7 @@ use {
     collections::BTreeMap,
     env,
     fmt::{self, Debug, Display, Formatter},
-    fs::File,
+    fs::{self, File},
     io::{self, Read, Stdout, Write},
     iter::once,
     path::PathBuf,
@@ -89,7 +89,7 @@ use {
   tool_result::ToolResult,
   tools::{
     ApplyPatchTool, CommandTool, ListFilesTool, ReadFileTool, SearchFilesTool,
-    TOOLS,
+    TOOLS, WriteFileTool,
   },
   transcript::Transcript,
   transcript_tool_invocation::TranscriptToolInvocation,

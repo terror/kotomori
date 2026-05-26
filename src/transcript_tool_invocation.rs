@@ -27,9 +27,18 @@ impl<'a> TranscriptToolInvocation<'a> {
           details.push(("cwd", cwd.display().to_string()));
         }
       }
-      ToolInvocationKind::ListFiles(_)
-      | ToolInvocationKind::ReadFile(_)
-      | ToolInvocationKind::SearchFiles(_) => {}
+      ToolInvocationKind::ReadFile(tool) => {
+        if let Some(cwd) = &tool.cwd {
+          details.push(("cwd", cwd.display().to_string()));
+        }
+      }
+      ToolInvocationKind::WriteFile(tool) => {
+        if let Some(cwd) = &tool.cwd {
+          details.push(("cwd", cwd.display().to_string()));
+        }
+      }
+      ToolInvocationKind::ListFiles(_) | ToolInvocationKind::SearchFiles(_) => {
+      }
     }
 
     if let Some(exit_status) = self

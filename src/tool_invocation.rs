@@ -34,6 +34,11 @@ impl ToolInvocation {
         ToolActionTense::Failed => "Failed searching",
         ToolActionTense::Progressive => "Searching",
       },
+      ToolInvocationKind::WriteFile(_) => match tense {
+        ToolActionTense::Completed => "Wrote",
+        ToolActionTense::Failed => "Failed writing",
+        ToolActionTense::Progressive => "Writing",
+      },
     }
   }
 
@@ -47,7 +52,8 @@ impl ToolInvocation {
       ToolInvocationKind::ApplyPatch(_)
       | ToolInvocationKind::ListFiles(_)
       | ToolInvocationKind::ReadFile(_)
-      | ToolInvocationKind::SearchFiles(_) => None,
+      | ToolInvocationKind::SearchFiles(_)
+      | ToolInvocationKind::WriteFile(_) => None,
     }
   }
 
@@ -81,6 +87,7 @@ impl ToolInvocation {
       ToolInvocationKind::ListFiles(_) => "list_files",
       ToolInvocationKind::ReadFile(_) => "read_file",
       ToolInvocationKind::SearchFiles(_) => "search_files",
+      ToolInvocationKind::WriteFile(_) => "write_file",
     }
   }
 
@@ -98,7 +105,10 @@ impl ToolInvocation {
         || "files".into(),
         |cwd| format!("files in {}", cwd.display()),
       ),
-      ToolInvocationKind::ReadFile(tool) => tool.path.display().to_string(),
+      ToolInvocationKind::ReadFile(tool) => tool.cwd.as_ref().map_or_else(
+        || tool.path.display().to_string(),
+        |cwd| format!("{} in {}", tool.path.display(), cwd.display()),
+      ),
       ToolInvocationKind::SearchFiles(tool) => {
         let query = if tool.arguments.is_empty() {
           "files".into()
@@ -111,6 +121,10 @@ impl ToolInvocation {
           .as_ref()
           .map_or(query.clone(), |cwd| format!("{query} in {}", cwd.display()))
       }
+      ToolInvocationKind::WriteFile(tool) => tool.cwd.as_ref().map_or_else(
+        || tool.path.display().to_string(),
+        |cwd| format!("{} in {}", tool.path.display(), cwd.display()),
+      ),
     }
   }
 
@@ -138,7 +152,11 @@ impl Display for ToolInvocation {
         }
       }
       ToolInvocationKind::ReadFile(tool) => {
-        write!(f, "read {}", tool.path.display())
+        if let Some(cwd) = &tool.cwd {
+          write!(f, "read {} in {}", tool.path.display(), cwd.display())
+        } else {
+          write!(f, "read {}", tool.path.display())
+        }
       }
       ToolInvocationKind::SearchFiles(tool) => {
         if tool.arguments.is_empty() {
@@ -156,6 +174,13 @@ impl Display for ToolInvocation {
           )
         } else {
           write!(f, "search files {}", tool.arguments.join(" "))
+        }
+      }
+      ToolInvocationKind::WriteFile(tool) => {
+        if let Some(cwd) = &tool.cwd {
+          write!(f, "write {} in {}", tool.path.display(), cwd.display())
+        } else {
+          write!(f, "write {}", tool.path.display())
         }
       }
     }
@@ -237,7 +262,10 @@ mod tests {
       invocation,
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::ReadFile(ReadFileTool { path: "bar".into() }),
+        kind: ToolInvocationKind::ReadFile(ReadFileTool {
+          cwd: None,
+          path: "bar".into(),
+        }),
       },
     );
   }
@@ -278,6 +306,29 @@ mod tests {
     assert_eq!(
       invocation.arguments(),
       json!({"arguments": ["bar"], "cwd": null, "program": "baz"}),
+    );
+  }
+
+  #[test]
+  fn parses_write_file_tool_call() {
+    let invocation: ToolInvocation = RawToolCall::new(
+      "foo",
+      "write_file",
+      json!({"content": "bar", "path": "baz"}),
+    )
+    .try_into()
+    .unwrap();
+
+    assert_eq!(
+      invocation,
+      ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::WriteFile(WriteFileTool {
+          content: "bar".into(),
+          cwd: None,
+          path: "baz".into(),
+        }),
+      },
     );
   }
 
