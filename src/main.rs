@@ -92,6 +92,7 @@ use {
     TOOLS, WriteFileTool,
   },
   transcript::Transcript,
+  transcript_entry::TranscriptEntry,
   transcript_tool_invocation::TranscriptToolInvocation,
   unicode_width::UnicodeWidthChar,
   view::View,
@@ -168,6 +169,7 @@ mod tool_invocation_kind;
 mod tool_result;
 mod tools;
 mod transcript;
+mod transcript_entry;
 mod transcript_tool_invocation;
 mod view;
 

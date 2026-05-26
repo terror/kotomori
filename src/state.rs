@@ -59,7 +59,7 @@ impl State {
         self.transcript.push_tool_call(tool_call);
       }
       Event::AgentToolResult { id, result } => {
-        self.transcript.push_tool_result(id, result);
+        self.transcript.push_tool_result(&id, result);
       }
       Event::Error(error) => self.transcript.error(error),
       Event::Tick => self.transcript.tick(),
@@ -141,7 +141,7 @@ impl State {
 
     self.transcript.send(input.clone());
 
-    let messages = self.transcript.messages().to_vec();
+    let messages = self.transcript.messages();
 
     self.reset_input();
 

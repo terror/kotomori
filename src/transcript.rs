@@ -4,9 +4,7 @@ use super::*;
 pub(crate) struct Transcript {
   active_agent_message: Option<String>,
   active_frame: usize,
-  messages: Vec<Message>,
-  tool_invocations: BTreeMap<String, ToolInvocation>,
-  tool_results: BTreeMap<String, ToolResult>,
+  entries: Vec<TranscriptEntry>,
 }
 
 impl Transcript {
@@ -14,34 +12,52 @@ impl Transcript {
 
   pub(crate) fn clear(&mut self) {
     self.active_agent_message = None;
-    self.messages.clear();
-    self.tool_invocations.clear();
-    self.tool_results.clear();
+    self.entries.clear();
   }
 
   pub(crate) fn error(&mut self, error: String) {
     self.active_agent_message = None;
-    self.messages.push(Message::new(Role::Agent, error));
+    self.entries.push(TranscriptEntry::Agent(error));
+  }
+
+  fn find_tool_result_mut(
+    &mut self,
+    id: &str,
+  ) -> Option<&mut Option<ToolResult>> {
+    self.entries.iter_mut().rev().find_map(|entry| match entry {
+      TranscriptEntry::Tool { invocation, result } if invocation.id == id => {
+        Some(result)
+      }
+      _ => None,
+    })
   }
 
   pub(crate) fn finish_agent_message(&mut self) {
-    if let Some(message) = self.active_agent_message.take()
-      && !message.is_empty()
-    {
-      self.messages.push(Message::new(Role::Agent, message));
+    let Some(message) = self.active_agent_message.take() else {
+      return;
+    };
+
+    if message.is_empty() {
+      return;
     }
+
+    self.entries.push(TranscriptEntry::Agent(message));
   }
 
   pub(crate) fn is_agent_active(&self) -> bool {
     self.active_agent_message.is_some()
   }
 
-  pub(crate) fn messages(&self) -> &[Message] {
-    &self.messages
+  pub(crate) fn messages(&self) -> Vec<Message> {
+    self
+      .entries
+      .iter()
+      .flat_map(TranscriptEntry::messages)
+      .collect()
   }
 
   pub(crate) fn push_agent(&mut self, content: impl Into<String>) {
-    self.messages.push(Message::new(Role::Agent, content));
+    self.entries.push(TranscriptEntry::Agent(content.into()));
   }
 
   pub(crate) fn push_agent_delta(&mut self, delta: &str) {
@@ -55,25 +71,24 @@ impl Transcript {
   pub(crate) fn push_tool_call(&mut self, invocation: ToolInvocation) {
     self.finish_agent_message();
 
-    self.messages.push(invocation.message());
-
-    self
-      .tool_invocations
-      .insert(invocation.id.clone(), invocation);
+    self.entries.push(TranscriptEntry::Tool {
+      invocation,
+      result: None,
+    });
 
     self.active_agent_message = Some(String::new());
   }
 
-  pub(crate) fn push_tool_result(&mut self, id: String, result: ToolResult) {
-    self.messages.push(result.message(id.clone()));
-
-    self.tool_results.insert(id, result);
+  pub(crate) fn push_tool_result(&mut self, id: &str, result: ToolResult) {
+    if let Some(entry_result) = self.find_tool_result_mut(id) {
+      *entry_result = Some(result);
+    }
 
     self.active_agent_message = Some(String::new());
   }
 
   pub(crate) fn send(&mut self, input: String) {
-    self.messages.push(Message::new(Role::User, input));
+    self.entries.push(TranscriptEntry::User(input));
     self.active_agent_message = Some(String::new());
     self.active_frame = 0;
   }
@@ -93,35 +108,24 @@ impl Component for Transcript {
   fn render(&self, width: u16) -> Vec<Line> {
     let mut lines = Vec::new();
 
-    for message in self.messages() {
-      match message.kind() {
-        MessageKind::Text {
-          content,
-          role: Role::Agent,
-        } => {
+    for entry in &self.entries {
+      match entry {
+        TranscriptEntry::Agent(content) => {
           lines.extend(
             once(Line::blank())
               .chain(content.lines().map(|line| Line::raw(format!(" {line}"))))
               .chain(once(Line::blank())),
           );
         }
-        MessageKind::Text {
-          content: _,
-          role: Role::User,
-        } => lines.extend(message.render(width)),
-        MessageKind::ToolUse { id, .. } => {
-          let Some(invocation) = self.tool_invocations.get(id) else {
-            continue;
-          };
-
-          let transcript_tool_invocation = TranscriptToolInvocation::new(
-            invocation,
-            self.tool_results.get(id),
+        TranscriptEntry::Tool { invocation, result } => {
+          lines.extend(
+            TranscriptToolInvocation::new(invocation, result.as_ref())
+              .render(width),
           );
-
-          lines.extend(transcript_tool_invocation.render(width));
         }
-        MessageKind::ToolResult { .. } => {}
+        TranscriptEntry::User(content) => {
+          lines.extend(Message::new(Role::User, content.clone()).render(width));
+        }
       }
     }
 
@@ -192,5 +196,32 @@ mod tests {
       Line::raw(" bar"),
       Line::blank(),
     ]));
+  }
+
+  #[test]
+  fn tool_messages() {
+    let mut transcript = Transcript::default();
+
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "echo".into(),
+      }),
+    };
+
+    transcript.push_tool_call(invocation.clone());
+
+    assert_eq!(transcript.messages(), vec![invocation.message()]);
+
+    let result = ToolResult::command(Some(0), "bar\n", "");
+
+    transcript.push_tool_result("foo", result.clone());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![invocation.message(), result.message("foo")]
+    );
   }
 }
