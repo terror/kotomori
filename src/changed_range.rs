@@ -8,26 +8,17 @@ pub(crate) struct ChangedRange {
 
 impl ChangedRange {
   pub(crate) fn between(previous: &[String], next: &[String]) -> Option<Self> {
-    let mut changed = None;
+    let len = previous.len().max(next.len());
 
-    for index in 0..previous.len().max(next.len()) {
-      let (previous, next) = (
-        previous.get(index).map_or("", String::as_str),
-        next.get(index).map_or("", String::as_str),
-      );
+    let changed = |index| {
+      previous.get(index).map_or("", String::as_str)
+        != next.get(index).map_or("", String::as_str)
+    };
 
-      if previous != next {
-        changed = Some(match changed {
-          Some(Self { first, .. }) => Self { first, last: index },
-          None => Self {
-            first: index,
-            last: index,
-          },
-        });
-      }
-    }
-
-    changed
+    Some(Self {
+      first: (0..len).find(|&index| changed(index))?,
+      last: (0..len).rfind(|&index| changed(index))?,
+    })
   }
 }
 
@@ -35,14 +26,113 @@ impl ChangedRange {
 mod tests {
   use super::*;
 
+  fn lines(lines: &[&str]) -> Vec<String> {
+    lines.iter().map(|line| (*line).into()).collect()
+  }
+
   #[test]
-  fn detects_first_and_last_changed_line() {
+  fn between_detects_added_tail() {
     assert_eq!(
       ChangedRange::between(
-        &["foo".into(), "bar".into(), "baz".into()],
-        &["foo".into(), "qux".into(), "baz".into(), "bob".into()],
+        &lines(&["foo", "bar"]),
+        &lines(&["foo", "bar", "baz"])
       ),
-      Some(ChangedRange { first: 1, last: 3 }),
+      Some(ChangedRange { first: 2, last: 2 }),
+    );
+  }
+
+  #[test]
+  fn between_detects_changed_middle_span() {
+    assert_eq!(
+      ChangedRange::between(
+        &lines(&["foo", "bar", "baz", "qux"]),
+        &lines(&["foo", "bob", "rob", "qux"]),
+      ),
+      Some(ChangedRange { first: 1, last: 2 }),
+    );
+  }
+
+  #[test]
+  fn between_detects_changed_prefix() {
+    assert_eq!(
+      ChangedRange::between(
+        &lines(&["foo", "bar", "baz"]),
+        &lines(&["qux", "bar", "baz"])
+      ),
+      Some(ChangedRange { first: 0, last: 0 }),
+    );
+  }
+
+  #[test]
+  fn between_detects_changed_suffix() {
+    assert_eq!(
+      ChangedRange::between(
+        &lines(&["foo", "bar", "baz"]),
+        &lines(&["foo", "bar", "qux"])
+      ),
+      Some(ChangedRange { first: 2, last: 2 }),
+    );
+  }
+
+  #[test]
+  fn between_detects_disjoint_changes_as_one_span() {
+    assert_eq!(
+      ChangedRange::between(
+        &lines(&["foo", "bar", "baz", "qux"]),
+        &lines(&["bob", "bar", "baz", "rob"]),
+      ),
+      Some(ChangedRange { first: 0, last: 3 }),
+    );
+  }
+
+  #[test]
+  fn between_detects_empty_string_changed_to_non_empty_string() {
+    assert_eq!(
+      ChangedRange::between(&lines(&[""]), &lines(&["foo"])),
+      Some(ChangedRange { first: 0, last: 0 }),
+    );
+  }
+
+  #[test]
+  fn between_detects_non_empty_string_changed_to_empty_string() {
+    assert_eq!(
+      ChangedRange::between(&lines(&["foo"]), &lines(&[""])),
+      Some(ChangedRange { first: 0, last: 0 }),
+    );
+  }
+
+  #[test]
+  fn between_detects_removed_tail() {
+    assert_eq!(
+      ChangedRange::between(
+        &lines(&["foo", "bar", "baz"]),
+        &lines(&["foo", "bar"])
+      ),
+      Some(ChangedRange { first: 2, last: 2 }),
+    );
+  }
+
+  #[test]
+  fn between_returns_none_for_empty_inputs() {
+    assert_eq!(ChangedRange::between(&lines(&[]), &lines(&[])), None);
+  }
+
+  #[test]
+  fn between_returns_none_for_identical_inputs() {
+    assert_eq!(
+      ChangedRange::between(
+        &lines(&["foo", "bar", "baz"]),
+        &lines(&["foo", "bar", "baz"])
+      ),
+      None,
+    );
+  }
+
+  #[test]
+  fn between_treats_missing_line_as_empty_string() {
+    assert_eq!(
+      ChangedRange::between(&lines(&["foo", ""]), &lines(&["foo"])),
+      None,
     );
   }
 }
