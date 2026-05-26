@@ -65,6 +65,7 @@ use {
     fs::{self, File},
     io::{self, BufRead, Read, Stdout, Write},
     iter::once,
+    ops::RangeInclusive,
     path::PathBuf,
     process::{self, Stdio},
     str::{self, FromStr},

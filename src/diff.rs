@@ -24,9 +24,7 @@ impl Diff {
     self.changed.first >= self.next_len
   }
 
-  pub(crate) fn writable_range(
-    self,
-  ) -> Option<std::ops::RangeInclusive<usize>> {
+  pub(crate) fn writable_range(self) -> Option<RangeInclusive<usize>> {
     if self.next_len == 0 || self.changed.first >= self.next_len {
       return None;
     }
@@ -39,26 +37,145 @@ impl Diff {
 mod tests {
   use super::*;
 
-  #[test]
-  fn splits_writable_and_deleted_tail_ranges() {
-    let previous = Frame::new(
-      vec!["foo".into(), "bar".into(), "baz".into()],
+  fn frame(lines: &[&str]) -> Frame {
+    Frame::new(
+      lines.iter().map(|line| (*line).into()).collect(),
       Dimensions {
         height: 24,
         width: 80,
       },
-    );
-    let next = Frame::new(
-      vec!["foo".into(), "qux".into()],
-      Dimensions {
-        height: 24,
-        width: 80,
-      },
-    );
-    let diff = Diff::between(&previous, &next).unwrap();
+    )
+  }
 
-    assert_eq!(diff.writable_range(), Some(1..=1));
-    assert_eq!(diff.deleted_tail_len(), 1);
-    assert!(!diff.is_pure_tail_delete());
+  #[test]
+  fn between_returns_none_when_frames_are_identical() {
+    assert_eq!(
+      Diff::between(
+        &frame(&["foo", "bar", "baz"]),
+        &frame(&["foo", "bar", "baz"])
+      ),
+      None,
+    );
+  }
+
+  #[test]
+  fn between_tracks_changed_range_and_lengths_for_middle_change() {
+    assert_eq!(
+      Diff::between(
+        &frame(&["foo", "bar", "baz"]),
+        &frame(&["foo", "qux", "baz"])
+      ),
+      Some(Diff {
+        changed: ChangedRange { first: 1, last: 1 },
+        previous_len: 3,
+        next_len: 3,
+      }),
+    );
+  }
+
+  #[test]
+  fn deleted_tail_len_is_zero_when_next_is_longer() {
+    assert_eq!(
+      Diff::between(&frame(&["foo"]), &frame(&["foo", "bar"]))
+        .unwrap()
+        .deleted_tail_len(),
+      0,
+    );
+  }
+
+  #[test]
+  fn deleted_tail_len_is_zero_when_next_is_same_length() {
+    assert_eq!(
+      Diff::between(
+        &frame(&["foo", "bar", "baz"]),
+        &frame(&["foo", "qux", "baz"])
+      )
+      .unwrap()
+      .deleted_tail_len(),
+      0,
+    );
+  }
+
+  #[test]
+  fn deleted_tail_len_returns_removed_suffix_length() {
+    assert_eq!(
+      Diff::between(
+        &frame(&["foo", "bar", "baz", "qux"]),
+        &frame(&["foo", "bar"])
+      )
+      .unwrap()
+      .deleted_tail_len(),
+      2,
+    );
+  }
+
+  #[test]
+  fn is_pure_tail_delete_is_false_for_inserted_tail() {
+    assert!(
+      !Diff::between(&frame(&["foo"]), &frame(&["foo", "bar"]))
+        .unwrap()
+        .is_pure_tail_delete(),
+    );
+  }
+
+  #[test]
+  fn is_pure_tail_delete_is_false_for_middle_change_with_tail_delete() {
+    assert!(
+      !Diff::between(&frame(&["foo", "bar", "baz"]), &frame(&["foo", "qux"]))
+        .unwrap()
+        .is_pure_tail_delete(),
+    );
+  }
+
+  #[test]
+  fn is_pure_tail_delete_is_true_when_only_suffix_was_removed() {
+    assert!(
+      Diff::between(&frame(&["foo", "bar", "baz"]), &frame(&["foo"]))
+        .unwrap()
+        .is_pure_tail_delete(),
+    );
+  }
+
+  #[test]
+  fn writable_range_clamps_last_changed_row_to_last_next_row() {
+    assert_eq!(
+      Diff::between(&frame(&["foo", "bar", "baz"]), &frame(&["foo", "qux"]))
+        .unwrap()
+        .writable_range(),
+      Some(1..=1),
+    );
+  }
+
+  #[test]
+  fn writable_range_is_none_for_empty_next_frame() {
+    assert_eq!(
+      Diff::between(&frame(&["foo"]), &frame(&[]))
+        .unwrap()
+        .writable_range(),
+      None,
+    );
+  }
+
+  #[test]
+  fn writable_range_is_none_for_pure_tail_delete() {
+    assert_eq!(
+      Diff::between(&frame(&["foo", "bar", "baz"]), &frame(&["foo"]))
+        .unwrap()
+        .writable_range(),
+      None,
+    );
+  }
+
+  #[test]
+  fn writable_range_returns_changed_rows_present_in_next_frame() {
+    assert_eq!(
+      Diff::between(
+        &frame(&["foo", "bar", "baz"]),
+        &frame(&["foo", "qux", "baz"])
+      )
+      .unwrap()
+      .writable_range(),
+      Some(1..=1),
+    );
   }
 }
