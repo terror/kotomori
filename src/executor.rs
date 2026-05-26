@@ -54,16 +54,18 @@ impl Executor {
     };
 
     let stdout = match stdout {
-      Some(stdout) => match Self::read_pipe_task(stdout).await {
-        Ok(stdout) => stdout,
+      Some(stdout) => match stdout.await {
+        Ok(Ok(stdout)) => stdout,
+        Ok(Err(error)) => return ToolResult::error(&error),
         Err(error) => return ToolResult::error(&error),
       },
       None => String::new(),
     };
 
     let stderr = match stderr {
-      Some(stderr) => match Self::read_pipe_task(stderr).await {
-        Ok(stderr) => stderr,
+      Some(stderr) => match stderr.await {
+        Ok(Ok(stderr)) => stderr,
+        Ok(Err(error)) => return ToolResult::error(&error),
         Err(error) => return ToolResult::error(&error),
       },
       None => String::new(),
@@ -79,20 +81,9 @@ impl Executor {
   }
 
   pub(crate) async fn read_file(&self, path: PathBuf) -> ToolResult {
-    match timeout(self.limits.timeout, self.read_file_inner(path)).await {
-      Ok(Ok(content)) => ToolResult::content(content),
-      Ok(Err(error)) => ToolResult::error(&error),
-      Err(_) => ToolResult::error(&format!(
-        "tool timed out after {} seconds",
-        self.limits.timeout.as_secs()
-      )),
-    }
-  }
-
-  async fn read_file_inner(&self, path: PathBuf) -> Result<String> {
     let limits = self.limits;
 
-    let content = task::spawn_blocking(move || -> io::Result<String> {
+    let read = task::spawn_blocking(move || -> io::Result<String> {
       let file = File::open(path)?;
 
       let mut file = file.take(limits.output_limit as u64 + 1);
@@ -101,10 +92,17 @@ impl Executor {
       file.read_to_end(&mut bytes)?;
 
       Ok(limits.decode(bytes))
-    })
-    .await??;
+    });
 
-    Ok(content)
+    match timeout(limits.timeout, async { Ok::<_, Error>(read.await??) }).await
+    {
+      Ok(Ok(content)) => ToolResult::content(content),
+      Ok(Err(error)) => ToolResult::error(&error),
+      Err(_) => ToolResult::error(&format!(
+        "tool timed out after {} seconds",
+        limits.timeout.as_secs()
+      )),
+    }
   }
 
   async fn read_pipe<R>(
@@ -141,12 +139,6 @@ impl Executor {
     Ok(limits.decode(bytes))
   }
 
-  async fn read_pipe_task(
-    task: task::JoinHandle<io::Result<String>>,
-  ) -> Result<String> {
-    Ok(task.await??)
-  }
-
   async fn timeout_result(
     &self,
     mut child: tokio::process::Child,
@@ -156,12 +148,18 @@ impl Executor {
     let kill = child.kill().await;
 
     let stdout = match stdout {
-      Some(stdout) => Self::read_pipe_task(stdout).await.unwrap_or_default(),
+      Some(stdout) => match stdout.await {
+        Ok(Ok(stdout)) => stdout,
+        Ok(Err(_)) | Err(_) => String::new(),
+      },
       None => String::new(),
     };
 
     let stderr = match stderr {
-      Some(stderr) => Self::read_pipe_task(stderr).await.unwrap_or_default(),
+      Some(stderr) => match stderr.await {
+        Ok(Ok(stderr)) => stderr,
+        Ok(Err(_)) | Err(_) => String::new(),
+      },
       None => String::new(),
     };
 
@@ -208,11 +206,11 @@ mod tests {
       process::id()
     ));
 
-    fs::write(&path, "foo bar baz").unwrap();
+    std::fs::write(&path, "foo bar baz").unwrap();
 
     let result = executor.read_file(path.clone()).await;
 
-    fs::remove_file(path).unwrap();
+    std::fs::remove_file(path).unwrap();
 
     assert_eq!(result.content.unwrap(), "foo b...");
   }
