@@ -18,7 +18,7 @@ impl ToolInvocation {
     }
   }
 
-  fn command(&self) -> Option<&tools::CommandTool> {
+  fn command(&self) -> Option<&CommandTool> {
     match &self.kind {
       ToolInvocationKind::Command(command) => Some(command),
       ToolInvocationKind::ApplyPatch(_)
@@ -132,7 +132,7 @@ mod tests {
       invocation,
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::ApplyPatch(tools::ApplyPatchTool {
+        kind: ToolInvocationKind::ApplyPatch(ApplyPatchTool {
           cwd: None,
           patch: "bar".into(),
         }),
@@ -154,7 +154,7 @@ mod tests {
       invocation,
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::Command(tools::CommandTool {
+        kind: ToolInvocationKind::Command(CommandTool {
           arguments: vec!["baz".into()],
           cwd: None,
           program: "bar".into(),
@@ -174,7 +174,7 @@ mod tests {
       invocation,
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::ListFiles(tools::ListFilesTool {
+        kind: ToolInvocationKind::ListFiles(ListFilesTool {
           cwd: Some("bar".into()),
         }),
       },
@@ -192,9 +192,7 @@ mod tests {
       invocation,
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::ReadFile(tools::ReadFileTool {
-          path: "bar".into(),
-        }),
+        kind: ToolInvocationKind::ReadFile(ReadFileTool { path: "bar".into() }),
       },
     );
   }
@@ -213,7 +211,7 @@ mod tests {
       invocation,
       ToolInvocation {
         id: "foo".into(),
-        kind: ToolInvocationKind::SearchFiles(tools::SearchFilesTool {
+        kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
           arguments: vec!["foo".into()],
           cwd: Some("bar".into()),
         }),

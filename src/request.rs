@@ -46,7 +46,7 @@ impl From<&Request> for anthropic::MessageCreateParams {
         ),
         |builder, message| builder.message(message.role, message.content),
       )
-      .tools(tools::TOOLS.iter().map(Into::into).collect::<Vec<_>>())
+      .tools(TOOLS.iter().map(Into::into).collect::<Vec<_>>())
       .build()
   }
 }
@@ -59,7 +59,7 @@ impl TryFrom<&Request> for openai::CreateChatCompletionRequest {
       openai::CreateChatCompletionRequestArgs::default()
         .model(request.model_name())
         .messages(request.messages().map(Into::into).collect::<Vec<_>>())
-        .tools(tools::TOOLS.iter().map(Into::into).collect::<Vec<_>>())
+        .tools(TOOLS.iter().map(Into::into).collect::<Vec<_>>())
         .build()?,
     )
   }

@@ -77,6 +77,7 @@ use {
   tool_invocation_kind::ToolInvocationKind,
   tools::{
     ApplyPatchTool, CommandTool, ListFilesTool, ReadFileTool, SearchFilesTool,
+    TOOLS,
   },
   transcript::Transcript,
   unicode_width::UnicodeWidthChar,

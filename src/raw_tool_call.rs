@@ -31,15 +31,13 @@ impl TryInto<ToolInvocation> for RawToolCall {
   type Error = Error;
 
   fn try_into(self) -> Result<ToolInvocation> {
-    let name = self.name.clone();
-    let id = self.id.clone();
-
-    let kind = tools::TOOLS
-      .iter()
-      .find(|tool| tool.name == name)
-      .with_context(|| format!("unknown tool `{name}`"))?
-      .invocation(self)?;
-
-    Ok(ToolInvocation { id, kind })
+    Ok(ToolInvocation {
+      id: self.id.clone(),
+      kind: TOOLS
+        .iter()
+        .find(|tool| tool.name == self.name)
+        .with_context(|| format!("unknown tool `{}`", self.name))?
+        .invocation(self)?,
+    })
   }
 }
