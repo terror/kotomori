@@ -58,7 +58,7 @@ use {
     env,
     fmt::{self, Debug, Display, Formatter},
     fs::{self, File},
-    io::{self, Read, Stdout, Write},
+    io::{self, BufRead, Read, Stdout, Write},
     iter::once,
     path::PathBuf,
     process::{self, Stdio},

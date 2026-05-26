@@ -105,26 +105,67 @@ impl Executor {
   pub(crate) async fn read_file(&self, tool: &ReadFileTool) -> ToolResult {
     let limits = self.limits;
 
-    match self
-      .blocking({
-        let path = tool
-          .cwd
-          .as_ref()
-          .map_or_else(|| tool.path.clone(), |cwd| cwd.join(&tool.path));
+    let path = tool
+      .cwd
+      .as_ref()
+      .map_or_else(|| tool.path.clone(), |cwd| cwd.join(&tool.path));
 
-        move || {
-          let file = File::open(path)?;
+    let (start_line, end_line) = (tool.start_line, tool.end_line);
 
-          let mut file = file.take(limits.output_limit as u64 + 1);
-          let mut bytes = Vec::new();
+    let result = self
+      .blocking(move || {
+        let file = File::open(path)?;
 
-          file.read_to_end(&mut bytes)?;
+        let bytes = match (start_line, end_line) {
+          (None, None) => {
+            let mut reader = file.take(limits.output_limit as u64 + 1);
+            let mut bytes = Vec::new();
 
-          Ok(limits.decode(bytes))
-        }
+            reader.read_to_end(&mut bytes)?;
+
+            bytes
+          }
+          (start_line, end_line) => {
+            let (start_line, end_line) = (
+              start_line.unwrap_or(1).max(1),
+              end_line.unwrap_or(usize::MAX),
+            );
+
+            let maximum = limits.output_limit.saturating_add(1);
+
+            let mut bytes = Vec::new();
+            let mut line = Vec::new();
+            let mut reader = io::BufReader::new(file);
+
+            for number in 1.. {
+              line.clear();
+
+              if reader.read_until(b'\n', &mut line)? == 0 {
+                break;
+              }
+
+              if number < start_line {
+                continue;
+              }
+
+              if number > end_line || bytes.len() >= maximum {
+                break;
+              }
+
+              bytes.extend_from_slice(
+                &line[..line.len().min(maximum.saturating_sub(bytes.len()))],
+              );
+            }
+
+            bytes
+          }
+        };
+
+        Ok(limits.decode(bytes))
       })
-      .await
-    {
+      .await;
+
+    match result {
       Ok(content) => ToolResult::content(content),
       Err(error) => ToolResult::error(error),
     }
@@ -280,13 +321,84 @@ mod tests {
     let result = executor
       .read_file(&ReadFileTool {
         cwd: None,
+        end_line: None,
         path: path.clone(),
+        start_line: None,
       })
       .await;
 
     fs::remove_file(path).unwrap();
 
     assert_eq!(result.output().unwrap(), "foo b...");
+  }
+
+  #[tokio::test]
+  async fn read_file_range_can_start_after_output_limit() {
+    let executor = Executor::with_limits(ExecutionLimit {
+      output_limit: 8,
+      timeout: Duration::from_secs(30),
+      truncated_marker: "...",
+    });
+
+    let path = env::temp_dir().join(format!(
+      "kotomori-{}-read-file-range-can-start-after-output-limit",
+      process::id()
+    ));
+
+    fs::write(&path, "foo foo foo\nbar\n").unwrap();
+
+    let result = executor
+      .read_file(&ReadFileTool {
+        cwd: None,
+        end_line: Some(2),
+        path: path.clone(),
+        start_line: Some(2),
+      })
+      .await;
+
+    fs::remove_file(path).unwrap();
+
+    assert_eq!(result.output().unwrap(), "bar\n");
+  }
+
+  #[tokio::test]
+  async fn read_file_reads_line_range() {
+    let executor = Executor::default();
+
+    let path = env::temp_dir().join(format!(
+      "kotomori-{}-read-file-reads-line-range",
+      process::id()
+    ));
+
+    fs::write(&path, "foo\nbar\nbaz\nqux\n").unwrap();
+
+    let result = executor
+      .read_file(&ReadFileTool {
+        cwd: None,
+        end_line: Some(3),
+        path: path.clone(),
+        start_line: Some(2),
+      })
+      .await;
+
+    fs::remove_file(path).unwrap();
+
+    assert_eq!(result.output().unwrap(), "bar\nbaz\n");
+  }
+
+  #[tokio::test]
+  async fn read_pipe_output_is_capped() {
+    let limits = ExecutionLimit {
+      output_limit: 8,
+      timeout: Duration::from_secs(30),
+      truncated_marker: "...",
+    };
+
+    let output = Executor::read_pipe(&b"foo bar baz"[..], limits)
+      .await
+      .unwrap();
+
+    assert_eq!(output, "foo b...");
   }
 
   #[tokio::test]
@@ -312,21 +424,6 @@ mod tests {
 
     assert_eq!(result.output().unwrap(), "wrote 3 bytes");
     assert_eq!(content, "bar");
-  }
-
-  #[tokio::test]
-  async fn read_pipe_output_is_capped() {
-    let limits = ExecutionLimit {
-      output_limit: 8,
-      timeout: Duration::from_secs(30),
-      truncated_marker: "...",
-    };
-
-    let output = Executor::read_pipe(&b"foo bar baz"[..], limits)
-      .await
-      .unwrap();
-
-    assert_eq!(output, "foo b...");
   }
 
   #[tokio::test]

@@ -77,10 +77,12 @@ define_tools! {
   },
   ReadFileTool => ReadFile {
     name: "read_file",
-    description: "Read a UTF-8 text file.",
+    description: "Read a UTF-8 text file. start_line and end_line are optional 1-based inclusive line numbers.",
     fields: {
       cwd: Option<PathBuf>,
+      end_line: Option<usize>,
       path: PathBuf,
+      start_line: Option<usize>,
     },
   },
   SearchFilesTool => SearchFiles {
