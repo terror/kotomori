@@ -8,6 +8,7 @@ pub(crate) enum ToolInvocationKind {
   ListFiles(ListFilesTool),
   ReadFile(ReadFileTool),
   SearchFiles(SearchFilesTool),
+  WriteFile(WriteFileTool),
 }
 
 impl ToolInvocationKind {
@@ -50,7 +51,7 @@ impl ToolInvocationKind {
 
         executor.execute(command, None).await
       }
-      Self::ReadFile(tool) => executor.read_file(tool.path.clone()).await,
+      Self::ReadFile(tool) => executor.read_file(tool).await,
       Self::SearchFiles(tool) => {
         let mut command = tokio::process::Command::new("rg");
 
@@ -62,6 +63,7 @@ impl ToolInvocationKind {
 
         executor.execute(command, None).await
       }
+      Self::WriteFile(tool) => executor.write_file(tool).await,
     }
   }
 }
