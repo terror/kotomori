@@ -93,6 +93,8 @@ impl App {
       self.drain_pending_events();
     }
 
+    renderer.finish(terminal.stdout_mut())?;
+
     Ok(())
   }
 

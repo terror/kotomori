@@ -42,7 +42,6 @@ use {
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
-  refresh::Refresh,
   renderer::Renderer,
   request::Request,
   role::Role,
@@ -148,7 +147,6 @@ mod provider;
 mod provider_output;
 mod provider_sink;
 mod raw_tool_call;
-mod refresh;
 mod renderer;
 mod request;
 mod role;
