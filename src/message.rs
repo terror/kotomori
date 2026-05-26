@@ -24,43 +24,38 @@ impl Component for Message {
   }
 }
 
-impl From<&Message> for openai::types::chat::ChatCompletionRequestMessage {
+impl From<&Message> for openai::ChatCompletionRequestMessage {
   fn from(message: &Message) -> Self {
     match message.role {
-      Role::Agent => {
-        openai::types::chat::ChatCompletionRequestMessage::Assistant(
-          openai::types::chat::ChatCompletionRequestAssistantMessage {
-            content: Some(
-              openai::types::chat::ChatCompletionRequestAssistantMessageContent::Text(
-                message.content.clone(),
-              ),
+      Role::Agent => openai::ChatCompletionRequestMessage::Assistant(
+        openai::ChatCompletionRequestAssistantMessage {
+          content: Some(
+            openai::ChatCompletionRequestAssistantMessageContent::Text(
+              message.content.clone(),
             ),
-            ..Default::default()
-          },
-        )
-      }
-      Role::User => {
-        openai::types::chat::ChatCompletionRequestMessage::User(
-          openai::types::chat::ChatCompletionRequestUserMessage {
-            content:
-              openai::types::chat::ChatCompletionRequestUserMessageContent::Text(
-                message.content.clone(),
-              ),
-            name: None,
-          },
-        )
-      }
+          ),
+          ..Default::default()
+        },
+      ),
+      Role::User => openai::ChatCompletionRequestMessage::User(
+        openai::ChatCompletionRequestUserMessage {
+          content: openai::ChatCompletionRequestUserMessageContent::Text(
+            message.content.clone(),
+          ),
+          name: None,
+        },
+      ),
     }
   }
 }
 
-impl From<&Message> for anthropic::types::MessageParam {
+impl From<&Message> for anthropic::MessageParam {
   fn from(message: &Message) -> Self {
-    anthropic::types::MessageParam {
-      content: anthropic::types::MessageContent::Text(message.content.clone()),
+    anthropic::MessageParam {
+      content: anthropic::MessageContent::Text(message.content.clone()),
       role: match message.role {
-        Role::Agent => anthropic::types::Role::Assistant,
-        Role::User => anthropic::types::Role::User,
+        Role::Agent => anthropic::Role::Assistant,
+        Role::User => anthropic::Role::User,
       },
     }
   }

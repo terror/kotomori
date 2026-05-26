@@ -1,18 +1,18 @@
-use {super::*, async_openai as openai};
+use super::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct OpenAi {
-  client: openai::Client<openai::config::OpenAIConfig>,
+  client: crate::openai::Client<crate::openai::OpenAIConfig>,
 }
 
 impl OpenAi {
   pub(crate) fn new() -> Self {
-    Self::with_config(openai::config::OpenAIConfig::new())
+    Self::with_config(crate::openai::OpenAIConfig::new())
   }
 
-  pub(crate) fn with_config(config: openai::config::OpenAIConfig) -> Self {
+  pub(crate) fn with_config(config: crate::openai::OpenAIConfig) -> Self {
     Self {
-      client: openai::Client::with_config(config),
+      client: crate::openai::Client::with_config(config),
     }
   }
 }

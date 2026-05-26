@@ -31,13 +31,13 @@ impl Request {
   }
 }
 
-impl From<&Request> for anthropic::types::MessageCreateParams {
+impl From<&Request> for anthropic::MessageCreateParams {
   fn from(request: &Request) -> Self {
     request
       .messages()
-      .map(anthropic::types::MessageParam::from)
+      .map(anthropic::MessageParam::from)
       .fold(
-        anthropic::types::MessageCreateBuilder::new(
+        anthropic::MessageCreateBuilder::new(
           request.model_name(),
           env::var("ANTHROPIC_MAX_TOKENS")
             .ok()
@@ -56,12 +56,12 @@ impl From<&Request> for anthropic::types::MessageCreateParams {
   }
 }
 
-impl TryFrom<&Request> for openai::types::chat::CreateChatCompletionRequest {
+impl TryFrom<&Request> for openai::CreateChatCompletionRequest {
   type Error = Error;
 
   fn try_from(request: &Request) -> Result<Self> {
     Ok(
-      openai::types::chat::CreateChatCompletionRequestArgs::default()
+      openai::CreateChatCompletionRequestArgs::default()
         .model(request.model_name())
         .messages(request.messages().map(Into::into).collect::<Vec<_>>())
         .tools(

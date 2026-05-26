@@ -6,9 +6,7 @@ pub(crate) trait ToolCallStreamEvent {
   fn tool_call_fragment(self) -> Option<ToolCallFragment<Self::Index>>;
 }
 
-impl ToolCallStreamEvent
-  for openai::types::chat::ChatCompletionMessageToolCallChunk
-{
+impl ToolCallStreamEvent for openai::ChatCompletionMessageToolCallChunk {
   type Index = u32;
 
   fn tool_call_fragment(self) -> Option<ToolCallFragment<Self::Index>> {
@@ -26,14 +24,13 @@ impl ToolCallStreamEvent
   }
 }
 
-impl ToolCallStreamEvent for anthropic::types::MessageStreamEvent {
+impl ToolCallStreamEvent for anthropic::MessageStreamEvent {
   type Index = usize;
 
   fn tool_call_fragment(self) -> Option<ToolCallFragment<Self::Index>> {
     match self {
       Self::ContentBlockStart {
-        content_block:
-          anthropic::types::ContentBlock::ToolUse { id, input, name },
+        content_block: anthropic::ContentBlock::ToolUse { id, input, name },
         index,
       } => Some(ToolCallFragment::Update {
         argument_fragment: None,
@@ -43,8 +40,7 @@ impl ToolCallStreamEvent for anthropic::types::MessageStreamEvent {
         name: Some(name),
       }),
       Self::ContentBlockDelta {
-        delta:
-          anthropic::types::ContentBlockDelta::InputJsonDelta { partial_json },
+        delta: anthropic::ContentBlockDelta::InputJsonDelta { partial_json },
         index,
       } => Some(ToolCallFragment::Update {
         argument_fragment: Some(partial_json),

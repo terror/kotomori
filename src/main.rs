@@ -1,11 +1,9 @@
 use {
   action::Action,
   agent::Agent,
-  anthropic_sdk as anthropic,
   anyhow::{Context, Error, bail},
   app::App,
   arguments::Arguments,
-  async_openai as openai,
   async_trait::async_trait,
   clap::{Args, Parser},
   command::Command,
@@ -83,6 +81,13 @@ use {
 
 mod action;
 mod agent;
+mod anthropic {
+  pub(crate) use anthropic_sdk::{
+    Anthropic, AuthMethod, ClientConfig, ContentBlock, ContentBlockDelta,
+    MessageContent, MessageCreateBuilder, MessageCreateParams, MessageParam,
+    MessageStreamEvent, Role, Tool, types::ToolInputSchema,
+  };
+}
 mod app;
 mod arguments;
 mod command;
@@ -97,6 +102,21 @@ mod hint;
 mod line;
 mod message;
 mod model;
+mod openai {
+  pub(crate) use async_openai::{
+    Client,
+    config::OpenAIConfig,
+    types::chat::{
+      ChatCompletionMessageToolCallChunk,
+      ChatCompletionRequestAssistantMessage,
+      ChatCompletionRequestAssistantMessageContent,
+      ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
+      ChatCompletionRequestUserMessageContent, ChatCompletionTool,
+      ChatCompletionTools, CreateChatCompletionRequest,
+      CreateChatCompletionRequestArgs, FunctionObject,
+    },
+  };
+}
 mod options;
 mod provider;
 mod provider_sink;

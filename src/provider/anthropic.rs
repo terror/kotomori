@@ -1,7 +1,7 @@
-use {super::*, anthropic_sdk as anthropic};
+use super::*;
 
 pub(crate) struct Anthropic {
-  client: anthropic::Anthropic,
+  client: crate::anthropic::Anthropic,
 }
 
 impl Anthropic {
@@ -14,10 +14,10 @@ impl Anthropic {
       .unwrap_or_default();
 
     Ok(Self {
-      client: anthropic::Anthropic::with_config(
-        anthropic::ClientConfig::new(api_key)
+      client: crate::anthropic::Anthropic::with_config(
+        crate::anthropic::ClientConfig::new(api_key)
           .with_base_url(base_url)
-          .with_auth_method(anthropic::AuthMethod::Anthropic),
+          .with_auth_method(crate::anthropic::AuthMethod::Anthropic),
       )?,
     })
   }
@@ -44,8 +44,8 @@ impl Provider for Anthropic {
       let event = event?;
 
       match event {
-        anthropic::types::MessageStreamEvent::ContentBlockDelta {
-          delta: anthropic::types::ContentBlockDelta::TextDelta { text },
+        crate::anthropic::MessageStreamEvent::ContentBlockDelta {
+          delta: crate::anthropic::ContentBlockDelta::TextDelta { text },
           ..
         } if !text.is_empty() => sink.delta(text)?,
         event => {
