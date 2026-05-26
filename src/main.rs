@@ -75,6 +75,9 @@ use {
   tool_call_stream_event::ToolCallStreamEvent,
   tool_invocation::ToolInvocation,
   tool_invocation_kind::ToolInvocationKind,
+  tools::{
+    ApplyPatchTool, CommandTool, ListFilesTool, ReadFileTool, SearchFilesTool,
+  },
   transcript::Transcript,
   unicode_width::UnicodeWidthChar,
   view::View,
