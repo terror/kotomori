@@ -64,7 +64,9 @@ impl Transcript {
 
   pub(crate) fn push_tool_call(&mut self, invocation: ToolInvocation) {
     self.finish_agent_message();
+
     self.messages.push(invocation.message());
+
     self
       .tool_invocations
       .insert(invocation.id.clone(), invocation);
@@ -76,6 +78,7 @@ impl Transcript {
       result.message_content(),
       result.is_error(),
     ));
+
     self.tool_results.insert(id, result);
   }
 
