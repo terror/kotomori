@@ -21,7 +21,7 @@ impl Renderer {
   ) -> Result<PresentedFrame> {
     let target_row = next.last_row();
 
-    write!(stdout, "\x1b[?2026h")?;
+    stdout.begin_synchronized_update()?;
 
     stdout.move_by(presented.cursor.diff_to(
       previous_viewport,
@@ -46,13 +46,13 @@ impl Renderer {
 
       write!(stdout, "\r")?;
 
-      queue!(stdout, Clear(ClearType::CurrentLine))?;
+      stdout.clear_line()?;
     }
 
     stdout
       .move_up(deleted_tail_len.saturating_sub(usize::from(next.is_empty())))?;
 
-    write!(stdout, "\x1b[?2026l")?;
+    stdout.end_synchronized_update()?;
 
     Ok(PresentedFrame::new(
       Cursor::new(target_row),
@@ -149,15 +149,10 @@ impl Renderer {
     next: &Frame,
     clear: bool,
   ) -> Result<PresentedFrame> {
-    write!(stdout, "\x1b[?2026h")?;
+    stdout.begin_synchronized_update()?;
 
     if clear {
-      queue!(
-        stdout,
-        Clear(ClearType::All),
-        MoveTo(0, 0),
-        Clear(ClearType::Purge)
-      )?;
+      stdout.clear_screen()?;
     }
 
     let lines = if clear {
@@ -168,7 +163,7 @@ impl Renderer {
 
     stdout.write_lines(lines)?;
 
-    write!(stdout, "\x1b[?2026l")?;
+    stdout.end_synchronized_update()?;
 
     Ok(next.clone().into())
   }
@@ -231,7 +226,7 @@ impl Renderer {
     let mut cursor = presented.cursor;
     let mut viewport = previous_viewport;
 
-    write!(stdout, "\x1b[?2026h")?;
+    stdout.begin_synchronized_update()?;
 
     if move_target_row > viewport.bottom() {
       let move_to_bottom = viewport
@@ -269,9 +264,7 @@ impl Renderer {
         Self::line_feed(stdout, &mut viewport, index.saturating_sub(1))?;
       }
 
-      queue!(stdout, Clear(ClearType::CurrentLine))?;
-
-      write!(stdout, "{line}")?;
+      stdout.write_line(line)?;
     }
 
     let mut cursor = Cursor::new(*writable_range.end());
@@ -286,14 +279,14 @@ impl Renderer {
       for _ in next.len()..presented.frame.len() {
         Self::line_feed(stdout, &mut viewport, cursor.row())?;
         cursor = Cursor::new(cursor.row().saturating_add(1));
-        queue!(stdout, Clear(ClearType::CurrentLine))?;
+        stdout.clear_line()?;
       }
 
       stdout.move_up(diff.deleted_tail_len())?;
       cursor = Cursor::new(next.last_row());
     }
 
-    write!(stdout, "\x1b[?2026l")?;
+    stdout.end_synchronized_update()?;
 
     Ok(PresentedFrame::new(cursor, next, viewport))
   }

@@ -23,7 +23,7 @@ impl Terminal {
 
 impl Drop for Terminal {
   fn drop(&mut self) {
-    let _ = write!(self.stdout, "\x1b[?2026l");
+    let _ = self.stdout.end_synchronized_update();
 
     let _ = execute!(self.stdout, MoveToColumn(0), MoveToNextLine(1), Show);
 
