@@ -11,35 +11,7 @@ impl<'a> TranscriptToolInvocation<'a> {
   const OUTPUT_LIMIT: usize = 3;
 
   fn details(&self) -> Vec<(&'static str, String)> {
-    let mut details = Vec::new();
-
-    match &self.invocation.kind {
-      ToolInvocationKind::ApplyPatch(tool) => {
-        details
-          .push(("patch", format!("{} lines", tool.patch.lines().count())));
-
-        if let Some(cwd) = &tool.cwd {
-          details.push(("cwd", cwd.display().to_string()));
-        }
-      }
-      ToolInvocationKind::Command(tool) => {
-        if let Some(cwd) = &tool.cwd {
-          details.push(("cwd", cwd.display().to_string()));
-        }
-      }
-      ToolInvocationKind::ReadFile(tool) => {
-        if let Some(cwd) = &tool.cwd {
-          details.push(("cwd", cwd.display().to_string()));
-        }
-      }
-      ToolInvocationKind::WriteFile(tool) => {
-        if let Some(cwd) = &tool.cwd {
-          details.push(("cwd", cwd.display().to_string()));
-        }
-      }
-      ToolInvocationKind::ListFiles(_) | ToolInvocationKind::SearchFiles(_) => {
-      }
-    }
+    let mut details = self.invocation.kind.details();
 
     if let Some(exit_status) = self
       .result
