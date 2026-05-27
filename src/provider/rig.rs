@@ -18,6 +18,7 @@ enum RigModel {
   Ollama(ollama::CompletionModel),
   OpenAi(openai::CompletionModel),
   OpenRouter(openrouter::CompletionModel),
+  Together(together::CompletionModel),
   Xai(xai::CompletionModel),
 }
 
@@ -217,6 +218,20 @@ impl Rig {
     Ok(())
   }
 
+  pub(crate) fn together(model: &Model) -> Result<Self> {
+    let api_key = env::var("TOGETHER_API_KEY").unwrap_or_default();
+
+    let client = together::Client::builder().api_key(api_key).build()?;
+
+    let model = CompletionClient::completion_model(&client, model.name());
+
+    Ok(Self {
+      max_tokens: None,
+      model: RigModel::Together(model),
+      provider: "together",
+    })
+  }
+
   pub(crate) fn xai(model: &Model) -> Result<Self> {
     let api_key = env::var("XAI_API_KEY").unwrap_or_default();
 
@@ -257,6 +272,9 @@ impl Provider for Rig {
       RigModel::Ollama(model) => self.stream_model(model, request, sink).await,
       RigModel::OpenAi(model) => self.stream_model(model, request, sink).await,
       RigModel::OpenRouter(model) => {
+        self.stream_model(model, request, sink).await
+      }
+      RigModel::Together(model) => {
         self.stream_model(model, request, sink).await
       }
       RigModel::Xai(model) => self.stream_model(model, request, sink).await,
