@@ -15,6 +15,7 @@ enum RigModel {
   Gemini(gemini::CompletionModel),
   Groq(groq::CompletionModel),
   Mistral(mistral::CompletionModel),
+  Moonshot(moonshot::CompletionModel),
   Ollama(ollama::CompletionModel),
   OpenAi(openai::CompletionModel),
   OpenRouter(openrouter::CompletionModel),
@@ -118,6 +119,26 @@ impl Rig {
       max_tokens: None,
       model: RigModel::Mistral(model),
       provider: "mistral",
+    })
+  }
+
+  pub(crate) fn moonshot(model: &Model) -> Result<Self> {
+    let api_key = env::var("MOONSHOT_API_KEY").unwrap_or_default();
+
+    let mut builder = moonshot::Client::builder().api_key(api_key);
+
+    if let Ok(base_url) = env::var("MOONSHOT_API_BASE") {
+      builder = builder.base_url(base_url);
+    }
+
+    let client = builder.build()?;
+
+    let model = CompletionClient::completion_model(&client, model.name());
+
+    Ok(Self {
+      max_tokens: None,
+      model: RigModel::Moonshot(model),
+      provider: "moonshot",
     })
   }
 
@@ -284,6 +305,9 @@ impl Provider for Rig {
       RigModel::Gemini(model) => self.stream_model(model, request, sink).await,
       RigModel::Groq(model) => self.stream_model(model, request, sink).await,
       RigModel::Mistral(model) => self.stream_model(model, request, sink).await,
+      RigModel::Moonshot(model) => {
+        self.stream_model(model, request, sink).await
+      }
       RigModel::Ollama(model) => self.stream_model(model, request, sink).await,
       RigModel::OpenAi(model) => self.stream_model(model, request, sink).await,
       RigModel::OpenRouter(model) => {
