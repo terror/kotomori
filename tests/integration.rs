@@ -1,3 +1,5 @@
+#![cfg(not(windows))]
+
 use {
   anyhow::{Context, Error, bail},
   portable_pty::{CommandBuilder, PtySize, native_pty_system},
