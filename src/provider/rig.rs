@@ -15,6 +15,7 @@ enum RigModel {
   Ollama(ollama::CompletionModel),
   OpenAi(openai::CompletionModel),
   OpenRouter(openrouter::CompletionModel),
+  Xai(xai::CompletionModel),
 }
 
 impl Rig {
@@ -170,6 +171,20 @@ impl Rig {
 
     Ok(())
   }
+
+  pub(crate) fn xai(model: &Model) -> Result<Self> {
+    let api_key = env::var("XAI_API_KEY").unwrap_or_default();
+
+    let client = xai::Client::builder().api_key(api_key).build()?;
+
+    let model = CompletionClient::completion_model(&client, model.name());
+
+    Ok(Self {
+      max_tokens: None,
+      model: RigModel::Xai(model),
+      provider: "xai",
+    })
+  }
 }
 
 impl Debug for Rig {
@@ -196,6 +211,7 @@ impl Provider for Rig {
       RigModel::OpenRouter(model) => {
         self.stream_model(model, request, sink).await
       }
+      RigModel::Xai(model) => self.stream_model(model, request, sink).await,
     }
   }
 }

@@ -59,6 +59,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
       "ollama" => Ok(Arc::new(Rig::ollama(&model)?)),
       "openai" => Ok(Arc::new(Rig::openai(&model)?)),
       "openrouter" => Ok(Arc::new(Rig::openrouter(&model)?)),
+      "xai" => Ok(Arc::new(Rig::xai(&model)?)),
       provider => bail!("unknown provider `{provider}`"),
     }
   }
