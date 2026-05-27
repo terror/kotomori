@@ -77,6 +77,9 @@ use {
         Client as DeepSeekClient, CompletionModel as DeepSeekCompletionModel,
       },
       groq::{Client as GroqClient, CompletionModel as GroqCompletionModel},
+      mistral::{
+        Client as MistralClient, CompletionModel as MistralCompletionModel,
+      },
       ollama::{
         Client as OllamaClient, CompletionModel as OllamaCompletionModel,
       },
@@ -185,6 +188,10 @@ mod line;
 mod loader;
 mod message;
 mod message_kind;
+mod mistral {
+  pub(crate) type Client = super::MistralClient;
+  pub(crate) type CompletionModel = super::MistralCompletionModel;
+}
 mod model;
 mod ollama {
   pub(crate) type Client = super::OllamaClient;

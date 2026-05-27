@@ -12,6 +12,7 @@ enum RigModel {
   Anthropic(anthropic::CompletionModel),
   DeepSeek(deepseek::CompletionModel),
   Groq(groq::CompletionModel),
+  Mistral(mistral::CompletionModel),
   Ollama(ollama::CompletionModel),
   OpenAi(openai::CompletionModel),
   OpenRouter(openrouter::CompletionModel),
@@ -71,6 +72,20 @@ impl Rig {
       max_tokens: None,
       model: RigModel::Groq(model),
       provider: "groq",
+    })
+  }
+
+  pub(crate) fn mistral(model: &Model) -> Result<Self> {
+    let api_key = env::var("MISTRAL_API_KEY").unwrap_or_default();
+
+    let client = mistral::Client::builder().api_key(api_key).build()?;
+
+    let model = CompletionClient::completion_model(&client, model.name());
+
+    Ok(Self {
+      max_tokens: None,
+      model: RigModel::Mistral(model),
+      provider: "mistral",
     })
   }
 
@@ -206,6 +221,7 @@ impl Provider for Rig {
         self.stream_model(model, request, sink).await
       }
       RigModel::Groq(model) => self.stream_model(model, request, sink).await,
+      RigModel::Mistral(model) => self.stream_model(model, request, sink).await,
       RigModel::Ollama(model) => self.stream_model(model, request, sink).await,
       RigModel::OpenAi(model) => self.stream_model(model, request, sink).await,
       RigModel::OpenRouter(model) => {
