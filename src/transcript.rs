@@ -26,37 +26,6 @@ impl Transcript {
     });
   }
 
-  fn extend_agent_lines(
-    lines: &mut Vec<Line>,
-    content: &str,
-    reasoning: Option<&str>,
-  ) {
-    if !lines.last().is_some_and(|line| line == &Line::blank()) {
-      lines.push(Line::blank());
-    }
-
-    if let Some(reasoning) = reasoning.filter(|reasoning| !reasoning.is_empty())
-    {
-      lines.extend(
-        reasoning
-          .lines()
-          .map(|line| {
-            vec![Span::styled(format!(" {line}"), Style::DarkGray)].into()
-          })
-          .chain(once(Line::blank())),
-      );
-    }
-
-    if !content.is_empty() {
-      lines.extend(
-        content
-          .lines()
-          .map(|line| Line::raw(format!(" {line}")))
-          .chain(once(Line::blank())),
-      );
-    }
-  }
-
   fn find_tool_result_mut(
     &mut self,
     id: &str,
@@ -187,7 +156,32 @@ impl Component for Transcript {
     for entry in &self.entries {
       match entry {
         TranscriptEntry::Agent { content, reasoning } => {
-          Self::extend_agent_lines(&mut lines, content, reasoning.as_deref());
+          if !lines.last().is_some_and(|line| line == &Line::blank()) {
+            lines.push(Line::blank());
+          }
+
+          if let Some(reasoning) = reasoning
+            .as_deref()
+            .filter(|reasoning| !reasoning.is_empty())
+          {
+            lines.extend(
+              reasoning
+                .lines()
+                .map(|line| {
+                  vec![Span::styled(format!(" {line}"), Style::DarkGray)].into()
+                })
+                .chain(once(Line::blank())),
+            );
+          }
+
+          if !content.is_empty() {
+            lines.extend(
+              content
+                .lines()
+                .map(|line| Line::raw(format!(" {line}")))
+                .chain(once(Line::blank())),
+            );
+          }
         }
         TranscriptEntry::Interrupted => {
           lines.extend([
@@ -215,7 +209,31 @@ impl Component for Transcript {
     match &self.active_agent_activity {
       AgentActivity::Idle => {}
       AgentActivity::Streaming { content, reasoning } => {
-        Self::extend_agent_lines(&mut lines, content, Some(reasoning));
+        if !lines.last().is_some_and(|line| line == &Line::blank()) {
+          lines.push(Line::blank());
+        }
+
+        if let Some(reasoning) =
+          Some(reasoning.as_str()).filter(|reasoning| !reasoning.is_empty())
+        {
+          lines.extend(
+            reasoning
+              .lines()
+              .map(|line| {
+                vec![Span::styled(format!(" {line}"), Style::DarkGray)].into()
+              })
+              .chain(once(Line::blank())),
+          );
+        }
+
+        if !content.is_empty() {
+          lines.extend(
+            content
+              .lines()
+              .map(|line| Line::raw(format!(" {line}")))
+              .chain(once(Line::blank())),
+          );
+        }
       }
       AgentActivity::Waiting => {
         if !lines.last().is_some_and(|line| line == &Line::blank()) {

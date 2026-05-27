@@ -29,8 +29,8 @@ impl Provider for Ollama {
     let mut next_tool_call: usize = 0;
 
     while let Some(response) = stream.next().await {
-      let response = response
-        .map_err(|_| anyhow!("failed to read Ollama stream"))?;
+      let response =
+        response.map_err(|()| anyhow!("failed to read Ollama stream"))?;
 
       let message = response.message;
 
