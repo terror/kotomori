@@ -7,7 +7,7 @@ pub(crate) struct ToolInvocation {
 }
 
 impl ToolInvocation {
-  fn arguments(&self) -> Value {
+  pub(crate) fn arguments(&self) -> Value {
     self.kind.arguments()
   }
 
@@ -31,7 +31,7 @@ impl ToolInvocation {
   }
 
   pub(crate) fn message(&self) -> Message {
-    Message::tool_use(self.id.clone(), self.kind.name(), self.arguments())
+    Message::Agent(vec![AgentMessageContent::ToolCall(self.clone())])
   }
 
   pub(crate) fn progressive_tense(&self) -> String {

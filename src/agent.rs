@@ -97,17 +97,19 @@ impl Agent {
 
       let output = sink.finish();
 
-      if !output.content.is_empty() {
-        messages.push(Message::new(Role::Agent, output.content));
-      }
-
-      if output.tool_calls.is_empty() {
+      if output.content.is_empty() {
         break;
       }
 
-      for tool_call in output.tool_calls {
-        messages.push(tool_call.message());
+      let tool_calls = output.tool_calls().cloned().collect::<Vec<_>>();
 
+      messages.push(Message::Agent(output.content));
+
+      if tool_calls.is_empty() {
+        break;
+      }
+
+      for tool_call in tool_calls {
         let result = tool_call
           .kind
           .execute(self.approval(&tool_call).await?)
@@ -190,6 +192,107 @@ mod tests {
     }
   }
 
+  #[derive(Debug)]
+  struct OrderedProvider {
+    requests: Arc<Mutex<Vec<Vec<Message>>>>,
+  }
+
+  #[async_trait]
+  impl Provider for OrderedProvider {
+    async fn stream(
+      &self,
+      request: Request,
+      sink: &mut ProviderSink,
+    ) -> Result {
+      let index = {
+        let mut requests = self.requests.lock().unwrap();
+
+        let index = requests.len();
+
+        requests.push(request.messages().cloned().collect());
+
+        index
+      };
+
+      if index == 0 {
+        sink.delta("foo")?;
+        sink.tool_call(RawToolCall::new(
+          "foo",
+          "command",
+          json!({
+            "arguments": ["bar"],
+            "cwd": null,
+            "program": "echo",
+          }),
+        ))?;
+        sink.delta("baz")?;
+      } else {
+        sink.delta("done")?;
+      }
+
+      Ok(())
+    }
+  }
+
+  fn command_invocation() -> ToolInvocation {
+    ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "echo".into(),
+      }),
+    }
+  }
+
+  #[tokio::test]
+  async fn preserves_ordered_agent_content() {
+    let (event_sender, _event_receiver) = mpsc::unbounded_channel();
+
+    let directory = tempfile::tempdir().unwrap();
+
+    let requests = Arc::new(Mutex::new(Vec::new()));
+
+    let agent = Agent {
+      event_sender,
+      loader: Loader::with_cwd(directory.path()),
+      model: "fake:local".parse().unwrap(),
+      provider: Arc::new(OrderedProvider {
+        requests: requests.clone(),
+      }),
+      task: None,
+      tool_registry: ToolRegistry::default(),
+      yolo: true,
+    };
+
+    agent
+      .stream(vec![Message::User(vec![UserMessageContent::Text(
+        "foo".into(),
+      )])])
+      .await
+      .unwrap();
+
+    let requests = requests.lock().unwrap();
+
+    let tool_result = ToolResult::command(Some(0), "bar\n", "");
+
+    assert_eq!(
+      *requests,
+      [
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+        vec![
+          Message::User(vec![UserMessageContent::Text("foo".into())]),
+          Message::Agent(vec![
+            AgentMessageContent::Text("foo".into()),
+            AgentMessageContent::ToolCall(command_invocation()),
+            AgentMessageContent::Text("baz".into()),
+          ]),
+          tool_result.message("foo"),
+        ],
+      ],
+    );
+  }
+
   #[tokio::test]
   async fn command_tools_wait_for_approval() {
     let (event_sender, mut event_receiver) = mpsc::unbounded_channel();
@@ -212,21 +315,16 @@ mod tests {
 
     let task = tokio::spawn(async move {
       agent
-        .stream(vec![Message::new(Role::User, "foo")])
+        .stream(vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into(),
+        )])])
         .await
         .unwrap();
     });
 
     assert_eq!(
       event_receiver.recv().await.unwrap(),
-      Event::AgentToolCall(ToolInvocation {
-        id: "foo".into(),
-        kind: ToolInvocationKind::Command(CommandTool {
-          arguments: vec!["bar".into()],
-          cwd: None,
-          program: "echo".into(),
-        }),
-      })
+      Event::AgentToolCall(command_invocation())
     );
 
     let request = match event_receiver.recv().await.unwrap() {
@@ -253,17 +351,10 @@ mod tests {
     assert_eq!(
       *requests,
       [
-        vec![Message::new(Role::User, "foo")],
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
         vec![
-          Message::new(Role::User, "foo"),
-          Message::tool_use(
-            "foo",
-            "command",
-            json!({
-              "arguments": ["bar"],
-              "program": "echo",
-            }),
-          ),
+          Message::User(vec![UserMessageContent::Text("foo".into())]),
+          command_invocation().message(),
           tool_result.message("foo"),
         ],
       ],
@@ -291,7 +382,9 @@ mod tests {
     };
 
     agent
-      .stream(vec![Message::new(Role::User, "foo")])
+      .stream(vec![Message::User(vec![UserMessageContent::Text(
+        "foo".into(),
+      )])])
       .await
       .unwrap();
 
@@ -302,17 +395,10 @@ mod tests {
     assert_eq!(
       *requests,
       [
-        vec![Message::new(Role::User, "foo")],
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
         vec![
-          Message::new(Role::User, "foo"),
-          Message::tool_use(
-            "foo",
-            "command",
-            json!({
-              "arguments": ["bar"],
-              "program": "echo",
-            }),
-          ),
+          Message::User(vec![UserMessageContent::Text("foo".into())]),
+          command_invocation().message(),
           tool_result.message("foo"),
         ],
       ],
@@ -362,7 +448,9 @@ mod tests {
     };
 
     agent
-      .stream(vec![Message::new(Role::User, "baz")])
+      .stream(vec![Message::User(vec![UserMessageContent::Text(
+        "baz".into(),
+      )])])
       .await
       .unwrap();
 

@@ -371,7 +371,9 @@ mod tests {
       assert_eq!(
         state.handle_event(Event::Action(Action::Submit)),
         vec![Effect::RunAgent {
-          messages: vec![Message::new(Role::User, "foo")]
+          messages: vec![Message::User(vec![UserMessageContent::Text(
+            "foo".into()
+          )])]
         }]
       );
 
@@ -407,7 +409,9 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        messages: vec![Message::new(Role::User, "foo")]
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])]
       }]
     );
 
@@ -415,7 +419,7 @@ mod tests {
 
     assert_eq!(
       state.transcript().messages()[1],
-      Message::new(Role::Agent, "bar")
+      Message::Agent(vec![AgentMessageContent::Text("bar".into())])
     );
 
     for c in "baz".chars() {
@@ -429,9 +433,9 @@ mod tests {
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
         messages: vec![
-          Message::new(Role::User, "foo"),
-          Message::new(Role::Agent, "bar"),
-          Message::new(Role::User, "baz"),
+          Message::User(vec![UserMessageContent::Text("foo".into())]),
+          Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
+          Message::User(vec![UserMessageContent::Text("baz".into())]),
         ]
       }]
     );
@@ -449,7 +453,9 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        messages: vec![Message::new(Role::User, "foo")]
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])]
       }]
     );
 
@@ -478,7 +484,9 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        messages: vec![Message::new(Role::User, "foo")]
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])]
       }]
     );
 
@@ -562,7 +570,9 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        messages: vec![Message::new(Role::User, "foo\nbar")]
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo\nbar".into()
+        )])]
       }]
     );
   }
@@ -580,10 +590,9 @@ mod tests {
 
     assert_eq!(
       state.transcript().messages(),
-      &[Message::new(
-        Role::Agent,
-        "Unrecognized command '/foobar'. Type \"/\" for a list of supported commands."
-      )]
+      &[Message::Agent(vec![AgentMessageContent::Text(
+        "Unrecognized command '/foobar'. Type \"/\" for a list of supported commands.".into()
+      )])]
     );
 
     assert_eq!(state.input_text(), "");
