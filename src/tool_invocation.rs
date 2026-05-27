@@ -7,54 +7,8 @@ pub(crate) struct ToolInvocation {
 }
 
 impl ToolInvocation {
-  fn action(&self, tense: ToolActionTense) -> &'static str {
-    match &self.kind {
-      ToolInvocationKind::ApplyPatch(_) => match tense {
-        ToolActionTense::Completed => "Applied",
-        ToolActionTense::Failed => "Failed applying",
-        ToolActionTense::Progressive => "Applying",
-      },
-      ToolInvocationKind::Command(_) => match tense {
-        ToolActionTense::Completed => "Ran",
-        ToolActionTense::Failed => "Failed running",
-        ToolActionTense::Progressive => "Running",
-      },
-      ToolInvocationKind::ListFiles(_) => match tense {
-        ToolActionTense::Completed => "Listed",
-        ToolActionTense::Failed => "Failed listing",
-        ToolActionTense::Progressive => "Listing",
-      },
-      ToolInvocationKind::ReadFile(_) => match tense {
-        ToolActionTense::Completed => "Read",
-        ToolActionTense::Failed => "Failed reading",
-        ToolActionTense::Progressive => "Reading",
-      },
-      ToolInvocationKind::SearchFiles(_) => match tense {
-        ToolActionTense::Completed => "Searched",
-        ToolActionTense::Failed => "Failed searching",
-        ToolActionTense::Progressive => "Searching",
-      },
-      ToolInvocationKind::WriteFile(_) => match tense {
-        ToolActionTense::Completed => "Wrote",
-        ToolActionTense::Failed => "Failed writing",
-        ToolActionTense::Progressive => "Writing",
-      },
-    }
-  }
-
   fn arguments(&self) -> Value {
     self.kind.arguments()
-  }
-
-  fn command(&self) -> Option<&CommandTool> {
-    match &self.kind {
-      ToolInvocationKind::Command(command) => Some(command),
-      ToolInvocationKind::ApplyPatch(_)
-      | ToolInvocationKind::ListFiles(_)
-      | ToolInvocationKind::ReadFile(_)
-      | ToolInvocationKind::SearchFiles(_)
-      | ToolInvocationKind::WriteFile(_) => None,
-    }
   }
 
   pub(crate) fn completed_tense(&self) -> String {
@@ -67,7 +21,7 @@ impl ToolInvocation {
 
   pub(crate) fn from_raw<T>(call: RawToolCall) -> Result<ToolInvocationKind>
   where
-    T: Into<ToolInvocationKind> + DeserializeOwned,
+    T: ToolSpec,
   {
     Ok(
       serde_json::from_value::<T>(call.arguments)
@@ -77,113 +31,21 @@ impl ToolInvocation {
   }
 
   pub(crate) fn message(&self) -> Message {
-    Message::tool_use(self.id.clone(), self.name(), self.arguments())
-  }
-
-  fn name(&self) -> &'static str {
-    match &self.kind {
-      ToolInvocationKind::ApplyPatch(_) => "apply_patch",
-      ToolInvocationKind::Command(_) => "command",
-      ToolInvocationKind::ListFiles(_) => "list_files",
-      ToolInvocationKind::ReadFile(_) => "read_file",
-      ToolInvocationKind::SearchFiles(_) => "search_files",
-      ToolInvocationKind::WriteFile(_) => "write_file",
-    }
+    Message::tool_use(self.id.clone(), self.kind.name(), self.arguments())
   }
 
   pub(crate) fn progressive_tense(&self) -> String {
     self.title(ToolActionTense::Progressive)
   }
 
-  fn subject(&self) -> String {
-    match &self.kind {
-      ToolInvocationKind::ApplyPatch(_) => "apply_patch".into(),
-      ToolInvocationKind::Command(_) => self
-        .command()
-        .map_or_else(|| "command".into(), ToString::to_string),
-      ToolInvocationKind::ListFiles(tool) => tool.cwd.as_ref().map_or_else(
-        || "files".into(),
-        |cwd| format!("files in {}", cwd.display()),
-      ),
-      ToolInvocationKind::ReadFile(tool) => tool.cwd.as_ref().map_or_else(
-        || tool.path.display().to_string(),
-        |cwd| format!("{} in {}", tool.path.display(), cwd.display()),
-      ),
-      ToolInvocationKind::SearchFiles(tool) => {
-        let query = if tool.arguments.is_empty() {
-          "files".into()
-        } else {
-          tool.arguments.join(" ")
-        };
-
-        tool
-          .cwd
-          .as_ref()
-          .map_or(query.clone(), |cwd| format!("{query} in {}", cwd.display()))
-      }
-      ToolInvocationKind::WriteFile(tool) => tool.cwd.as_ref().map_or_else(
-        || tool.path.display().to_string(),
-        |cwd| format!("{} in {}", tool.path.display(), cwd.display()),
-      ),
-    }
-  }
-
   fn title(&self, tense: ToolActionTense) -> String {
-    format!("{} {}", self.action(tense), self.subject())
+    format!("{} {}", self.kind.action(tense), self.kind.subject())
   }
 }
 
 impl Display for ToolInvocation {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-    match &self.kind {
-      ToolInvocationKind::ApplyPatch(_) => write!(f, "apply_patch"),
-      ToolInvocationKind::Command(_) => {
-        if let Some(command) = self.command() {
-          write!(f, "{command}")
-        } else {
-          write!(f, "command")
-        }
-      }
-      ToolInvocationKind::ListFiles(tool) => {
-        if let Some(cwd) = &tool.cwd {
-          write!(f, "list files in {}", cwd.display())
-        } else {
-          write!(f, "list files")
-        }
-      }
-      ToolInvocationKind::ReadFile(tool) => {
-        if let Some(cwd) = &tool.cwd {
-          write!(f, "read {} in {}", tool.path.display(), cwd.display())
-        } else {
-          write!(f, "read {}", tool.path.display())
-        }
-      }
-      ToolInvocationKind::SearchFiles(tool) => {
-        if tool.arguments.is_empty() {
-          if let Some(cwd) = &tool.cwd {
-            write!(f, "search files in {}", cwd.display())
-          } else {
-            write!(f, "search files")
-          }
-        } else if let Some(cwd) = &tool.cwd {
-          write!(
-            f,
-            "search files {} in {}",
-            tool.arguments.join(" "),
-            cwd.display()
-          )
-        } else {
-          write!(f, "search files {}", tool.arguments.join(" "))
-        }
-      }
-      ToolInvocationKind::WriteFile(tool) => {
-        if let Some(cwd) = &tool.cwd {
-          write!(f, "write {} in {}", tool.path.display(), cwd.display())
-        } else {
-          write!(f, "write {}", tool.path.display())
-        }
-      }
-    }
+    write!(f, "{}", self.kind.display())
   }
 }
 

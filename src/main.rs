@@ -106,6 +106,7 @@ use {
   tool_invocation::ToolInvocation,
   tool_invocation_kind::ToolInvocationKind,
   tool_result::ToolResult,
+  tool_spec::ToolSpec,
   tools::{
     ApplyPatchTool, CommandTool, ListFilesTool, ReadFileTool, SearchFilesTool,
     TOOLS, WriteFileTool,
@@ -205,6 +206,7 @@ mod tool_call_update_kind;
 mod tool_invocation;
 mod tool_invocation_kind;
 mod tool_result;
+mod tool_spec;
 mod tools;
 mod transcript;
 mod transcript_entry;

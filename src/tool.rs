@@ -14,6 +14,21 @@ impl Tool {
   ) -> Result<ToolInvocationKind> {
     (self.invocation)(call)
   }
+
+  pub(crate) fn new<T>() -> Self
+  where
+    T: ToolSpec,
+  {
+    Self {
+      description: T::DESCRIPTION,
+      invocation: ToolInvocation::from_raw::<T>,
+      name: T::NAME,
+      parameters: serde_json::to_value(T::json_schema(
+        &mut schemars::SchemaGenerator::default(),
+      ))
+      .expect("failed to serialize tool schema"),
+    }
+  }
 }
 
 impl From<&Tool> for anthropic::Tool {

@@ -12,8 +12,41 @@ pub(crate) enum ToolInvocationKind {
 }
 
 impl ToolInvocationKind {
+  pub(crate) fn action(&self, tense: ToolActionTense) -> &'static str {
+    match self {
+      Self::ApplyPatch(_) => ApplyPatchTool::action(tense),
+      Self::Command(_) => CommandTool::action(tense),
+      Self::ListFiles(_) => ListFilesTool::action(tense),
+      Self::ReadFile(_) => ReadFileTool::action(tense),
+      Self::SearchFiles(_) => SearchFilesTool::action(tense),
+      Self::WriteFile(_) => WriteFileTool::action(tense),
+    }
+  }
+
   pub(crate) fn arguments(&self) -> Value {
     serde_json::to_value(self).expect("failed to serialize tool arguments")
+  }
+
+  pub(crate) fn details(&self) -> Vec<(&'static str, String)> {
+    match self {
+      Self::ApplyPatch(tool) => tool.details(),
+      Self::Command(tool) => tool.details(),
+      Self::ListFiles(tool) => tool.details(),
+      Self::ReadFile(tool) => tool.details(),
+      Self::SearchFiles(tool) => tool.details(),
+      Self::WriteFile(tool) => tool.details(),
+    }
+  }
+
+  pub(crate) fn display(&self) -> String {
+    match self {
+      Self::ApplyPatch(tool) => tool.display(),
+      Self::Command(tool) => tool.display(),
+      Self::ListFiles(tool) => tool.display(),
+      Self::ReadFile(tool) => tool.display(),
+      Self::SearchFiles(tool) => tool.display(),
+      Self::WriteFile(tool) => tool.display(),
+    }
   }
 
   pub(crate) async fn execute(&self, approval: ToolApproval) -> ToolResult {
@@ -24,61 +57,45 @@ impl ToolInvocationKind {
     let executor = Executor::default();
 
     match self {
-      Self::ApplyPatch(tool) => {
-        let mut command = tokio::process::Command::new("apply_patch");
+      Self::ApplyPatch(tool) => tool.execute(&executor).await,
+      Self::Command(tool) => tool.execute(&executor).await,
+      Self::ListFiles(tool) => tool.execute(&executor).await,
+      Self::ReadFile(tool) => tool.execute(&executor).await,
+      Self::SearchFiles(tool) => tool.execute(&executor).await,
+      Self::WriteFile(tool) => tool.execute(&executor).await,
+    }
+  }
 
-        if let Some(cwd) = &tool.cwd {
-          command.current_dir(cwd);
-        }
-
-        executor.execute(command, Some(tool.patch.clone())).await
-      }
-      Self::Command(tool) => {
-        let mut command = tokio::process::Command::new(&tool.program);
-
-        command.args(&tool.arguments);
-
-        if let Some(cwd) = &tool.cwd {
-          command.current_dir(cwd);
-        }
-
-        executor.execute(command, None).await
-      }
-      Self::ListFiles(tool) => {
-        let mut command = tokio::process::Command::new("rg");
-
-        command.arg("--files");
-
-        if let Some(cwd) = &tool.cwd {
-          command.current_dir(cwd);
-        }
-
-        executor.execute(command, None).await
-      }
-      Self::ReadFile(tool) => executor.read_file(tool).await,
-      Self::SearchFiles(tool) => {
-        let mut command = tokio::process::Command::new("rg");
-
-        command.args(&tool.arguments);
-
-        if let Some(cwd) = &tool.cwd {
-          command.current_dir(cwd);
-        }
-
-        executor.execute(command, None).await
-      }
-      Self::WriteFile(tool) => executor.write_file(tool).await,
+  pub(crate) fn name(&self) -> &'static str {
+    match self {
+      Self::ApplyPatch(_) => ApplyPatchTool::NAME,
+      Self::Command(_) => CommandTool::NAME,
+      Self::ListFiles(_) => ListFilesTool::NAME,
+      Self::ReadFile(_) => ReadFileTool::NAME,
+      Self::SearchFiles(_) => SearchFilesTool::NAME,
+      Self::WriteFile(_) => WriteFileTool::NAME,
     }
   }
 
   pub(crate) fn requires_approval(&self) -> bool {
     match self {
-      Self::ApplyPatch(_) | Self::Command(_) | Self::WriteFile(_) => true,
-      Self::SearchFiles(tool) => tool
-        .arguments
-        .iter()
-        .any(|argument| argument == "--pre" || argument.starts_with("--pre=")),
-      _ => false,
+      Self::ApplyPatch(tool) => tool.requires_approval(),
+      Self::Command(tool) => tool.requires_approval(),
+      Self::ListFiles(tool) => tool.requires_approval(),
+      Self::ReadFile(tool) => tool.requires_approval(),
+      Self::SearchFiles(tool) => tool.requires_approval(),
+      Self::WriteFile(tool) => tool.requires_approval(),
+    }
+  }
+
+  pub(crate) fn subject(&self) -> String {
+    match self {
+      Self::ApplyPatch(tool) => tool.subject(),
+      Self::Command(tool) => tool.subject(),
+      Self::ListFiles(tool) => tool.subject(),
+      Self::ReadFile(tool) => tool.subject(),
+      Self::SearchFiles(tool) => tool.subject(),
+      Self::WriteFile(tool) => tool.subject(),
     }
   }
 }
