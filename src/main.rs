@@ -44,13 +44,15 @@ use {
   message_kind::MessageKind,
   model::Model,
   options::Options,
+  patch_plan::PatchPlan,
   presented_frame::PresentedFrame,
   provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
   provider_output::ProviderOutput,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
-  render_operation::RenderOperation,
+  render_plan::RenderPlan,
+  render_planner::RenderPlanner,
   renderer::Renderer,
   request::Request,
   role::Role,
@@ -106,6 +108,7 @@ use {
   unicode_width::UnicodeWidthChar,
   view::View,
   viewport::Viewport,
+  write_ext::WriteExt,
 };
 
 mod action;
@@ -161,12 +164,14 @@ mod openai {
 }
 mod cursor;
 mod options;
+mod patch_plan;
 mod presented_frame;
 mod provider;
 mod provider_output;
 mod provider_sink;
 mod raw_tool_call;
-mod render_operation;
+mod render_plan;
+mod render_planner;
 mod renderer;
 mod request;
 mod role;
@@ -191,6 +196,7 @@ mod transcript_entry;
 mod transcript_tool_invocation;
 mod view;
 mod viewport;
+mod write_ext;
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 

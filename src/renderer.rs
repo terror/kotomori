@@ -8,36 +8,31 @@ pub(crate) struct Renderer {
 
 impl Renderer {
   fn clear_deleted_tail(
-    &self,
     stdout: &mut impl Write,
+    presented: &PresentedFrame,
     next: &Frame,
     diff: Diff,
     previous_viewport: Viewport,
   ) -> Result<PresentedFrame> {
-    let presented = self.presented.as_ref().unwrap();
-
     let target_row = next.last_row();
 
     write!(stdout, "\x1b[?2026h")?;
 
-    Self::move_by(
-      stdout,
-      presented.cursor.diff_to(
-        previous_viewport,
-        target_row,
-        previous_viewport,
-      ),
-    )?;
+    stdout.move_by(presented.cursor.diff_to(
+      previous_viewport,
+      target_row,
+      previous_viewport,
+    ))?;
 
     write!(stdout, "\r")?;
 
     if diff.deleted_tail_len() > 0 {
-      Self::move_down(stdout, 1)?;
+      stdout.move_down(1)?;
     }
 
     for index in diff.changed.first..=diff.changed.last {
       if index > diff.changed.first {
-        Self::move_down(stdout, 1)?;
+        stdout.move_down(1)?;
       }
 
       write!(stdout, "\r")?;
@@ -45,7 +40,7 @@ impl Renderer {
       queue!(stdout, Clear(ClearType::CurrentLine))?;
     }
 
-    Self::move_up(stdout, diff.deleted_tail_len())?;
+    stdout.move_up(diff.deleted_tail_len())?;
 
     write!(stdout, "\x1b[?2026l")?;
 
@@ -87,24 +82,34 @@ impl Renderer {
   ) -> Result {
     let next = Frame::new(rendered, Dimensions { height, width });
 
-    let operation = self.render_operation(&next);
+    let plan =
+      RenderPlanner::new(self.max_lines_rendered, self.presented.as_ref())
+        .plan(&next);
 
-    let presented = match operation {
-      RenderOperation::Full { clear } => {
-        Self::full_render(stdout, &next, clear)?
+    let clears = plan.clears();
+
+    let presented = match plan {
+      RenderPlan::Full { clear } => Self::full_render(stdout, &next, clear)?,
+      RenderPlan::NoOperation {
+        previous,
+        previous_viewport,
+      } => {
+        PresentedFrame::new(previous.cursor, next.clone(), previous_viewport)
       }
-      RenderOperation::NoOperation => self.present_no_operation(&next),
-      RenderOperation::Patch { diff } => {
-        self.patch_render(stdout, next, diff)?
+      RenderPlan::Patch {
+        previous,
+        previous_viewport,
+        patch,
+      } => {
+        Self::patch_render(stdout, previous, next, previous_viewport, patch)?
       }
     };
 
-    self.max_lines_rendered =
-      if matches!(operation, RenderOperation::Full { clear: true }) {
-        presented.frame.len()
-      } else {
-        self.max_lines_rendered.max(presented.frame.len())
-      };
+    self.max_lines_rendered = if clears {
+      presented.frame.len()
+    } else {
+      self.max_lines_rendered.max(presented.frame.len())
+    };
 
     self.presented = Some(presented);
 
@@ -116,14 +121,11 @@ impl Renderer {
       return Ok(());
     };
 
-    Self::move_by(
-      stdout,
-      presented.cursor.diff_to(
-        presented.viewport,
-        presented.frame.last_row(),
-        presented.viewport,
-      ),
-    )?;
+    stdout.move_by(presented.cursor.diff_to(
+      presented.viewport,
+      presented.frame.last_row(),
+      presented.viewport,
+    ))?;
 
     if let Some(presented) = &mut self.presented {
       presented.cursor = Cursor::new(presented.frame.last_row());
@@ -149,15 +151,11 @@ impl Renderer {
       &next.lines
     };
 
-    Self::write_lines(stdout, lines)?;
+    stdout.write_lines(lines)?;
 
     write!(stdout, "\x1b[?2026l")?;
 
     Ok(next.clone().into())
-  }
-
-  fn is_termux_session() -> bool {
-    env::var_os("TERMUX_VERSION").is_some()
   }
 
   fn line_feed(
@@ -174,32 +172,6 @@ impl Renderer {
     Ok(())
   }
 
-  fn move_by(stdout: &mut impl Write, diff: isize) -> Result {
-    match diff.cmp(&0) {
-      Ordering::Less => Self::move_up(stdout, diff.unsigned_abs())?,
-      Ordering::Equal => {}
-      Ordering::Greater => Self::move_down(stdout, diff.unsigned_abs())?,
-    }
-
-    Ok(())
-  }
-
-  fn move_down(stdout: &mut impl Write, lines: usize) -> Result {
-    if lines > 0 {
-      queue!(stdout, MoveDown(u16::try_from(lines).unwrap_or(u16::MAX)))?;
-    }
-
-    Ok(())
-  }
-
-  fn move_up(stdout: &mut impl Write, lines: usize) -> Result {
-    if lines > 0 {
-      queue!(stdout, MoveUp(u16::try_from(lines).unwrap_or(u16::MAX)))?;
-    }
-
-    Ok(())
-  }
-
   pub(crate) fn new() -> Self {
     Self {
       max_lines_rendered: 0,
@@ -208,20 +180,27 @@ impl Renderer {
   }
 
   fn patch_render(
-    &self,
     stdout: &mut impl Write,
+    presented: &PresentedFrame,
     next: Frame,
-    diff: Diff,
+    previous_viewport: Viewport,
+    patch: PatchPlan,
   ) -> Result<PresentedFrame> {
-    let previous_viewport = self.previous_viewport(&next);
-
-    if diff.is_pure_tail_delete() {
-      return self.clear_deleted_tail(stdout, &next, diff, previous_viewport);
-    }
-
-    let presented = self.presented.as_ref().unwrap();
-
-    let writable_range = diff.writable_range().unwrap();
+    let (diff, writable_range) = match patch {
+      PatchPlan::ClearDeletedTail { diff } => {
+        return Self::clear_deleted_tail(
+          stdout,
+          presented,
+          &next,
+          diff,
+          previous_viewport,
+        );
+      }
+      PatchPlan::Update {
+        diff,
+        writable_range,
+      } => (diff, writable_range),
+    };
 
     let append_start = next.len() > presented.frame.len()
       && diff.changed.first == presented.frame.len();
@@ -245,7 +224,7 @@ impl Renderer {
         .saturating_sub(1)
         .saturating_sub(viewport.screen_row(cursor.row()));
 
-      Self::move_down(stdout, move_to_bottom)?;
+      stdout.move_down(move_to_bottom)?;
 
       let bottom = viewport.bottom();
 
@@ -256,7 +235,7 @@ impl Renderer {
       cursor = Cursor::new(move_target_row);
     }
 
-    Self::move_by(stdout, cursor.diff_to(viewport, move_target_row, viewport))?;
+    stdout.move_by(cursor.diff_to(viewport, move_target_row, viewport))?;
 
     if append_start {
       Self::line_feed(stdout, &mut viewport, move_target_row)?;
@@ -285,7 +264,7 @@ impl Renderer {
     if diff.deleted_tail_len() > 0 {
       if cursor.row() < next.last_row() {
         let move_down = next.last_row() - cursor.row();
-        Self::move_down(stdout, move_down)?;
+        stdout.move_down(move_down)?;
         cursor = Cursor::new(next.last_row());
       }
 
@@ -295,107 +274,13 @@ impl Renderer {
         queue!(stdout, Clear(ClearType::CurrentLine))?;
       }
 
-      Self::move_up(stdout, diff.deleted_tail_len())?;
+      stdout.move_up(diff.deleted_tail_len())?;
       cursor = Cursor::new(next.last_row());
     }
 
     write!(stdout, "\x1b[?2026l")?;
 
     Ok(PresentedFrame::new(cursor, next, viewport))
-  }
-
-  fn present_no_operation(&self, next: &Frame) -> PresentedFrame {
-    let presented = self.presented.as_ref().unwrap();
-
-    PresentedFrame::new(
-      presented.cursor,
-      next.clone(),
-      self.previous_viewport(next),
-    )
-  }
-
-  fn previous_viewport(&self, next: &Frame) -> Viewport {
-    let presented = self.presented.as_ref().unwrap();
-
-    let height = next.dimensions.height();
-
-    if presented.frame.dimensions.height == next.dimensions.height {
-      Viewport::new(presented.viewport.top(), height)
-    } else {
-      Viewport::anchored_to_bottom(
-        presented
-          .viewport
-          .top()
-          .saturating_add(presented.frame.dimensions.height()),
-        height,
-      )
-    }
-  }
-
-  fn render_operation(&self, next: &Frame) -> RenderOperation {
-    let Some(presented) = &self.presented else {
-      return RenderOperation::Full { clear: false };
-    };
-
-    if presented.frame.dimensions.width != next.dimensions.width {
-      return RenderOperation::Full { clear: true };
-    }
-
-    if presented.frame.dimensions.height != next.dimensions.height
-      && !Self::is_termux_session()
-    {
-      return RenderOperation::Full { clear: true };
-    }
-
-    if next.len() < self.max_lines_rendered
-      && env::var_os("KOTOMORI_CLEAR_ON_SHRINK").is_some()
-    {
-      return RenderOperation::Full { clear: true };
-    }
-
-    let Some(diff) = Diff::between(&presented.frame, next) else {
-      return RenderOperation::NoOperation;
-    };
-
-    let previous_viewport = self.previous_viewport(next);
-
-    let next_viewport =
-      Viewport::anchored_to_bottom(next.len(), next.dimensions.height());
-
-    if next.is_empty() || next_viewport.top() < previous_viewport.top() {
-      return RenderOperation::Full { clear: true };
-    }
-
-    if diff.changed.first < previous_viewport.top() {
-      return RenderOperation::Full { clear: true };
-    }
-
-    if diff.is_pure_tail_delete()
-      && next.last_row() < previous_viewport.top()
-      && !next.is_empty()
-    {
-      return RenderOperation::Full { clear: true };
-    }
-
-    if diff.deleted_tail_len() > next.dimensions.height() {
-      return RenderOperation::Full { clear: true };
-    }
-
-    RenderOperation::Patch { diff }
-  }
-
-  fn write_lines(stdout: &mut impl Write, lines: &[String]) -> Result {
-    for (index, line) in lines.iter().enumerate() {
-      if index > 0 {
-        write!(stdout, "\r\n")?;
-      }
-
-      queue!(stdout, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
-
-      write!(stdout, "{line}")?;
-    }
-
-    Ok(())
   }
 }
 
@@ -855,18 +740,6 @@ mod tests {
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
       "\x1b[?2026h\x1b[2A\r\x1b[1B\r\x1b[2K\x1b[1B\r\x1b[2K\x1b[2A\x1b[?2026l",
-    );
-  }
-
-  #[test]
-  fn writing_lines_scrolls() {
-    let mut stdout = Vec::new();
-
-    Renderer::write_lines(&mut stdout, &["foo".into(), "bar".into()]).unwrap();
-
-    assert_eq!(
-      String::from_utf8(stdout).unwrap(),
-      "\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar",
     );
   }
 }
