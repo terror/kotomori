@@ -53,6 +53,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
   fn try_from(model: Model) -> Result<Self> {
     match model.provider.as_str() {
       "anthropic" => Ok(Arc::new(Rig::anthropic(&model)?)),
+      "cohere" => Ok(Arc::new(Rig::cohere(&model)?)),
       "deepseek" => Ok(Arc::new(Rig::deepseek(&model)?)),
       "fake" => Ok(Arc::new(Fake)),
       "gemini" => Ok(Arc::new(Rig::gemini(&model)?)),
