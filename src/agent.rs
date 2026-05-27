@@ -108,9 +108,10 @@ impl Agent {
       for tool_call in output.tool_calls {
         messages.push(tool_call.message());
 
-        let approval = self.approval(&tool_call).await?;
-
-        let result = tool_call.kind.execute(approval).await;
+        let result = tool_call
+          .kind
+          .execute(self.approval(&tool_call).await?)
+          .await;
 
         messages.push(result.message(tool_call.id.clone()));
 
@@ -129,7 +130,7 @@ impl Agent {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use {super::*, serde_json::json};
 
   #[derive(Debug)]
   struct LoopProvider {
@@ -166,6 +167,24 @@ mod tests {
       } else {
         sink.delta("done")?;
       }
+
+      Ok(())
+    }
+  }
+
+  #[derive(Debug)]
+  struct ReasoningProvider;
+
+  #[async_trait]
+  impl Provider for ReasoningProvider {
+    async fn stream(
+      &self,
+      _request: Request,
+      sink: &mut ProviderSink,
+    ) -> Result {
+      sink.reasoning_delta(None, "foo")?;
+      sink.reasoning(Reasoning::new("foo"))?;
+      sink.delta("bar")?;
 
       Ok(())
     }
@@ -321,6 +340,43 @@ mod tests {
           result: tool_result,
         },
         Event::AgentDelta("done".into()),
+        Event::AgentDone,
+      ],
+    );
+  }
+
+  #[tokio::test]
+  async fn streams_reasoning() {
+    let (event_sender, mut event_receiver) = mpsc::unbounded_channel();
+
+    let directory = tempfile::tempdir().unwrap();
+
+    let agent = Agent {
+      event_sender,
+      loader: Loader::with_cwd(directory.path()),
+      model: "fake:local".parse().unwrap(),
+      provider: Arc::new(ReasoningProvider),
+      task: None,
+      tool_registry: ToolRegistry::default(),
+      yolo: true,
+    };
+
+    agent
+      .stream(vec![Message::new(Role::User, "baz")])
+      .await
+      .unwrap();
+
+    let mut events = Vec::new();
+
+    while let Ok(event) = event_receiver.try_recv() {
+      events.push(event);
+    }
+
+    assert_eq!(
+      events,
+      [
+        Event::AgentReasoningDelta("foo".into()),
+        Event::AgentDelta("bar".into()),
         Event::AgentDone,
       ],
     );

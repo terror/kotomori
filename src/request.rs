@@ -107,7 +107,7 @@ impl From<&Request> for CompletionRequest {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use {super::*, serde_json::json};
 
   #[test]
   fn chat_messages() {

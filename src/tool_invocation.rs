@@ -51,7 +51,7 @@ impl Display for ToolInvocation {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use {super::*, serde_json::json};
 
   fn invocation(name: &str, arguments: Value) -> ToolInvocation {
     ToolRegistry::default()

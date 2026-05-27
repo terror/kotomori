@@ -390,7 +390,7 @@ impl ToolSpec for WriteFileTool {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use {super::*, serde_json::json};
 
   #[test]
   fn tool_parameters_are_derived_from_type() {

@@ -105,11 +105,18 @@ impl Rig {
         StreamedAssistantContent::Text(text) if !text.text.is_empty() => {
           sink.delta(text.text)?;
         }
+        StreamedAssistantContent::Reasoning(reasoning) => {
+          sink.reasoning(reasoning)?;
+        }
+        StreamedAssistantContent::ReasoningDelta { id, reasoning }
+          if !reasoning.is_empty() =>
+        {
+          sink.reasoning_delta(id, reasoning)?;
+        }
         StreamedAssistantContent::ToolCall { tool_call, .. } => {
           sink.tool_call(tool_call.into())?;
         }
         StreamedAssistantContent::Final(_)
-        | StreamedAssistantContent::Reasoning(_)
         | StreamedAssistantContent::ReasoningDelta { .. }
         | StreamedAssistantContent::Text(_)
         | StreamedAssistantContent::ToolCallDelta { .. } => {}

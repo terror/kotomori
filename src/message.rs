@@ -132,7 +132,7 @@ impl From<&Message> for RigMessage {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use {super::*, serde_json::json};
 
   #[test]
   fn rig_tool_messages() {

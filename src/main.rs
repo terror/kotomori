@@ -55,6 +55,7 @@ use {
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
+  reasoning_buffer::ReasoningBuffer,
   render_plan::RenderPlan,
   render_planner::RenderPlanner,
   renderer::Renderer,
@@ -66,7 +67,7 @@ use {
       AssistantContent, CompletionModel, CompletionRequest,
       Message as RigMessage, ToolDefinition,
     },
-    message::ToolCall,
+    message::{Reasoning, ToolCall},
     providers::{
       anthropic::{
         Client as AnthropicClient,
@@ -134,9 +135,6 @@ use {
   write_ext::WriteExt,
 };
 
-#[cfg(test)]
-use serde_json::json;
-
 mod action;
 mod agent;
 mod agent_activity;
@@ -186,6 +184,7 @@ mod provider;
 mod provider_output;
 mod provider_sink;
 mod raw_tool_call;
+mod reasoning_buffer;
 mod render_plan;
 mod render_planner;
 mod renderer;
