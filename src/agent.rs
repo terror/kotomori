@@ -242,7 +242,6 @@ mod tests {
             "command",
             json!({
               "arguments": ["bar"],
-              "cwd": null,
               "program": "echo",
             }),
           ),
@@ -292,7 +291,6 @@ mod tests {
             "command",
             json!({
               "arguments": ["bar"],
-              "cwd": null,
               "program": "echo",
             }),
           ),
