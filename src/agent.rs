@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Agent {
   event_sender: UnboundedSender<Event>,
+  loader: Loader,
   model: Model,
   provider: Arc<dyn Provider>,
   task: Option<task::JoinHandle<()>>,
@@ -38,6 +39,7 @@ impl Agent {
 
     Ok(Self {
       event_sender,
+      loader: Loader::new()?,
       model: options.model.clone(),
       provider,
       task: None,
@@ -50,6 +52,7 @@ impl Agent {
 
     let agent = Self {
       event_sender: self.event_sender.clone(),
+      loader: self.loader.clone(),
       model: self.model.clone(),
       provider: self.provider.clone(),
       task: None,
@@ -64,16 +67,22 @@ impl Agent {
   }
 
   async fn stream(&self, mut messages: Vec<Message>) -> Result {
+    let system = self.loader.load()?;
+
     loop {
       let mut sink = ProviderSink::new(self.event_sender.clone());
 
-      self
-        .provider
-        .stream(
-          Request::new(self.model.clone(), messages.clone()),
-          &mut sink,
+      let request = if system.is_empty() {
+        Request::new(self.model.clone(), messages.clone())
+      } else {
+        Request::with_system(
+          self.model.clone(),
+          messages.clone(),
+          system.clone(),
         )
-        .await?;
+      };
+
+      self.provider.stream(request, &mut sink).await?;
 
       let output = sink.finish();
 
@@ -155,10 +164,13 @@ mod tests {
   async fn command_tools_wait_for_approval() {
     let (event_sender, mut event_receiver) = mpsc::unbounded_channel();
 
+    let directory = tempfile::tempdir().unwrap();
+
     let requests = Arc::new(Mutex::new(Vec::new()));
 
     let agent = Agent {
       event_sender,
+      loader: Loader::with_cwd(directory.path()),
       model: "fake:local".parse().unwrap(),
       provider: Arc::new(LoopProvider {
         requests: requests.clone(),
@@ -232,10 +244,13 @@ mod tests {
   async fn loops_until_provider_returns_no_tool_calls() {
     let (event_sender, mut event_receiver) = mpsc::unbounded_channel();
 
+    let directory = tempfile::tempdir().unwrap();
+
     let requests = Arc::new(Mutex::new(Vec::new()));
 
     let agent = Agent {
       event_sender,
+      loader: Loader::with_cwd(directory.path()),
       model: "fake:local".parse().unwrap(),
       provider: Arc::new(LoopProvider {
         requests: requests.clone(),
