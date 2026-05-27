@@ -380,24 +380,13 @@ impl ToolSpec for WriteFileTool {
   }
 }
 
-pub(crate) static TOOLS: LazyLock<Vec<Tool>> = LazyLock::new(|| {
-  vec![
-    Tool::new::<ApplyPatchTool>(),
-    Tool::new::<CommandTool>(),
-    Tool::new::<ListFilesTool>(),
-    Tool::new::<ReadFileTool>(),
-    Tool::new::<SearchFilesTool>(),
-    Tool::new::<WriteFileTool>(),
-  ]
-});
-
 #[cfg(test)]
 mod tests {
   use super::*;
 
   #[test]
   fn tool_parameters_are_derived_from_type() {
-    let tool = TOOLS.iter().find(|tool| tool.name == "command").unwrap();
+    let tool = Tool::new::<CommandTool>();
 
     assert_eq!(
       tool.parameters,

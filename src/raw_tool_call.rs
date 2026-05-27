@@ -26,18 +26,3 @@ impl Display for RawToolCall {
     write!(f, "{} {}", self.name, self.arguments)
   }
 }
-
-impl TryInto<ToolInvocation> for RawToolCall {
-  type Error = Error;
-
-  fn try_into(self) -> Result<ToolInvocation> {
-    Ok(ToolInvocation {
-      id: self.id.clone(),
-      kind: TOOLS
-        .iter()
-        .find(|tool| tool.name == self.name)
-        .with_context(|| format!("unknown tool `{}`", self.name))?
-        .invocation(self)?,
-    })
-  }
-}

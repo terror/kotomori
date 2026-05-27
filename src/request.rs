@@ -5,6 +5,7 @@ pub(crate) struct Request {
   messages: Vec<Message>,
   model: Model,
   system: Option<String>,
+  tool_registry: ToolRegistry,
 }
 
 impl Request {
@@ -27,11 +28,16 @@ impl Request {
     self.model.name()
   }
 
-  pub(crate) fn new(model: Model, messages: Vec<Message>) -> Self {
+  pub(crate) fn new(
+    model: Model,
+    messages: Vec<Message>,
+    tool_registry: ToolRegistry,
+  ) -> Self {
     Self {
       messages,
       model,
       system: None,
+      tool_registry,
     }
   }
 
@@ -39,10 +45,15 @@ impl Request {
     self.system.as_deref()
   }
 
+  pub(crate) fn tools(&self) -> impl Iterator<Item = &Tool> {
+    self.tool_registry.tools()
+  }
+
   pub(crate) fn with_system(
     model: Model,
     messages: Vec<Message>,
     system: impl Into<String>,
+    tool_registry: ToolRegistry,
   ) -> Self {
     let system = system.into();
 
@@ -56,6 +67,7 @@ impl Request {
       messages,
       model,
       system,
+      tool_registry,
     }
   }
 }
@@ -84,7 +96,7 @@ impl From<&Request> for anthropic::MessageCreateParams {
     };
 
     builder
-      .tools(TOOLS.iter().map(Into::into).collect::<Vec<_>>())
+      .tools(request.tools().map(Into::into).collect::<Vec<_>>())
       .build()
   }
 }
@@ -113,7 +125,7 @@ impl TryFrom<&Request> for openai::CreateChatCompletionRequest {
       openai::CreateChatCompletionRequestArgs::default()
         .model(request.model_name())
         .messages(messages)
-        .tools(TOOLS.iter().map(Into::into).collect::<Vec<_>>())
+        .tools(request.tools().map(Into::into).collect::<Vec<_>>())
         .build()?,
     )
   }
@@ -131,6 +143,7 @@ mod tests {
         Message::new(Role::User, "foo"),
         Message::new(Role::Agent, "bar"),
       ],
+      ToolRegistry::default(),
     );
 
     assert_eq!(request.model_name(), "foo");
@@ -153,6 +166,7 @@ mod tests {
         Message::new(Role::Agent, "bar"),
         Message::new(Role::User, "baz"),
       ],
+      ToolRegistry::default(),
     );
 
     assert_eq!(
@@ -167,6 +181,7 @@ mod tests {
       "fake:foo".parse().unwrap(),
       vec![Message::new(Role::User, "bar")],
       "baz",
+      ToolRegistry::default(),
     ));
 
     assert_eq!(request.system.as_deref(), Some("baz"));
@@ -179,6 +194,7 @@ mod tests {
         "fake:foo".parse().unwrap(),
         vec![Message::new(Role::User, "bar")],
         "baz",
+        ToolRegistry::default(),
       ))
       .unwrap();
 
@@ -203,6 +219,7 @@ mod tests {
       openai::CreateChatCompletionRequest::try_from(&Request::new(
         "fake:foo".parse().unwrap(),
         vec![Message::new(Role::User, "bar")],
+        ToolRegistry::default(),
       ))
       .unwrap();
 

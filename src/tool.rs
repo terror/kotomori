@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Debug)]
 pub(crate) struct Tool {
   pub(crate) description: &'static str,
   pub(crate) invocation: fn(RawToolCall) -> Result<ToolInvocationKind>,
