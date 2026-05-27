@@ -4,6 +4,7 @@ use super::*;
 pub(crate) struct Request {
   messages: Vec<Message>,
   model: Model,
+  system: Option<String>,
 }
 
 impl Request {
@@ -27,28 +28,62 @@ impl Request {
   }
 
   pub(crate) fn new(model: Model, messages: Vec<Message>) -> Self {
-    Self { messages, model }
+    Self {
+      messages,
+      model,
+      system: None,
+    }
+  }
+
+  pub(crate) fn system(&self) -> Option<&str> {
+    self.system.as_deref()
+  }
+
+  pub(crate) fn with_system(
+    model: Model,
+    messages: Vec<Message>,
+    system: impl Into<String>,
+  ) -> Self {
+    let system = system.into();
+
+    let system = if system.is_empty() {
+      None
+    } else {
+      Some(system)
+    };
+
+    Self {
+      messages,
+      model,
+      system,
+    }
   }
 }
 
 impl From<&Request> for anthropic::MessageCreateParams {
   fn from(request: &Request) -> Self {
-    request
-      .messages()
-      .fold(
-        anthropic::MessageCreateBuilder::new(
-          request.model_name(),
-          env::var("ANTHROPIC_MAX_TOKENS")
-            .ok()
-            .and_then(|max_tokens| max_tokens.parse::<u32>().ok())
-            .unwrap_or(4096),
-        ),
-        |builder, message| {
-          let message = anthropic::MessageParam::from(message);
+    let builder = request.messages().fold(
+      anthropic::MessageCreateBuilder::new(
+        request.model_name(),
+        env::var("ANTHROPIC_MAX_TOKENS")
+          .ok()
+          .and_then(|max_tokens| max_tokens.parse::<u32>().ok())
+          .unwrap_or(4096),
+      ),
+      |builder, message| {
+        let message = anthropic::MessageParam::from(message);
 
-          builder.message(message.role, message.content)
-        },
-      )
+        builder.message(message.role, message.content)
+      },
+    );
+
+    let builder = if let Some(system) = request.system() {
+      builder.system(system)
+    } else {
+      builder
+    };
+
+    builder
       .tools(TOOLS.iter().map(Into::into).collect::<Vec<_>>())
       .build()
   }
@@ -58,10 +93,26 @@ impl TryFrom<&Request> for openai::CreateChatCompletionRequest {
   type Error = Error;
 
   fn try_from(request: &Request) -> Result<Self> {
+    let system = request.system().map(|system| {
+      openai::ChatCompletionRequestMessage::System(
+        openai::ChatCompletionRequestSystemMessage {
+          content: openai::ChatCompletionRequestSystemMessageContent::Text(
+            system.into(),
+          ),
+          name: None,
+        },
+      )
+    });
+
+    let messages = system
+      .into_iter()
+      .chain(request.messages().map(Into::into))
+      .collect::<Vec<_>>();
+
     Ok(
       openai::CreateChatCompletionRequestArgs::default()
         .model(request.model_name())
-        .messages(request.messages().map(Into::into).collect::<Vec<_>>())
+        .messages(messages)
         .tools(TOOLS.iter().map(Into::into).collect::<Vec<_>>())
         .build()?,
     )
@@ -107,6 +158,42 @@ mod tests {
     assert_eq!(
       request.last_user_message().unwrap().content().unwrap(),
       "baz"
+    );
+  }
+
+  #[test]
+  fn anthropic_system_context() {
+    let request = anthropic::MessageCreateParams::from(&Request::with_system(
+      "fake:foo".parse().unwrap(),
+      vec![Message::new(Role::User, "bar")],
+      "baz",
+    ));
+
+    assert_eq!(request.system.as_deref(), Some("baz"));
+  }
+
+  #[test]
+  fn openai_system_context() {
+    let request =
+      openai::CreateChatCompletionRequest::try_from(&Request::with_system(
+        "fake:foo".parse().unwrap(),
+        vec![Message::new(Role::User, "bar")],
+        "baz",
+      ))
+      .unwrap();
+
+    assert_eq!(
+      serde_json::to_value(request).unwrap()["messages"],
+      json!([
+        {
+          "role": "system",
+          "content": "baz",
+        },
+        {
+          "role": "user",
+          "content": "bar",
+        },
+      ]),
     );
   }
 

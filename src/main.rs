@@ -43,6 +43,7 @@ use {
   hint::Hint,
   input_mode::InputMode,
   line::Line,
+  loader::Loader,
   message::Message,
   message_kind::MessageKind,
   model::Model,
@@ -74,7 +75,7 @@ use {
     io::{self, BufRead, Read, Stdout, Write},
     iter::once,
     ops::RangeInclusive,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{self, Stdio},
     str::{self, FromStr},
     sync::{Arc, LazyLock, Mutex},
@@ -151,6 +152,7 @@ mod header;
 mod hint;
 mod input_mode;
 mod line;
+mod loader;
 mod message;
 mod message_kind;
 mod model;
@@ -162,7 +164,9 @@ mod openai {
       ChatCompletionMessageToolCall, ChatCompletionMessageToolCallChunk,
       ChatCompletionMessageToolCalls, ChatCompletionRequestAssistantMessage,
       ChatCompletionRequestAssistantMessageContent,
-      ChatCompletionRequestMessage, ChatCompletionRequestToolMessage,
+      ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
+      ChatCompletionRequestSystemMessageContent,
+      ChatCompletionRequestToolMessage,
       ChatCompletionRequestToolMessageContent,
       ChatCompletionRequestUserMessage,
       ChatCompletionRequestUserMessageContent, ChatCompletionTool,
