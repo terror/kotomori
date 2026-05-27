@@ -73,6 +73,9 @@ use {
         Client as AnthropicClient,
         completion::CompletionModel as AnthropicCompletionModel,
       },
+      cohere::{
+        Client as CohereClient, CompletionModel as CohereCompletionModel,
+      },
       deepseek::{
         Client as DeepSeekClient, CompletionModel as DeepSeekCompletionModel,
       },
@@ -163,6 +166,10 @@ mod approval_request;
 mod arguments;
 mod changed_range;
 mod command;
+mod cohere {
+  pub(crate) type Client = super::CohereClient;
+  pub(crate) type CompletionModel = super::CohereCompletionModel;
+}
 mod component;
 mod composer;
 mod cursor;
