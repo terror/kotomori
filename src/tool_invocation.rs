@@ -158,7 +158,7 @@ mod tests {
 
     assert_eq!(
       invocation.arguments(),
-      json!({"arguments": ["bar"], "cwd": null, "program": "baz"}),
+      json!({"arguments": ["bar"], "program": "baz"}),
     );
   }
 

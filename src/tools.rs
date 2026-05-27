@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ApplyPatchTool {
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) cwd: Option<PathBuf>,
   pub(crate) patch: String,
 }
@@ -64,6 +65,7 @@ impl ToolSpec for ApplyPatchTool {
 #[serde(deny_unknown_fields)]
 pub(crate) struct CommandTool {
   pub(crate) arguments: Vec<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) cwd: Option<PathBuf>,
   pub(crate) program: String,
 }
@@ -134,6 +136,7 @@ impl ToolSpec for CommandTool {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ListFilesTool {
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) cwd: Option<PathBuf>,
 }
 
@@ -185,9 +188,12 @@ impl ToolSpec for ListFilesTool {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ReadFileTool {
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) cwd: Option<PathBuf>,
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) end_line: Option<usize>,
   pub(crate) path: PathBuf,
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) start_line: Option<usize>,
 }
 
@@ -246,6 +252,7 @@ impl ToolSpec for ReadFileTool {
 #[serde(deny_unknown_fields)]
 pub(crate) struct SearchFilesTool {
   pub(crate) arguments: Vec<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) cwd: Option<PathBuf>,
 }
 
@@ -321,6 +328,7 @@ impl ToolSpec for SearchFilesTool {
 #[serde(deny_unknown_fields)]
 pub(crate) struct WriteFileTool {
   pub(crate) content: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) cwd: Option<PathBuf>,
   pub(crate) path: PathBuf,
 }
