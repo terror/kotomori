@@ -77,6 +77,10 @@ use {
         Client as OllamaClient, CompletionModel as OllamaCompletionModel,
       },
       openai::{CompletionModel as OpenAiCompletionModel, CompletionsClient},
+      openrouter::{
+        Client as OpenRouterClient,
+        CompletionModel as OpenRouterCompletionModel,
+      },
     },
     streaming::StreamedAssistantContent,
   },
@@ -176,6 +180,10 @@ mod ollama {
 mod openai {
   pub(crate) type CompletionModel = super::OpenAiCompletionModel;
   pub(crate) type CompletionsClient = super::CompletionsClient;
+}
+mod openrouter {
+  pub(crate) type Client = super::OpenRouterClient;
+  pub(crate) type CompletionModel = super::OpenRouterCompletionModel;
 }
 mod options;
 mod patch_plan;
