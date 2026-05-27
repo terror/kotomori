@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct State {
   composer: Composer,
+  pending_approval: Option<ApprovalRequest>,
   should_quit: bool,
   transcript: Transcript,
 }
@@ -13,6 +14,10 @@ impl State {
   }
 
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
+    if self.pending_approval.is_some() {
+      return self.handle_approval_action(action);
+    }
+
     match action {
       Action::CompleteCommand => {
         if !self.composer.complete_command() {
@@ -57,19 +62,60 @@ impl State {
     Vec::new()
   }
 
+  fn handle_approval_action(&mut self, action: Action) -> Vec<Effect> {
+    match action {
+      Action::Edit(input) if input.key == Key::Char('y') => {
+        self.resolve_approval(ToolApproval::Approved);
+      }
+      Action::Edit(input) if input.key == Key::Char('Y') => {
+        self.resolve_approval(ToolApproval::Approved);
+      }
+      Action::Edit(input) if input.key == Key::Char('n') => {
+        self.resolve_approval(ToolApproval::Denied);
+      }
+      Action::Edit(input) if input.key == Key::Char('N') => {
+        self.resolve_approval(ToolApproval::Denied);
+      }
+      Action::Interrupt => {
+        self.resolve_approval(ToolApproval::Denied);
+      }
+      Action::Quit => {
+        self.resolve_approval(ToolApproval::Denied);
+        self.quit();
+      }
+      Action::CompleteCommand
+      | Action::Edit(_)
+      | Action::SelectNextCommand
+      | Action::SelectPreviousCommand
+      | Action::Submit => {}
+    }
+
+    Vec::new()
+  }
+
   pub(crate) fn handle_event(&mut self, event: Event) -> Vec<Effect> {
     match event {
       Event::Action(action) => return self.handle_action(action),
-      Event::AgentDone => self.transcript.finish_agent_message(),
+      Event::AgentDone => {
+        self.pending_approval = None;
+        self.transcript.finish_agent_message();
+      }
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
       Event::AgentToolCall(tool_call) => {
         self.transcript.push_tool_call(tool_call);
       }
       Event::AgentToolResult { id, result } => {
+        self.pending_approval = None;
         self.transcript.push_tool_result(&id, result);
       }
-      Event::Error(error) => self.transcript.error(error),
+      Event::Error(error) => {
+        self.pending_approval = None;
+        self.transcript.error(error);
+      }
       Event::Tick(elapsed) => self.transcript.tick(elapsed),
+      Event::ToolApprovalRequest(request) => {
+        self.pending_approval = Some(request);
+      }
     }
 
     Vec::new()
@@ -84,9 +130,14 @@ impl State {
     Ok(Self {
       composer: Composer::new(options.prompt.as_deref().unwrap_or_default())
         .footer(Footer::try_from(&options.model)?),
+      pending_approval: None,
       should_quit: false,
       transcript: Transcript::default(),
     })
+  }
+
+  pub(crate) fn pending_approval(&self) -> Option<&ApprovalRequest> {
+    self.pending_approval.as_ref()
   }
 
   fn quit(&mut self) {
@@ -95,6 +146,17 @@ impl State {
 
   fn reset_input(&mut self) {
     self.composer.clear();
+  }
+
+  fn resolve_approval(&mut self, approval: ToolApproval) {
+    let Some(request) = self.pending_approval.take() else {
+      return;
+    };
+
+    match approval {
+      ToolApproval::Approved => request.approve(),
+      ToolApproval::Denied => request.deny(),
+    }
   }
 
   fn run_command(&mut self, command: Command) -> Vec<Effect> {
@@ -169,6 +231,7 @@ mod tests {
     let mut state = State::new(&Options {
       model: "fake:local".parse().unwrap(),
       prompt: Some("foo".into()),
+      yolo: false,
     })
     .unwrap();
 
@@ -214,11 +277,54 @@ mod tests {
     );
   }
 
+  #[tokio::test]
+  async fn approval_actions_resolve_pending_request() {
+    async fn case(action: Action, expected: ToolApproval) {
+      let mut state = State::new(&Options {
+        model: "fake:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap();
+
+      let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::Command(CommandTool {
+          arguments: Vec::new(),
+          cwd: None,
+          program: "bar".into(),
+        }),
+      });
+
+      state.handle_event(Event::ToolApprovalRequest(request));
+
+      assert!(state.pending_approval().is_some());
+
+      state.handle_event(Event::Action(action));
+
+      assert_eq!(response_receiver.await.unwrap(), expected);
+
+      assert!(state.pending_approval().is_none());
+    }
+
+    case(
+      Action::Edit(Input {
+        key: Key::Char('y'),
+        ..Default::default()
+      }),
+      ToolApproval::Approved,
+    )
+    .await;
+
+    case(Action::Interrupt, ToolApproval::Denied).await;
+  }
+
   #[test]
   fn command_autocomplete() {
     let mut state = State::new(&Options {
       model: "fake:local".parse().unwrap(),
       prompt: Some("/".into()),
+      yolo: false,
     })
     .unwrap();
 
@@ -248,6 +354,7 @@ mod tests {
       let mut state = State::new(&Options {
         model: "fake:local".parse().unwrap(),
         prompt: Some("foo".into()),
+        yolo: false,
       })
       .unwrap();
 
@@ -283,6 +390,7 @@ mod tests {
     let mut state = State::new(&Options {
       model: "fake:local".parse().unwrap(),
       prompt: Some("foo".into()),
+      yolo: false,
     })
     .unwrap();
 
@@ -324,6 +432,7 @@ mod tests {
     let mut state = State::new(&Options {
       model: "fake:local".parse().unwrap(),
       prompt: Some("foo".into()),
+      yolo: false,
     })
     .unwrap();
 
@@ -352,6 +461,7 @@ mod tests {
     let mut state = State::new(&Options {
       model: "fake:local".parse().unwrap(),
       prompt: Some(String::new()),
+      yolo: false,
     })
     .unwrap();
 
@@ -387,6 +497,7 @@ mod tests {
     let mut state = State::new(&Options {
       model: "fake:local".parse().unwrap(),
       prompt: Some("/foobar".into()),
+      yolo: false,
     })
     .unwrap();
 
