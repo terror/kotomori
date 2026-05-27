@@ -21,8 +21,8 @@ use {
     },
     execute, queue,
     terminal::{
-      self as crossterm_terminal, Clear, ClearType, disable_raw_mode,
-      enable_raw_mode,
+      self as crossterm_terminal, BeginSynchronizedUpdate, Clear, ClearType,
+      EndSynchronizedUpdate, disable_raw_mode, enable_raw_mode,
     },
   },
   cursor::Cursor,
