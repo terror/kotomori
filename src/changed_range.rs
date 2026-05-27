@@ -1,5 +1,11 @@
 use super::*;
 
+/// The smallest inclusive span of logical frame rows that differs between two
+/// rendered frames.
+///
+/// A single span is used even when there are multiple disjoint changes. This
+/// keeps the renderer's patching model simple: everything between the first and
+/// last changed row is considered dirty and may be rewritten.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ChangedRange {
   pub(crate) first: usize,

@@ -1,5 +1,11 @@
 use super::*;
 
+/// Incrementally collected JSON arguments for a streamed tool call.
+///
+/// Providers report tool arguments differently, but this type stores the common
+/// case where JSON arrives as one or more string deltas. An empty stream is
+/// treated as `{}` so providers that omit empty argument objects still produce
+/// a valid invocation.
 #[derive(Default)]
 pub(crate) enum ToolCallArguments {
   Deltas(String),
