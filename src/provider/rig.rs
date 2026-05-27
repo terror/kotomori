@@ -11,6 +11,7 @@ pub(crate) struct Rig {
 enum RigModel {
   Anthropic(anthropic::CompletionModel),
   DeepSeek(deepseek::CompletionModel),
+  Gemini(gemini::CompletionModel),
   Groq(groq::CompletionModel),
   Mistral(mistral::CompletionModel),
   Ollama(ollama::CompletionModel),
@@ -58,6 +59,20 @@ impl Rig {
       max_tokens: None,
       model: RigModel::DeepSeek(model),
       provider: "deepseek",
+    })
+  }
+
+  pub(crate) fn gemini(model: &Model) -> Result<Self> {
+    let api_key = env::var("GEMINI_API_KEY").unwrap_or_default();
+
+    let client = gemini::Client::builder().api_key(api_key).build()?;
+
+    let model = CompletionClient::completion_model(&client, model.name());
+
+    Ok(Self {
+      max_tokens: None,
+      model: RigModel::Gemini(model),
+      provider: "gemini",
     })
   }
 
@@ -220,6 +235,7 @@ impl Provider for Rig {
       RigModel::DeepSeek(model) => {
         self.stream_model(model, request, sink).await
       }
+      RigModel::Gemini(model) => self.stream_model(model, request, sink).await,
       RigModel::Groq(model) => self.stream_model(model, request, sink).await,
       RigModel::Mistral(model) => self.stream_model(model, request, sink).await,
       RigModel::Ollama(model) => self.stream_model(model, request, sink).await,
