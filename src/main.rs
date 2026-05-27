@@ -94,6 +94,10 @@ use {
         Client as OpenRouterClient,
         CompletionModel as OpenRouterCompletionModel,
       },
+      perplexity::{
+        Client as PerplexityClient,
+        CompletionModel as PerplexityCompletionModel,
+      },
       together::{
         Client as TogetherClient, CompletionModel as TogetherCompletionModel,
       },
@@ -224,6 +228,10 @@ mod openrouter {
 }
 mod options;
 mod patch_plan;
+mod perplexity {
+  pub(crate) type Client = super::PerplexityClient;
+  pub(crate) type CompletionModel = super::PerplexityCompletionModel;
+}
 mod presented_frame;
 mod provider;
 mod provider_output;

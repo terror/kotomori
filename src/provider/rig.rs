@@ -18,6 +18,7 @@ enum RigModel {
   Ollama(ollama::CompletionModel),
   OpenAi(openai::CompletionModel),
   OpenRouter(openrouter::CompletionModel),
+  Perplexity(perplexity::CompletionModel),
   Together(together::CompletionModel),
   Xai(xai::CompletionModel),
 }
@@ -177,6 +178,20 @@ impl Rig {
     })
   }
 
+  pub(crate) fn perplexity(model: &Model) -> Result<Self> {
+    let api_key = env::var("PERPLEXITY_API_KEY").unwrap_or_default();
+
+    let client = perplexity::Client::builder().api_key(api_key).build()?;
+
+    let model = CompletionClient::completion_model(&client, model.name());
+
+    Ok(Self {
+      max_tokens: None,
+      model: RigModel::Perplexity(model),
+      provider: "perplexity",
+    })
+  }
+
   async fn stream_model<M>(
     &self,
     model: &M,
@@ -272,6 +287,9 @@ impl Provider for Rig {
       RigModel::Ollama(model) => self.stream_model(model, request, sink).await,
       RigModel::OpenAi(model) => self.stream_model(model, request, sink).await,
       RigModel::OpenRouter(model) => {
+        self.stream_model(model, request, sink).await
+      }
+      RigModel::Perplexity(model) => {
         self.stream_model(model, request, sink).await
       }
       RigModel::Together(model) => {
