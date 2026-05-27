@@ -14,6 +14,10 @@ impl State {
   }
 
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
+    if action == Action::Quit && self.transcript.is_agent_active() {
+      return self.interrupt_agent();
+    }
+
     match &self.input_mode {
       InputMode::Approval(_) => self.handle_approval_action(action),
       InputMode::Compose => self.handle_composer_action(action),
@@ -63,11 +67,7 @@ impl State {
       }
       Action::Edit(input) => self.composer.input(input),
       Action::Interrupt => {
-        if self.transcript.is_agent_active() {
-          self.transcript.interrupt();
-
-          return vec![Effect::InterruptAgent];
-        }
+        return self.interrupt_agent();
       }
       Action::Quit => self.quit(),
       Action::SelectNextCommand => {
@@ -127,6 +127,17 @@ impl State {
   #[cfg(test)]
   pub(crate) fn input_text(&self) -> String {
     self.composer.input_text()
+  }
+
+  fn interrupt_agent(&mut self) -> Vec<Effect> {
+    if !self.transcript.is_agent_active() {
+      return Vec::new();
+    }
+
+    self.input_mode.clear_approval();
+    self.transcript.interrupt();
+
+    vec![Effect::InterruptAgent]
   }
 
   pub(crate) fn new(options: &Options) -> Result<Self> {
@@ -450,6 +461,71 @@ mod tests {
       state.handle_event(Event::Action(Action::Interrupt)),
       Vec::new()
     );
+  }
+
+  #[test]
+  fn quit_interrupts_active_agent() {
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::new(Role::User, "foo")]
+      }]
+    );
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Quit)),
+      vec![Effect::InterruptAgent]
+    );
+
+    assert!(!state.should_quit());
+    assert!(!state.transcript().is_agent_active());
+
+    assert_eq!(state.handle_event(Event::Action(Action::Quit)), Vec::new());
+
+    assert!(state.should_quit());
+  }
+
+  #[tokio::test]
+  async fn quit_interrupts_active_approval() {
+    let mut state = State::new(&Options {
+      model: "fake:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    assert!(state.pending_approval().is_some());
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Quit)),
+      vec![Effect::InterruptAgent]
+    );
+
+    assert!(!state.should_quit());
+    assert!(!state.transcript().is_agent_active());
+
+    assert!(state.pending_approval().is_none());
+    assert!(response_receiver.await.is_err());
   }
 
   #[test]
