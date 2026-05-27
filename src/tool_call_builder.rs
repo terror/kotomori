@@ -1,5 +1,10 @@
 use super::*;
 
+/// Builds a complete tool call from independently streamed fields.
+///
+/// Provider protocols may deliver the id, name, and argument JSON in separate
+/// events. The builder holds those partial fields until the stream reports that
+/// the call is finished, at which point missing required fields become errors.
 #[derive(Default)]
 pub(crate) struct ToolCallBuilder {
   arguments: ToolCallArguments,

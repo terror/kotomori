@@ -1,6 +1,11 @@
 use super::*;
 
 pub(crate) struct ToolCallStream<I> {
+  /// In-flight calls keyed by the provider's stream index.
+  ///
+  /// Multiple tool calls may be interleaved on the same response stream. A
+  /// stable map preserves deterministic completion order for any calls that
+  /// have to be flushed at end of stream.
   calls: BTreeMap<I, ToolCallBuilder>,
 }
 

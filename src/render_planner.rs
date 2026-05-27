@@ -1,5 +1,11 @@
 use super::*;
 
+/// Chooses the cheapest terminal operation that can present the next frame.
+///
+/// The planner is conservative. It only returns a patch when the previous
+/// frame, terminal dimensions, viewport, and diff all describe a region that
+/// can be safely reached and rewritten. Otherwise it asks the renderer to clear
+/// or redraw so that stale terminal rows are not left behind.
 #[derive(Debug)]
 pub(crate) struct RenderPlanner<'a> {
   max_lines_rendered: usize,

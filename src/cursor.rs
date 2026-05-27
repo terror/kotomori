@@ -1,11 +1,22 @@
 use super::*;
 
+/// The terminal cursor expressed as a logical row in the rendered frame.
+///
+/// This deliberately does not store a terminal screen row. A logical row only
+/// becomes a physical cursor position when interpreted through a [`Viewport`],
+/// which lets rendering code account for terminal scrollback between writes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Cursor {
   row: usize,
 }
 
 impl Cursor {
+  /// Return the signed vertical movement needed to reach `target_row`.
+  ///
+  /// The source and target rows may be interpreted through different
+  /// viewports. This is what lets callers compute cursor movement across
+  /// operations that scroll the terminal while preserving the logical row that
+  /// the cursor is attached to.
   pub(crate) fn diff_to(
     self,
     from: Viewport,
