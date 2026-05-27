@@ -10,6 +10,7 @@ pub(crate) struct Rig {
 #[derive(Clone)]
 enum RigModel {
   Anthropic(anthropic::CompletionModel),
+  Groq(groq::CompletionModel),
   Ollama(ollama::CompletionModel),
   OpenAi(openai::CompletionModel),
   OpenRouter(openrouter::CompletionModel),
@@ -40,6 +41,20 @@ impl Rig {
       max_tokens: Some(max_tokens),
       model: RigModel::Anthropic(model),
       provider: "anthropic",
+    })
+  }
+
+  pub(crate) fn groq(model: &Model) -> Result<Self> {
+    let api_key = env::var("GROQ_API_KEY").unwrap_or_default();
+
+    let client = groq::Client::builder().api_key(api_key).build()?;
+
+    let model = CompletionClient::completion_model(&client, model.name());
+
+    Ok(Self {
+      max_tokens: None,
+      model: RigModel::Groq(model),
+      provider: "groq",
     })
   }
 
@@ -157,6 +172,7 @@ impl Provider for Rig {
       RigModel::Anthropic(model) => {
         self.stream_model(model, request, sink).await
       }
+      RigModel::Groq(model) => self.stream_model(model, request, sink).await,
       RigModel::Ollama(model) => self.stream_model(model, request, sink).await,
       RigModel::OpenAi(model) => self.stream_model(model, request, sink).await,
       RigModel::OpenRouter(model) => {

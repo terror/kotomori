@@ -73,6 +73,7 @@ use {
         Client as AnthropicClient,
         completion::CompletionModel as AnthropicCompletionModel,
       },
+      groq::{Client as GroqClient, CompletionModel as GroqCompletionModel},
       ollama::{
         Client as OllamaClient, CompletionModel as OllamaCompletionModel,
       },
@@ -165,6 +166,10 @@ mod executor;
 mod footer;
 mod frame;
 mod framed_lines;
+mod groq {
+  pub(crate) type Client = super::GroqClient;
+  pub(crate) type CompletionModel = super::GroqCompletionModel;
+}
 mod header;
 mod hint;
 mod input_mode;
