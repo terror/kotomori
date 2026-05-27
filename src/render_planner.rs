@@ -7,10 +7,6 @@ pub(crate) struct RenderPlanner<'a> {
 }
 
 impl<'a> RenderPlanner<'a> {
-  fn is_termux_session() -> bool {
-    env::var_os("TERMUX_VERSION").is_some()
-  }
-
   pub(crate) fn new(
     max_lines_rendered: usize,
     presented: Option<&'a PresentedFrame>,
@@ -30,9 +26,7 @@ impl<'a> RenderPlanner<'a> {
       return RenderPlan::Full { clear: true };
     }
 
-    if presented.frame.dimensions.height != next.dimensions.height
-      && !Self::is_termux_session()
-    {
+    if presented.frame.dimensions.height != next.dimensions.height {
       return RenderPlan::Full { clear: true };
     }
 
@@ -51,21 +45,11 @@ impl<'a> RenderPlanner<'a> {
 
     let previous_viewport = Self::previous_viewport(presented, next);
 
-    let next_viewport =
-      Viewport::anchored_to_bottom(next.len(), next.dimensions.height());
-
-    if next.is_empty() || next_viewport.top() < previous_viewport.top() {
-      return RenderPlan::Full { clear: true };
-    }
-
     if diff.changed.first < previous_viewport.top() {
       return RenderPlan::Full { clear: true };
     }
 
-    if diff.is_pure_tail_delete()
-      && next.last_row() < previous_viewport.top()
-      && !next.is_empty()
-    {
+    if diff.is_pure_tail_delete() && next.last_row() < previous_viewport.top() {
       return RenderPlan::Full { clear: true };
     }
 

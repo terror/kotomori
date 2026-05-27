@@ -24,10 +24,14 @@ impl Renderer {
       previous_viewport,
     ))?;
 
-    write!(stdout, "\r")?;
+    let deleted_tail_len = diff.deleted_tail_len();
 
-    if diff.deleted_tail_len() > 0 {
-      stdout.move_down(1)?;
+    if !next.is_empty() {
+      write!(stdout, "\r")?;
+
+      if deleted_tail_len > 0 {
+        stdout.move_down(1)?;
+      }
     }
 
     for index in diff.changed.first..=diff.changed.last {
@@ -40,7 +44,8 @@ impl Renderer {
       queue!(stdout, Clear(ClearType::CurrentLine))?;
     }
 
-    stdout.move_up(diff.deleted_tail_len())?;
+    stdout
+      .move_up(deleted_tail_len.saturating_sub(usize::from(next.is_empty())))?;
 
     write!(stdout, "\x1b[?2026l")?;
 
@@ -142,7 +147,12 @@ impl Renderer {
     write!(stdout, "\x1b[?2026h")?;
 
     if clear {
-      queue!(stdout, MoveTo(0, 0), Clear(ClearType::All))?;
+      queue!(
+        stdout,
+        Clear(ClearType::All),
+        MoveTo(0, 0),
+        Clear(ClearType::Purge)
+      )?;
     }
 
     let lines = if clear {
@@ -445,7 +455,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
+      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
     );
   }
 
@@ -468,7 +478,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
+      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
     );
   }
 
@@ -563,7 +573,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
+      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
     );
   }
 
@@ -594,7 +604,49 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
+      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
+    );
+  }
+
+  #[test]
+  fn redraws_screen_when_height_changes_without_line_changes() {
+    let frame = Frame::new(
+      vec![
+        "foo".into(),
+        "bar".into(),
+        "baz".into(),
+        "qux".into(),
+        "quux".into(),
+      ],
+      Dimensions {
+        height: 3,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame.clone(),
+        Viewport::anchored_to_bottom(5, 3),
+      )),
+    };
+
+    let mut stdout = Vec::new();
+
+    subject
+      .draw_rendered(&mut stdout, frame.lines, 80, 4)
+      .unwrap();
+
+    assert_eq!(
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\r\n\x1b[1G\x1b[2Kqux\r\n\x1b[1G\x1b[2Kquux\x1b[?2026l",
+    );
+
+    assert_eq!(
+      subject.presented.as_ref().unwrap().viewport,
+      Viewport::new(1, 4),
     );
   }
 
@@ -625,12 +677,12 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
+      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
     );
   }
 
   #[test]
-  fn redraws_screen_when_shrink_moves_viewport_up() {
+  fn patches_when_shrink_moves_viewport_up() {
     let frame = Frame::new(
       vec![
         "foo".into(),
@@ -667,17 +719,17 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbob\r\n\x1b[1G\x1b[2Kqux\x1b[?2026l",
+      "\x1b[?2026h\x1b[2A\r\x1b[2Kbob\r\n\x1b[2Kqux\r\n\x1b[2K\x1b[1A\x1b[?2026l",
     );
 
     assert_eq!(
       subject.presented.as_ref().unwrap().viewport,
-      Viewport::anchored_to_bottom(4, 3),
+      Viewport::new(2, 3),
     );
   }
 
   #[test]
-  fn redraws_screen_when_frame_becomes_empty() {
+  fn clears_visible_lines_when_frame_becomes_empty() {
     let frame = Frame::new(
       vec!["foo".into()],
       Dimensions {
@@ -703,7 +755,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[1;1H\x1b[2J\x1b[?2026l",
+      "\x1b[?2026h\r\x1b[2K\x1b[?2026l",
     );
 
     assert_eq!(
