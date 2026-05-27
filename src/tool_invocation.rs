@@ -34,6 +34,18 @@ impl ToolInvocation {
     Message::tool_use(self.id.clone(), self.kind.name(), self.arguments())
   }
 
+  pub(crate) fn message_with_reasoning(
+    &self,
+    reasoning: Option<String>,
+  ) -> Message {
+    Message::tool_use_with_reasoning(
+      self.id.clone(),
+      self.kind.name(),
+      self.arguments(),
+      reasoning,
+    )
+  }
+
   pub(crate) fn progressive_tense(&self) -> String {
     self.title(ToolActionTense::Progressive)
   }
@@ -158,7 +170,7 @@ mod tests {
 
     assert_eq!(
       invocation.arguments(),
-      json!({"arguments": ["bar"], "cwd": null, "program": "baz"}),
+      json!({"arguments": ["bar"], "program": "baz"}),
     );
   }
 

@@ -17,16 +17,6 @@ impl OpenAi {
       reasoning_effort: None,
     }
   }
-
-  pub(crate) fn with_reasoning_effort(
-    self,
-    reasoning_effort: crate::openai::ReasoningEffort,
-  ) -> Self {
-    Self {
-      reasoning_effort: Some(reasoning_effort),
-      ..self
-    }
-  }
 }
 
 #[async_trait]

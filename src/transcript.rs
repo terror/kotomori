@@ -20,7 +20,41 @@ impl Transcript {
   pub(crate) fn error(&mut self, error: String) {
     self.active_agent_activity = AgentActivity::Idle;
     self.active_elapsed = Duration::ZERO;
-    self.entries.push(TranscriptEntry::Agent(error));
+    self.entries.push(TranscriptEntry::Agent {
+      content: error,
+      reasoning: None,
+    });
+  }
+
+  fn extend_agent_lines(
+    lines: &mut Vec<Line>,
+    content: &str,
+    reasoning: Option<&str>,
+  ) {
+    if !lines.last().is_some_and(|line| line == &Line::blank()) {
+      lines.push(Line::blank());
+    }
+
+    if let Some(reasoning) = reasoning.filter(|reasoning| !reasoning.is_empty())
+    {
+      lines.extend(
+        reasoning
+          .lines()
+          .map(|line| {
+            vec![Span::styled(format!(" {line}"), Style::DarkGray)].into()
+          })
+          .chain(once(Line::blank())),
+      );
+    }
+
+    if !content.is_empty() {
+      lines.extend(
+        content
+          .lines()
+          .map(|line| Line::raw(format!(" {line}")))
+          .chain(once(Line::blank())),
+      );
+    }
   }
 
   fn find_tool_result_mut(
@@ -36,17 +70,21 @@ impl Transcript {
   }
 
   pub(crate) fn finish_agent_message(&mut self) {
-    let AgentActivity::Streaming(message) =
+    let AgentActivity::Streaming { content, reasoning } =
       std::mem::take(&mut self.active_agent_activity)
     else {
       return;
     };
 
-    if message.is_empty() {
+    let reasoning = (!reasoning.is_empty()).then_some(reasoning);
+
+    if content.is_empty() && reasoning.is_none() {
       return;
     }
 
-    self.entries.push(TranscriptEntry::Agent(message));
+    self
+      .entries
+      .push(TranscriptEntry::Agent { content, reasoning });
   }
 
   pub(crate) fn interrupt(&mut self) {
@@ -68,7 +106,10 @@ impl Transcript {
   }
 
   pub(crate) fn push_agent(&mut self, content: impl Into<String>) {
-    self.entries.push(TranscriptEntry::Agent(content.into()));
+    self.entries.push(TranscriptEntry::Agent {
+      content: content.into(),
+      reasoning: None,
+    });
   }
 
   pub(crate) fn push_agent_delta(&mut self, delta: &str) {
@@ -77,9 +118,27 @@ impl Transcript {
         self.active_agent_activity = AgentActivity::Waiting;
       }
       AgentActivity::Idle | AgentActivity::Waiting => {
-        self.active_agent_activity = AgentActivity::Streaming(delta.into());
+        self.active_agent_activity = AgentActivity::Streaming {
+          content: delta.into(),
+          reasoning: String::new(),
+        };
       }
-      AgentActivity::Streaming(message) => message.push_str(delta),
+      AgentActivity::Streaming { content, .. } => content.push_str(delta),
+    }
+  }
+
+  pub(crate) fn push_agent_reasoning_delta(&mut self, delta: &str) {
+    match &mut self.active_agent_activity {
+      AgentActivity::Idle | AgentActivity::Waiting if delta.is_empty() => {
+        self.active_agent_activity = AgentActivity::Waiting;
+      }
+      AgentActivity::Idle | AgentActivity::Waiting => {
+        self.active_agent_activity = AgentActivity::Streaming {
+          content: String::new(),
+          reasoning: delta.into(),
+        };
+      }
+      AgentActivity::Streaming { reasoning, .. } => reasoning.push_str(delta),
     }
   }
 
@@ -127,12 +186,8 @@ impl Component for Transcript {
 
     for entry in &self.entries {
       match entry {
-        TranscriptEntry::Agent(content) => {
-          lines.extend(
-            once(Line::blank())
-              .chain(content.lines().map(|line| Line::raw(format!(" {line}"))))
-              .chain(once(Line::blank())),
-          );
+        TranscriptEntry::Agent { content, reasoning } => {
+          Self::extend_agent_lines(&mut lines, content, reasoning.as_deref());
         }
         TranscriptEntry::Interrupted => {
           lines.extend([
@@ -159,17 +214,8 @@ impl Component for Transcript {
 
     match &self.active_agent_activity {
       AgentActivity::Idle => {}
-      AgentActivity::Streaming(message) => {
-        if !lines.last().is_some_and(|line| line == &Line::blank()) {
-          lines.push(Line::blank());
-        }
-
-        lines.extend(
-          message
-            .lines()
-            .map(|line| Line::raw(format!(" {line}")))
-            .chain(once(Line::blank())),
-        );
+      AgentActivity::Streaming { content, reasoning } => {
+        Self::extend_agent_lines(&mut lines, content, Some(reasoning));
       }
       AgentActivity::Waiting => {
         if !lines.last().is_some_and(|line| line == &Line::blank()) {
@@ -234,6 +280,29 @@ mod tests {
       Line::raw(" bar"),
       Line::blank(),
     ]));
+  }
+
+  #[test]
+  fn reasoning_rendering() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_reasoning_delta("foo");
+    transcript.push_agent_delta("bar");
+
+    assert!(transcript.render(80).ends_with(&[
+      Line::blank(),
+      vec![Span::styled(" foo", Style::DarkGray)].into(),
+      Line::blank(),
+      Line::raw(" bar"),
+      Line::blank(),
+    ]));
+
+    transcript.finish_agent_message();
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::agent("bar", Some("foo".into()))],
+    );
   }
 
   #[test]

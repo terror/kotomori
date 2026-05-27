@@ -4,6 +4,7 @@ use {
   agent_activity::AgentActivity,
   anyhow::{Context, Error, bail},
   app::App,
+  anyhow::anyhow,
   approval_prompt::ApprovalPrompt,
   approval_request::ApprovalRequest,
   arguments::Arguments,
@@ -158,6 +159,18 @@ mod loader;
 mod message;
 mod message_kind;
 mod model;
+mod ollama {
+  pub(crate) use ollama_rs::{
+    Ollama,
+    generation::{
+      chat::{ChatMessage, MessageRole, request::ChatMessageRequest},
+      parameters::ThinkType,
+      tools::{
+        ToolCall, ToolCallFunction, ToolFunctionInfo, ToolInfo, ToolType,
+      },
+    },
+  };
+}
 mod openai {
   pub(crate) use async_openai::{
     Client,

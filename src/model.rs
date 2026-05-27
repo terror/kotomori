@@ -54,7 +54,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
     match model.provider.as_str() {
       "anthropic" => Ok(Arc::new(Anthropic::new()?)),
       "fake" => Ok(Arc::new(Fake)),
-      "ollama" => Ok(Arc::new(Ollama::new())),
+      "ollama" => Ok(Arc::new(Ollama::new()?)),
       "openai" => Ok(Arc::new(OpenAi::new())),
       provider => bail!("unknown provider `{provider}`"),
     }

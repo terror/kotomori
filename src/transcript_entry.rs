@@ -2,7 +2,10 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) enum TranscriptEntry {
-  Agent(String),
+  Agent {
+    content: String,
+    reasoning: Option<String>,
+  },
   Interrupted,
   Tool {
     invocation: ToolInvocation,
@@ -14,7 +17,9 @@ pub(crate) enum TranscriptEntry {
 impl TranscriptEntry {
   pub(crate) fn messages(&self) -> Vec<Message> {
     match self {
-      Self::Agent(content) => vec![Message::new(Role::Agent, content.clone())],
+      Self::Agent { content, reasoning } => {
+        vec![Message::agent(content.clone(), reasoning.clone())]
+      }
       Self::Interrupted => Vec::new(),
       Self::Tool { invocation, result } => result.as_ref().map_or_else(
         || vec![invocation.message()],

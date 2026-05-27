@@ -73,6 +73,23 @@ impl From<&Tool> for anthropic::Tool {
   }
 }
 
+impl TryFrom<&Tool> for ollama::ToolInfo {
+  type Error = Error;
+
+  fn try_from(tool: &Tool) -> Result<Self> {
+    Ok(Self {
+      function: ollama::ToolFunctionInfo {
+        description: tool.description.into(),
+        name: tool.name.into(),
+        parameters: serde_json::from_value::<schemars::Schema>(
+          tool.parameters.clone(),
+        )?,
+      },
+      tool_type: ollama::ToolType::Function,
+    })
+  }
+}
+
 impl From<&Tool> for openai::ChatCompletionTools {
   fn from(tool: &Tool) -> Self {
     Self::Function(openai::ChatCompletionTool {

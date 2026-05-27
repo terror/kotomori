@@ -104,6 +104,9 @@ impl State {
         self.transcript.finish_agent_message();
       }
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
+      Event::AgentReasoningDelta(delta) => {
+        self.transcript.push_agent_reasoning_delta(&delta);
+      }
       Event::AgentToolCall(tool_call) => {
         self.transcript.push_tool_call(tool_call);
       }

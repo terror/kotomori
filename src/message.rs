@@ -6,6 +6,19 @@ pub(crate) struct Message {
 }
 
 impl Message {
+  pub(crate) fn agent(
+    content: impl Into<String>,
+    reasoning: Option<String>,
+  ) -> Self {
+    Self {
+      kind: MessageKind::Text {
+        content: content.into(),
+        reasoning,
+        role: Role::Agent,
+      },
+    }
+  }
+
   pub(crate) fn content(&self) -> Option<&str> {
     match &self.kind {
       MessageKind::Text { content, .. }
@@ -18,6 +31,7 @@ impl Message {
     Self {
       kind: MessageKind::Text {
         content: content.into(),
+        reasoning: None,
         role,
       },
     }
@@ -51,11 +65,21 @@ impl Message {
     name: impl Into<String>,
     arguments: Value,
   ) -> Self {
+    Self::tool_use_with_reasoning(id, name, arguments, None)
+  }
+
+  pub(crate) fn tool_use_with_reasoning(
+    id: impl Into<String>,
+    name: impl Into<String>,
+    arguments: Value,
+    reasoning: Option<String>,
+  ) -> Self {
     Self {
       kind: MessageKind::ToolUse {
         arguments,
         id: id.into(),
         name: name.into(),
+        reasoning,
       },
     }
   }
@@ -65,17 +89,12 @@ impl Message {
       MessageKind::Text {
         content,
         role: Role::User,
+        ..
       } => Some(content),
       MessageKind::Text { .. }
       | MessageKind::ToolResult { .. }
       | MessageKind::ToolUse { .. } => None,
     }
-  }
-}
-
-impl From<RawToolCall> for Message {
-  fn from(call: RawToolCall) -> Self {
-    Self::tool_use(call.id, call.name, call.arguments)
   }
 }
 
@@ -85,10 +104,12 @@ impl Component for Message {
       MessageKind::Text {
         content,
         role: Role::Agent,
+        ..
       } => content.split('\n').map(Line::raw).collect(),
       MessageKind::Text {
         content,
         role: Role::User,
+        ..
       } => FramedLines::raw(content.split('\n')).render(width),
       MessageKind::ToolResult { content, .. } => {
         content.split('\n').map(Line::raw).collect()
@@ -100,72 +121,10 @@ impl Component for Message {
   }
 }
 
-impl From<&Message> for openai::ChatCompletionRequestMessage {
-  fn from(message: &Message) -> Self {
-    match &message.kind {
-      MessageKind::Text {
-        content,
-        role: Role::Agent,
-      } => openai::ChatCompletionRequestMessage::Assistant(
-        openai::ChatCompletionRequestAssistantMessage {
-          content: Some(
-            openai::ChatCompletionRequestAssistantMessageContent::Text(
-              content.clone(),
-            ),
-          ),
-          ..Default::default()
-        },
-      ),
-      MessageKind::Text {
-        content,
-        role: Role::User,
-      } => openai::ChatCompletionRequestMessage::User(
-        openai::ChatCompletionRequestUserMessage {
-          content: openai::ChatCompletionRequestUserMessageContent::Text(
-            content.clone(),
-          ),
-          name: None,
-        },
-      ),
-      MessageKind::ToolResult { content, id, .. } => {
-        openai::ChatCompletionRequestMessage::Tool(
-          openai::ChatCompletionRequestToolMessage {
-            content: openai::ChatCompletionRequestToolMessageContent::Text(
-              content.clone(),
-            ),
-            tool_call_id: id.clone(),
-          },
-        )
-      }
-      MessageKind::ToolUse {
-        arguments,
-        id,
-        name,
-      } => openai::ChatCompletionRequestMessage::Assistant(
-        openai::ChatCompletionRequestAssistantMessage {
-          tool_calls: Some(vec![
-            openai::ChatCompletionMessageToolCalls::Function(
-              openai::ChatCompletionMessageToolCall {
-                function: openai::FunctionCall {
-                  arguments: serde_json::to_string(arguments)
-                    .expect("failed to serialize tool arguments"),
-                  name: name.clone(),
-                },
-                id: id.clone(),
-              },
-            ),
-          ]),
-          ..Default::default()
-        },
-      ),
-    }
-  }
-}
-
 impl From<&Message> for anthropic::MessageParam {
   fn from(message: &Message) -> Self {
     match &message.kind {
-      MessageKind::Text { content, role } => anthropic::MessageParam {
+      MessageKind::Text { content, role, .. } => anthropic::MessageParam {
         content: anthropic::MessageContent::Text(content.clone()),
         role: match role {
           Role::Agent => anthropic::Role::Assistant,
@@ -190,6 +149,7 @@ impl From<&Message> for anthropic::MessageParam {
         arguments,
         id,
         name,
+        ..
       } => anthropic::MessageParam {
         content: anthropic::MessageContent::Blocks(vec![
           anthropic::ContentBlockParam::ToolUse {
@@ -201,6 +161,118 @@ impl From<&Message> for anthropic::MessageParam {
         role: anthropic::Role::Assistant,
       },
     }
+  }
+}
+
+impl From<&Message> for ollama::ChatMessage {
+  fn from(message: &Message) -> Self {
+    match &message.kind {
+      MessageKind::Text {
+        content,
+        reasoning,
+        role,
+      } => ollama::ChatMessage {
+        content: content.clone(),
+        images: None,
+        role: match role {
+          Role::Agent => ollama::MessageRole::Assistant,
+          Role::User => ollama::MessageRole::User,
+        },
+        thinking: reasoning.clone(),
+        tool_calls: Vec::new(),
+      },
+      MessageKind::ToolResult { content, .. } => {
+        ollama::ChatMessage::tool(content.clone())
+      }
+      MessageKind::ToolUse {
+        arguments,
+        name,
+        reasoning,
+        ..
+      } => ollama::ChatMessage {
+        content: String::new(),
+        images: None,
+        role: ollama::MessageRole::Assistant,
+        thinking: reasoning.clone(),
+        tool_calls: vec![ollama::ToolCall {
+          function: ollama::ToolCallFunction {
+            arguments: arguments.clone(),
+            name: name.clone(),
+          },
+        }],
+      },
+    }
+  }
+}
+
+impl From<&Message> for openai::ChatCompletionRequestMessage {
+  fn from(message: &Message) -> Self {
+    match &message.kind {
+      MessageKind::Text {
+        content,
+        role: Role::Agent,
+        ..
+      } => openai::ChatCompletionRequestMessage::Assistant(
+        openai::ChatCompletionRequestAssistantMessage {
+          content: Some(
+            openai::ChatCompletionRequestAssistantMessageContent::Text(
+              content.clone(),
+            ),
+          ),
+          ..Default::default()
+        },
+      ),
+      MessageKind::Text {
+        content,
+        role: Role::User,
+        ..
+      } => openai::ChatCompletionRequestMessage::User(
+        openai::ChatCompletionRequestUserMessage {
+          content: openai::ChatCompletionRequestUserMessageContent::Text(
+            content.clone(),
+          ),
+          name: None,
+        },
+      ),
+      MessageKind::ToolResult { content, id, .. } => {
+        openai::ChatCompletionRequestMessage::Tool(
+          openai::ChatCompletionRequestToolMessage {
+            content: openai::ChatCompletionRequestToolMessageContent::Text(
+              content.clone(),
+            ),
+            tool_call_id: id.clone(),
+          },
+        )
+      }
+      MessageKind::ToolUse {
+        arguments,
+        id,
+        name,
+        ..
+      } => openai::ChatCompletionRequestMessage::Assistant(
+        openai::ChatCompletionRequestAssistantMessage {
+          tool_calls: Some(vec![
+            openai::ChatCompletionMessageToolCalls::Function(
+              openai::ChatCompletionMessageToolCall {
+                function: openai::FunctionCall {
+                  arguments: serde_json::to_string(arguments)
+                    .expect("failed to serialize tool arguments"),
+                  name: name.clone(),
+                },
+                id: id.clone(),
+              },
+            ),
+          ]),
+          ..Default::default()
+        },
+      ),
+    }
+  }
+}
+
+impl From<RawToolCall> for Message {
+  fn from(call: RawToolCall) -> Self {
+    Self::tool_use(call.id, call.name, call.arguments)
   }
 }
 

@@ -101,6 +101,53 @@ impl From<&Request> for anthropic::MessageCreateParams {
   }
 }
 
+impl TryFrom<&Request> for ollama::ChatMessageRequest {
+  type Error = Error;
+
+  fn try_from(request: &Request) -> Result<Self> {
+    let messages = request
+      .system()
+      .map(|system| ollama::ChatMessage::system(system.into()))
+      .into_iter()
+      .chain(request.messages().map(Into::into))
+      .collect();
+
+    let tools = request
+      .tools()
+      .map(TryInto::try_into)
+      .collect::<Result<Vec<_>>>()?;
+
+    let think = env::var("OLLAMA_THINK")
+      .ok()
+      .map(|think| think.to_ascii_lowercase());
+
+    let think = match think.as_deref() {
+      Some("true") => Some(ollama::ThinkType::True),
+      Some("false") => Some(ollama::ThinkType::False),
+      Some("low") => Some(ollama::ThinkType::Low),
+      Some("medium") => Some(ollama::ThinkType::Medium),
+      Some("high") => Some(ollama::ThinkType::High),
+      Some(think) => bail!(
+        "unsupported OLLAMA_THINK `{think}`, expected true, false, low, medium, or high"
+      ),
+      None if request.model_name().starts_with("gpt-oss") => {
+        Some(ollama::ThinkType::Medium)
+      }
+      None => None,
+    };
+
+    let request =
+      ollama::ChatMessageRequest::new(request.model_name().into(), messages)
+        .tools(tools);
+
+    Ok(if let Some(think) = think {
+      request.think(think)
+    } else {
+      request
+    })
+  }
+}
+
 impl TryFrom<&Request> for openai::CreateChatCompletionRequest {
   type Error = Error;
 

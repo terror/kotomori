@@ -4,6 +4,7 @@ use super::*;
 pub(crate) enum MessageKind {
   Text {
     content: String,
+    reasoning: Option<String>,
     role: Role,
   },
   ToolResult {
@@ -15,5 +16,6 @@ pub(crate) enum MessageKind {
     arguments: Value,
     id: String,
     name: String,
+    reasoning: Option<String>,
   },
 }

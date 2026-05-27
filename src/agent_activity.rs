@@ -2,6 +2,9 @@
 pub(crate) enum AgentActivity {
   #[default]
   Idle,
-  Streaming(String),
+  Streaming {
+    content: String,
+    reasoning: String,
+  },
   Waiting,
 }

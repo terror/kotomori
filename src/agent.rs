@@ -26,6 +26,10 @@ impl Agent {
     Ok(response_receiver.await.unwrap_or(ToolApproval::Denied))
   }
 
+  fn default_system() -> &'static str {
+    "You are kotomori, a coding agent running in a terminal.\n\nUse the available tools to inspect or modify the project. When a tool is needed, emit the tool call in the current response instead of saying that you will use it. Do not end a response by saying you will read, list, search, run, or edit something unless the corresponding tool call is included. When no tool is needed, answer directly."
+  }
+
   pub(crate) fn interrupt(&mut self) {
     if let Some(task) = self.task.take() {
       task.abort();
@@ -70,7 +74,7 @@ impl Agent {
   }
 
   async fn stream(&self, mut messages: Vec<Message>) -> Result {
-    let system = self.loader.load()?;
+    let system = self.system()?;
 
     loop {
       let mut sink = ProviderSink::new(
@@ -97,20 +101,34 @@ impl Agent {
 
       let output = sink.finish();
 
-      if !output.content.is_empty() {
-        messages.push(Message::new(Role::Agent, output.content));
+      let reasoning = output.reasoning;
+
+      let has_content = !output.content.is_empty();
+
+      if has_content {
+        messages.push(Message::agent(
+          output.content,
+          (!reasoning.is_empty()).then_some(reasoning.clone()),
+        ));
       }
 
       if output.tool_calls.is_empty() {
         break;
       }
 
-      for tool_call in output.tool_calls {
-        messages.push(tool_call.message());
+      for (index, tool_call) in output.tool_calls.into_iter().enumerate() {
+        let reasoning = if index == 0 && !has_content {
+          (!reasoning.is_empty()).then_some(reasoning.clone())
+        } else {
+          None
+        };
 
-        let approval = self.approval(&tool_call).await?;
+        messages.push(tool_call.message_with_reasoning(reasoning));
 
-        let result = tool_call.kind.execute(approval).await;
+        let result = tool_call
+          .kind
+          .execute(self.approval(&tool_call).await?)
+          .await;
 
         messages.push(result.message(tool_call.id.clone()));
 
@@ -124,6 +142,17 @@ impl Agent {
     self.event_sender.send(Event::AgentDone)?;
 
     Ok(())
+  }
+
+  fn system(&self) -> Result<String> {
+    let agents = self.loader.load()?;
+    let default_system = Self::default_system();
+
+    if agents.is_empty() {
+      Ok(default_system.into())
+    } else {
+      Ok(format!("{default_system}\n\n{agents}"))
+    }
   }
 }
 
@@ -242,7 +271,6 @@ mod tests {
             "command",
             json!({
               "arguments": ["bar"],
-              "cwd": null,
               "program": "echo",
             }),
           ),
@@ -292,7 +320,6 @@ mod tests {
             "command",
             json!({
               "arguments": ["bar"],
-              "cwd": null,
               "program": "echo",
             }),
           ),
@@ -325,6 +352,34 @@ mod tests {
         Event::AgentDelta("done".into()),
         Event::AgentDone,
       ],
+    );
+  }
+
+  #[test]
+  fn system_includes_default_instructions() {
+    let (event_sender, _) = mpsc::unbounded_channel();
+    let directory = tempfile::tempdir().unwrap();
+
+    fs::create_dir(directory.path().join(".git")).unwrap();
+    fs::write(directory.path().join("AGENTS.md"), "foo\n").unwrap();
+
+    let agent = Agent {
+      event_sender,
+      loader: Loader::with_cwd(directory.path()),
+      model: "fake:local".parse().unwrap(),
+      provider: Arc::new(Fake),
+      task: None,
+      tool_registry: ToolRegistry::default(),
+      yolo: true,
+    };
+
+    assert_eq!(
+      agent.system().unwrap(),
+      format!(
+        "{}\n\n{}:\nfoo",
+        Agent::default_system(),
+        directory.path().join("AGENTS.md").display(),
+      ),
     );
   }
 }
