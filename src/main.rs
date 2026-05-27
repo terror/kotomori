@@ -85,6 +85,7 @@ use {
         Client as OpenRouterClient,
         CompletionModel as OpenRouterCompletionModel,
       },
+      xai::{Client as XaiClient, CompletionModel as XaiCompletionModel},
     },
     streaming::StreamedAssistantContent,
   },
@@ -229,6 +230,10 @@ mod transcript_tool_invocation;
 mod view;
 mod viewport;
 mod write_ext;
+mod xai {
+  pub(crate) type Client = super::XaiClient;
+  pub(crate) type CompletionModel = super::XaiCompletionModel;
+}
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 
