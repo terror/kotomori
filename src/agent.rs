@@ -6,9 +6,24 @@ pub(crate) struct Agent {
   model: Model,
   provider: Arc<dyn Provider>,
   task: Option<task::JoinHandle<()>>,
+  yolo: bool,
 }
 
 impl Agent {
+  async fn approval(&self, tool_call: &ToolInvocation) -> Result<ToolApproval> {
+    if self.yolo || !tool_call.kind.requires_approval() {
+      return Ok(ToolApproval::Approved);
+    }
+
+    let (request, response_receiver) = ApprovalRequest::new(tool_call.clone());
+
+    self
+      .event_sender
+      .send(Event::ToolApprovalRequest(request))?;
+
+    Ok(response_receiver.await.unwrap_or(ToolApproval::Denied))
+  }
+
   pub(crate) fn interrupt(&mut self) {
     if let Some(task) = self.task.take() {
       task.abort();
@@ -17,15 +32,16 @@ impl Agent {
 
   pub(crate) fn new(
     event_sender: UnboundedSender<Event>,
-    model: Model,
+    options: &Options,
   ) -> Result<Self> {
-    let provider = Arc::<dyn Provider>::try_from(model.clone())?;
+    let provider = Arc::<dyn Provider>::try_from(options.model.clone())?;
 
     Ok(Self {
       event_sender,
-      model,
+      model: options.model.clone(),
       provider,
       task: None,
+      yolo: options.yolo,
     })
   }
 
@@ -37,6 +53,7 @@ impl Agent {
       model: self.model.clone(),
       provider: self.provider.clone(),
       task: None,
+      yolo: self.yolo,
     };
 
     self.task = Some(tokio::spawn(async move {
@@ -71,7 +88,9 @@ impl Agent {
       for tool_call in output.tool_calls {
         messages.push(tool_call.message());
 
-        let result = tool_call.kind.execute().await;
+        let approval = self.approval(&tool_call).await?;
+
+        let result = tool_call.kind.execute(approval).await;
 
         messages.push(result.message(tool_call.id.clone()));
 
@@ -90,7 +109,7 @@ impl Agent {
 
 #[cfg(test)]
 mod tests {
-  use {super::*, std::sync::Mutex};
+  use super::*;
 
   #[derive(Debug)]
   struct LoopProvider {
@@ -133,6 +152,83 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn command_tools_wait_for_approval() {
+    let (event_sender, mut event_receiver) = mpsc::unbounded_channel();
+
+    let requests = Arc::new(Mutex::new(Vec::new()));
+
+    let agent = Agent {
+      event_sender,
+      model: "fake:local".parse().unwrap(),
+      provider: Arc::new(LoopProvider {
+        requests: requests.clone(),
+      }),
+      task: None,
+      yolo: false,
+    };
+
+    let task = tokio::spawn(async move {
+      agent
+        .stream(vec![Message::new(Role::User, "foo")])
+        .await
+        .unwrap();
+    });
+
+    assert_eq!(
+      event_receiver.recv().await.unwrap(),
+      Event::AgentToolCall(ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::Command(CommandTool {
+          arguments: vec!["bar".into()],
+          cwd: None,
+          program: "echo".into(),
+        }),
+      })
+    );
+
+    let request = match event_receiver.recv().await.unwrap() {
+      Event::ToolApprovalRequest(request) => request,
+      event => panic!("expected approval request, got {event:?}"),
+    };
+
+    request.deny();
+
+    task.await.unwrap();
+
+    let tool_result = ToolResult::error("permission denied");
+
+    assert_eq!(
+      event_receiver.recv().await.unwrap(),
+      Event::AgentToolResult {
+        id: "foo".into(),
+        result: tool_result.clone(),
+      },
+    );
+
+    let requests = requests.lock().unwrap();
+
+    assert_eq!(
+      *requests,
+      [
+        vec![Message::new(Role::User, "foo")],
+        vec![
+          Message::new(Role::User, "foo"),
+          Message::tool_use(
+            "foo",
+            "command",
+            json!({
+              "arguments": ["bar"],
+              "cwd": null,
+              "program": "echo",
+            }),
+          ),
+          tool_result.message("foo"),
+        ],
+      ],
+    );
+  }
+
+  #[tokio::test]
   async fn loops_until_provider_returns_no_tool_calls() {
     let (event_sender, mut event_receiver) = mpsc::unbounded_channel();
 
@@ -145,6 +241,7 @@ mod tests {
         requests: requests.clone(),
       }),
       task: None,
+      yolo: true,
     };
 
     agent

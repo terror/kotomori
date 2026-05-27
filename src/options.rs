@@ -6,4 +6,6 @@ pub(crate) struct Options {
   pub(crate) model: Model,
   #[arg(short, long)]
   pub(crate) prompt: Option<String>,
+  #[arg(long)]
+  pub(crate) yolo: bool,
 }

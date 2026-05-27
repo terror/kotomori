@@ -4,6 +4,8 @@ use {
   agent_activity::AgentActivity,
   anyhow::{Context, Error, bail},
   app::App,
+  approval_prompt::ApprovalPrompt,
+  approval_request::ApprovalRequest,
   arguments::Arguments,
   async_trait::async_trait,
   changed_range::ChangedRange,
@@ -39,6 +41,7 @@ use {
   futures_util::StreamExt,
   header::Header,
   hint::Hint,
+  input_mode::InputMode,
   line::Line,
   message::Message,
   message_kind::MessageKind,
@@ -74,7 +77,7 @@ use {
     path::PathBuf,
     process::{self, Stdio},
     str::{self, FromStr},
-    sync::{Arc, LazyLock},
+    sync::{Arc, LazyLock, Mutex},
     thread,
     time::Duration,
   },
@@ -83,12 +86,16 @@ use {
   terminal::Terminal,
   tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    sync::{
+      mpsc::{self, UnboundedReceiver, UnboundedSender},
+      oneshot,
+    },
     task,
     time::{interval, sleep, timeout},
   },
   tool::Tool,
   tool_action_tense::ToolActionTense,
+  tool_approval::ToolApproval,
   tool_call_arguments::ToolCallArguments,
   tool_call_builder::ToolCallBuilder,
   tool_call_stream::ToolCallStream,
@@ -114,6 +121,8 @@ use {
 mod action;
 mod agent;
 mod agent_activity;
+mod approval_prompt;
+mod approval_request;
 mod anthropic {
   pub(crate) use anthropic_sdk::{
     Anthropic, AuthMethod, ClientConfig, ContentBlock, ContentBlockDelta,
@@ -140,6 +149,7 @@ mod frame;
 mod framed_lines;
 mod header;
 mod hint;
+mod input_mode;
 mod line;
 mod message;
 mod message_kind;
@@ -181,6 +191,7 @@ mod style;
 mod terminal;
 mod tool;
 mod tool_action_tense;
+mod tool_approval;
 mod tool_call_arguments;
 mod tool_call_builder;
 mod tool_call_stream;

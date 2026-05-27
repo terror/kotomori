@@ -9,4 +9,5 @@ pub(crate) enum Event {
   AgentToolResult { id: String, result: ToolResult },
   Error(String),
   Tick(Duration),
+  ToolApprovalRequest(ApprovalRequest),
 }

@@ -19,7 +19,10 @@ impl Component for View<'_> {
       .chain(Hint.render(width))
       .chain(once(Line::blank()))
       .chain(self.state.transcript().render(width))
-      .chain(self.state.composer().render(width))
+      .chain(match self.state.pending_approval() {
+        Some(request) => ApprovalPrompt::new(request).render(width),
+        None => self.state.composer().render(width),
+      })
       .collect()
   }
 }
@@ -33,6 +36,7 @@ mod tests {
     let mut state = State::new(&Options {
       model: "fake:local".parse().unwrap(),
       prompt: Some("foo".into()),
+      yolo: false,
     })
     .unwrap();
 
