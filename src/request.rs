@@ -90,16 +90,8 @@ impl From<&Request> for CompletionRequest {
       }
     };
 
-    let additional_params = if request.model().provider() == "ollama" {
-      Some(json!({
-        "think": true,
-      }))
-    } else {
-      None
-    };
-
     Self {
-      additional_params,
+      additional_params: None,
       chat_history,
       documents: Vec::new(),
       max_tokens: None,
@@ -115,7 +107,7 @@ impl From<&Request> for CompletionRequest {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use {super::*, serde_json::json};
 
   #[test]
   fn chat_messages() {
@@ -169,22 +161,6 @@ mod tests {
     assert_eq!(
       request.chat_history.iter().collect::<Vec<_>>(),
       vec![&RigMessage::system("baz"), &RigMessage::user("bar")],
-    );
-  }
-
-  #[test]
-  fn rig_ollama_think() {
-    let request = CompletionRequest::from(&Request::new(
-      "ollama:foo".parse().unwrap(),
-      vec![Message::new(Role::User, "bar")],
-      ToolRegistry::default(),
-    ));
-
-    assert_eq!(
-      request.additional_params,
-      Some(json!({
-        "think": true,
-      })),
     );
   }
 

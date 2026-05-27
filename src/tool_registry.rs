@@ -51,7 +51,7 @@ impl Default for ToolRegistry {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use {super::*, serde_json::json};
 
   #[test]
   fn empty_registry_does_not_decode_default_tools() {

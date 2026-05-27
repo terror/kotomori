@@ -83,7 +83,7 @@ use {
   role::Role,
   schemars::JsonSchema,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
-  serde_json::{Value, json},
+  serde_json::Value,
   span::Span,
   state::State,
   std::{
