@@ -4,7 +4,7 @@ use super::*;
 pub(crate) struct ProviderSink {
   content: String,
   event_sender: UnboundedSender<Event>,
-  reflection: Reflection,
+  reasoning_buffer: ReasoningBuffer,
   tool_calls: Vec<ToolInvocation>,
   tool_registry: ToolRegistry,
 }
@@ -32,14 +32,14 @@ impl ProviderSink {
     Self {
       content: String::new(),
       event_sender,
-      reflection: Reflection::default(),
+      reasoning_buffer: ReasoningBuffer::default(),
       tool_calls: Vec::new(),
       tool_registry,
     }
   }
 
   pub(crate) fn reasoning(&mut self, reasoning: Reasoning) -> Result {
-    if let Some(delta) = self.reflection.reasoning(reasoning) {
+    if let Some(delta) = self.reasoning_buffer.push_reasoning(reasoning) {
       self.event_sender.send(Event::AgentReasoningDelta(delta))?;
     }
 
@@ -51,7 +51,7 @@ impl ProviderSink {
     id: Option<String>,
     delta: impl Into<String>,
   ) -> Result {
-    if let Some(delta) = self.reflection.delta(id, delta) {
+    if let Some(delta) = self.reasoning_buffer.push_delta(id, delta) {
       self.event_sender.send(Event::AgentReasoningDelta(delta))?;
     }
 

@@ -55,7 +55,7 @@ use {
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
-  reflection::Reflection,
+  reasoning_buffer::ReasoningBuffer,
   render_plan::RenderPlan,
   render_planner::RenderPlanner,
   renderer::Renderer,
@@ -184,7 +184,7 @@ mod provider;
 mod provider_output;
 mod provider_sink;
 mod raw_tool_call;
-mod reflection;
+mod reasoning_buffer;
 mod render_plan;
 mod render_planner;
 mod renderer;
