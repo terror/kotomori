@@ -10,6 +10,7 @@ pub(crate) struct Rig {
 #[derive(Clone)]
 enum RigModel {
   Anthropic(anthropic::CompletionModel),
+  DeepSeek(deepseek::CompletionModel),
   Groq(groq::CompletionModel),
   Ollama(ollama::CompletionModel),
   OpenAi(openai::CompletionModel),
@@ -41,6 +42,20 @@ impl Rig {
       max_tokens: Some(max_tokens),
       model: RigModel::Anthropic(model),
       provider: "anthropic",
+    })
+  }
+
+  pub(crate) fn deepseek(model: &Model) -> Result<Self> {
+    let api_key = env::var("DEEPSEEK_API_KEY").unwrap_or_default();
+
+    let client = deepseek::Client::builder().api_key(api_key).build()?;
+
+    let model = CompletionClient::completion_model(&client, model.name());
+
+    Ok(Self {
+      max_tokens: None,
+      model: RigModel::DeepSeek(model),
+      provider: "deepseek",
     })
   }
 
@@ -170,6 +185,9 @@ impl Provider for Rig {
   async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result {
     match &self.model {
       RigModel::Anthropic(model) => {
+        self.stream_model(model, request, sink).await
+      }
+      RigModel::DeepSeek(model) => {
         self.stream_model(model, request, sink).await
       }
       RigModel::Groq(model) => self.stream_model(model, request, sink).await,
