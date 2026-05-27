@@ -72,62 +72,36 @@ impl Request {
   }
 }
 
-impl From<&Request> for anthropic::MessageCreateParams {
+impl From<&Request> for CompletionRequest {
   fn from(request: &Request) -> Self {
-    let builder = request.messages().fold(
-      anthropic::MessageCreateBuilder::new(
-        request.model_name(),
-        env::var("ANTHROPIC_MAX_TOKENS")
-          .ok()
-          .and_then(|max_tokens| max_tokens.parse::<u32>().ok())
-          .unwrap_or(4096),
-      ),
-      |builder, message| {
-        let message = anthropic::MessageParam::from(message);
-
-        builder.message(message.role, message.content)
-      },
-    );
-
-    let builder = if let Some(system) = request.system() {
-      builder.system(system)
-    } else {
-      builder
-    };
-
-    builder
-      .tools(request.tools().map(Into::into).collect::<Vec<_>>())
-      .build()
-  }
-}
-
-impl TryFrom<&Request> for openai::CreateChatCompletionRequest {
-  type Error = Error;
-
-  fn try_from(request: &Request) -> Result<Self> {
-    let system = request.system().map(|system| {
-      openai::ChatCompletionRequestMessage::System(
-        openai::ChatCompletionRequestSystemMessage {
-          content: openai::ChatCompletionRequestSystemMessageContent::Text(
-            system.into(),
-          ),
-          name: None,
-        },
-      )
-    });
-
-    let messages = system
+    let messages = request
+      .system()
+      .map(RigMessage::system)
       .into_iter()
       .chain(request.messages().map(Into::into))
       .collect::<Vec<_>>();
 
-    Ok(
-      openai::CreateChatCompletionRequestArgs::default()
-        .model(request.model_name())
-        .messages(messages)
-        .tools(request.tools().map(Into::into).collect::<Vec<_>>())
-        .build()?,
-    )
+    let chat_history = if messages.is_empty() {
+      OneOrMany::one(RigMessage::user(""))
+    } else {
+      match OneOrMany::many(messages) {
+        Ok(messages) => messages,
+        Err(_) => OneOrMany::one(RigMessage::user("")),
+      }
+    };
+
+    Self {
+      additional_params: None,
+      chat_history,
+      documents: Vec::new(),
+      max_tokens: None,
+      model: Some(request.model_name().into()),
+      output_schema: None,
+      preamble: None,
+      temperature: None,
+      tool_choice: None,
+      tools: request.tools().map(Into::into).collect(),
+    }
   }
 }
 
@@ -176,58 +150,70 @@ mod tests {
   }
 
   #[test]
-  fn anthropic_system_context() {
-    let request = anthropic::MessageCreateParams::from(&Request::with_system(
+  fn rig_system_context() {
+    let request = CompletionRequest::from(&Request::with_system(
       "fake:foo".parse().unwrap(),
       vec![Message::new(Role::User, "bar")],
       "baz",
       ToolRegistry::default(),
     ));
 
-    assert_eq!(request.system.as_deref(), Some("baz"));
-  }
-
-  #[test]
-  fn openai_system_context() {
-    let request =
-      openai::CreateChatCompletionRequest::try_from(&Request::with_system(
-        "fake:foo".parse().unwrap(),
-        vec![Message::new(Role::User, "bar")],
-        "baz",
-        ToolRegistry::default(),
-      ))
-      .unwrap();
-
     assert_eq!(
-      serde_json::to_value(request).unwrap()["messages"],
-      json!([
-        {
-          "role": "system",
-          "content": "baz",
-        },
-        {
-          "role": "user",
-          "content": "bar",
-        },
-      ]),
+      request.chat_history.iter().collect::<Vec<_>>(),
+      vec![&RigMessage::system("baz"), &RigMessage::user("bar")],
     );
   }
 
   #[test]
-  fn openai_reasoning_effort_can_be_overridden() {
-    let mut request =
-      openai::CreateChatCompletionRequest::try_from(&Request::new(
-        "fake:foo".parse().unwrap(),
-        vec![Message::new(Role::User, "bar")],
-        ToolRegistry::default(),
-      ))
-      .unwrap();
-
-    request.reasoning_effort = Some(openai::ReasoningEffort::None);
+  fn rig_tools() {
+    let request = CompletionRequest::from(&Request::new(
+      "fake:foo".parse().unwrap(),
+      vec![Message::new(Role::User, "bar")],
+      ToolRegistry::new(vec![Tool::new::<ReadFileTool>()]),
+    ));
 
     assert_eq!(
-      serde_json::to_value(request).unwrap()["reasoning_effort"],
-      "none",
+      serde_json::to_value(request.tools).unwrap(),
+      json!([
+        {
+          "name": "read_file",
+          "description": "Read a UTF-8 text file. start_line and end_line are optional 1-based inclusive line numbers.",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "cwd": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "end_line": {
+                "format": "uint",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "path": {
+                "type": "string"
+              },
+              "start_line": {
+                "format": "uint",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+        },
+      ]),
     );
   }
 }
