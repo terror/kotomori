@@ -114,8 +114,8 @@ mod tests {
     let request = Request::new(
       "fake:foo".parse().unwrap(),
       vec![
-        Message::new(Role::User, "foo"),
-        Message::new(Role::Agent, "bar"),
+        Message::User(vec![UserMessageContent::Text("foo".into())]),
+        Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
       ],
       ToolRegistry::default(),
     );
@@ -123,11 +123,11 @@ mod tests {
     assert_eq!(request.model_name(), "foo");
 
     assert_eq!(
-      request
-        .messages()
-        .map(|message| (message.role(), message.content().unwrap()))
-        .collect::<Vec<_>>(),
-      vec![(Role::User, "foo"), (Role::Agent, "bar")],
+      request.messages().cloned().collect::<Vec<_>>(),
+      vec![
+        Message::User(vec![UserMessageContent::Text("foo".into())]),
+        Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
+      ],
     );
   }
 
@@ -136,9 +136,9 @@ mod tests {
     let request = Request::new(
       "fake:foo".parse().unwrap(),
       vec![
-        Message::new(Role::User, "foo"),
-        Message::new(Role::Agent, "bar"),
-        Message::new(Role::User, "baz"),
+        Message::User(vec![UserMessageContent::Text("foo".into())]),
+        Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
+        Message::User(vec![UserMessageContent::Text("baz".into())]),
       ],
       ToolRegistry::default(),
     );
@@ -153,7 +153,7 @@ mod tests {
   fn rig_system_context() {
     let request = CompletionRequest::from(&Request::with_system(
       "fake:foo".parse().unwrap(),
-      vec![Message::new(Role::User, "bar")],
+      vec![Message::User(vec![UserMessageContent::Text("bar".into())])],
       "baz",
       ToolRegistry::default(),
     ));
@@ -168,7 +168,7 @@ mod tests {
   fn rig_tools() {
     let request = CompletionRequest::from(&Request::new(
       "fake:foo".parse().unwrap(),
-      vec![Message::new(Role::User, "bar")],
+      vec![Message::User(vec![UserMessageContent::Text("bar".into())])],
       ToolRegistry::new(vec![Tool::new::<ReadFileTool>()]),
     ));
 

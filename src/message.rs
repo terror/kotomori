@@ -1,130 +1,103 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Message {
-  kind: MessageKind,
+pub(crate) enum Message {
+  Agent(Vec<AgentMessageContent>),
+  User(Vec<UserMessageContent>),
 }
 
 impl Message {
   pub(crate) fn content(&self) -> Option<&str> {
-    match &self.kind {
-      MessageKind::Text { content, .. }
-      | MessageKind::ToolResult { content, .. } => Some(content),
-      MessageKind::ToolUse { .. } => None,
-    }
-  }
-
-  pub(crate) fn new(role: Role, content: impl Into<String>) -> Self {
-    Self {
-      kind: MessageKind::Text {
-        content: content.into(),
-        role,
-      },
-    }
-  }
-
-  #[cfg(test)]
-  pub(crate) fn role(&self) -> Role {
-    match &self.kind {
-      MessageKind::Text { role, .. } => *role,
-      MessageKind::ToolResult { .. } => Role::User,
-      MessageKind::ToolUse { .. } => Role::Agent,
-    }
-  }
-
-  pub(crate) fn tool_result(
-    id: impl Into<String>,
-    content: impl Into<String>,
-    is_error: bool,
-  ) -> Self {
-    Self {
-      kind: MessageKind::ToolResult {
-        content: content.into(),
-        id: id.into(),
-        is_error,
-      },
-    }
-  }
-
-  pub(crate) fn tool_use(
-    id: impl Into<String>,
-    name: impl Into<String>,
-    arguments: Value,
-  ) -> Self {
-    Self {
-      kind: MessageKind::ToolUse {
-        arguments,
-        id: id.into(),
-        name: name.into(),
-      },
+    match self {
+      Self::Agent(content) => {
+        content.iter().find_map(AgentMessageContent::text)
+      }
+      Self::User(content) => content.iter().find_map(UserMessageContent::text),
     }
   }
 
   pub(crate) fn user_content(&self) -> Option<&str> {
-    match &self.kind {
-      MessageKind::Text {
-        content,
-        role: Role::User,
-      } => Some(content),
-      MessageKind::Text { .. }
-      | MessageKind::ToolResult { .. }
-      | MessageKind::ToolUse { .. } => None,
+    match self {
+      Self::User(content) => content.iter().find_map(UserMessageContent::text),
+      Self::Agent(_) => None,
     }
-  }
-}
-
-impl From<RawToolCall> for Message {
-  fn from(call: RawToolCall) -> Self {
-    Self::tool_use(call.id, call.name, call.arguments)
   }
 }
 
 impl Component for Message {
   fn render(&self, width: u16) -> Vec<Line> {
-    match &self.kind {
-      MessageKind::Text {
-        content,
-        role: Role::Agent,
-      } => content.split('\n').map(Line::raw).collect(),
-      MessageKind::Text {
-        content,
-        role: Role::User,
-      } => FramedLines::raw(content.split('\n')).render(width),
-      MessageKind::ToolResult { content, .. } => {
-        content.split('\n').map(Line::raw).collect()
-      }
-      MessageKind::ToolUse {
-        arguments, name, ..
-      } => vec![Line::raw(format!("{name} {arguments}"))],
+    match self {
+      Self::Agent(content) => content
+        .iter()
+        .flat_map(|content| match content {
+          AgentMessageContent::Text(text) => {
+            text.split('\n').map(Line::raw).collect::<Vec<_>>()
+          }
+          AgentMessageContent::ToolCall(invocation) => {
+            vec![Line::raw(invocation.to_string())]
+          }
+        })
+        .collect(),
+      Self::User(content) => content
+        .iter()
+        .flat_map(|content| match content {
+          UserMessageContent::Text(text) => {
+            FramedLines::raw(text.split('\n')).render(width)
+          }
+          UserMessageContent::ToolResult { result, .. } => result
+            .output()
+            .unwrap_or_default()
+            .split('\n')
+            .map(Line::raw)
+            .collect::<Vec<_>>(),
+        })
+        .collect(),
     }
   }
 }
 
 impl From<&Message> for RigMessage {
   fn from(message: &Message) -> Self {
-    match &message.kind {
-      MessageKind::Text {
-        content,
-        role: Role::Agent,
-      } => Self::assistant(content.clone()),
-      MessageKind::Text {
-        content,
-        role: Role::User,
-      } => Self::user(content.clone()),
-      MessageKind::ToolResult { content, id, .. } => {
-        Self::tool_result(id.clone(), content.clone())
-      }
-      MessageKind::ToolUse {
-        arguments,
-        id,
-        name,
-      } => Self::Assistant {
-        content: OneOrMany::one(AssistantContent::tool_call(
-          id.clone(),
-          name.clone(),
-          arguments.clone(),
-        )),
+    match message {
+      Message::Agent(content) => Self::Assistant {
+        content: OneOrMany::many(
+          content
+            .iter()
+            .map(|content| match content {
+              AgentMessageContent::Text(text) => {
+                AssistantContent::text(text.clone())
+              }
+              AgentMessageContent::ToolCall(invocation) => {
+                AssistantContent::tool_call(
+                  invocation.id.clone(),
+                  invocation.kind.name(),
+                  invocation.arguments(),
+                )
+              }
+            })
+            .collect::<Vec<_>>(),
+        )
+        .unwrap_or_else(|_| OneOrMany::one(AssistantContent::text(""))),
         id: None,
+      },
+      Message::User(content) => Self::User {
+        content: OneOrMany::many(
+          content
+            .iter()
+            .map(|content| match content {
+              UserMessageContent::Text(text) => UserContent::text(text.clone()),
+              UserMessageContent::ToolResult { id, result } => {
+                UserContent::tool_result(
+                  id.clone(),
+                  OneOrMany::one(ToolResultContent::text(
+                    result.message_content(),
+                  )),
+                )
+              }
+            })
+            .collect::<Vec<_>>(),
+        )
+        .unwrap_or_else(|_| OneOrMany::one(UserContent::text(String::new()))),
       },
     }
   }
@@ -136,11 +109,17 @@ mod tests {
 
   #[test]
   fn rig_tool_messages() {
-    let tool_use = RigMessage::from(&Message::tool_use(
-      "foo",
-      "read_file",
-      json!({"path": "bar"}),
-    ));
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::ReadFile(ReadFileTool {
+        cwd: None,
+        end_line: None,
+        path: "bar".into(),
+        start_line: None,
+      }),
+    };
+
+    let tool_use = RigMessage::from(&invocation.message());
 
     assert_eq!(
       tool_use,
@@ -155,8 +134,50 @@ mod tests {
     );
 
     let tool_result =
-      RigMessage::from(&Message::tool_result("foo", "bar", false));
+      RigMessage::from(&ToolResult::content("bar").message("foo"));
 
-    assert_eq!(tool_result, RigMessage::tool_result("foo", "bar"));
+    assert_eq!(
+      tool_result,
+      RigMessage::tool_result(
+        "foo",
+        serde_json::to_string(&ToolResult::content("bar")).unwrap()
+      )
+    );
+  }
+
+  #[test]
+  fn rig_ordered_agent_content() {
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::ReadFile(ReadFileTool {
+        cwd: None,
+        end_line: None,
+        path: "bar".into(),
+        start_line: None,
+      }),
+    };
+
+    let message = Message::Agent(vec![
+      AgentMessageContent::Text("foo".into()),
+      AgentMessageContent::ToolCall(invocation),
+      AgentMessageContent::Text("baz".into()),
+    ]);
+
+    assert_eq!(
+      RigMessage::from(&message),
+      RigMessage::Assistant {
+        content: OneOrMany::many(vec![
+          AssistantContent::text("foo"),
+          AssistantContent::tool_call(
+            "foo",
+            "read_file",
+            json!({"path": "bar"})
+          ),
+          AssistantContent::text("baz"),
+        ])
+        .unwrap(),
+        id: None,
+      },
+    );
   }
 }

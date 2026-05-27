@@ -2,6 +2,7 @@ use {
   action::Action,
   agent::Agent,
   agent_activity::AgentActivity,
+  agent_message_content::AgentMessageContent,
   anyhow::{Context, Error, bail},
   app::App,
   approval_prompt::ApprovalPrompt,
@@ -45,7 +46,6 @@ use {
   line::Line,
   loader::Loader,
   message::Message,
-  message_kind::MessageKind,
   model::Model,
   options::Options,
   patch_plan::PatchPlan,
@@ -67,7 +67,7 @@ use {
       AssistantContent, CompletionModel, CompletionRequest,
       Message as RigMessage, ToolDefinition,
     },
-    message::{Reasoning, ToolCall},
+    message::{Reasoning, ToolCall, ToolResultContent, UserContent},
     providers::{
       anthropic::{
         Client as AnthropicClient,
@@ -108,7 +108,6 @@ use {
     },
     streaming::StreamedAssistantContent,
   },
-  role::Role,
   schemars::JsonSchema,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
   serde_json::Value,
@@ -158,6 +157,7 @@ use {
   transcript_entry::TranscriptEntry,
   transcript_tool_invocation::TranscriptToolInvocation,
   unicode_width::UnicodeWidthChar,
+  user_message_content::UserMessageContent,
   view::View,
   viewport::Viewport,
   write_ext::WriteExt,
@@ -166,6 +166,7 @@ use {
 mod action;
 mod agent;
 mod agent_activity;
+mod agent_message_content;
 mod anthropic {
   pub(crate) type Client = super::AnthropicClient;
   pub(crate) type CompletionModel = super::AnthropicCompletionModel;
@@ -211,7 +212,6 @@ mod input_mode;
 mod line;
 mod loader;
 mod message;
-mod message_kind;
 mod mistral {
   pub(crate) type Client = super::MistralClient;
   pub(crate) type CompletionModel = super::MistralCompletionModel;
@@ -249,7 +249,6 @@ mod render_plan;
 mod render_planner;
 mod renderer;
 mod request;
-mod role;
 mod span;
 mod state;
 mod style;
@@ -270,6 +269,7 @@ mod tools;
 mod transcript;
 mod transcript_entry;
 mod transcript_tool_invocation;
+mod user_message_content;
 mod view;
 mod viewport;
 mod write_ext;

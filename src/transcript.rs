@@ -216,7 +216,10 @@ impl Component for Transcript {
           );
         }
         TranscriptEntry::User(content) => {
-          lines.extend(Message::new(Role::User, content.clone()).render(width));
+          lines.extend(
+            Message::User(vec![UserMessageContent::Text(content.clone())])
+              .render(width),
+          );
         }
       }
     }
@@ -344,7 +347,10 @@ mod tests {
       ])
     );
 
-    assert_eq!(transcript.messages(), vec![Message::new(Role::User, "foo")]);
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
+    );
   }
 
   #[test]
@@ -384,8 +390,8 @@ mod tests {
     assert_eq!(
       transcript.messages(),
       vec![
-        Message::new(Role::User, "foo"),
-        Message::new(Role::Agent, "baz")
+        Message::User(vec![UserMessageContent::Text("foo".into())]),
+        Message::Agent(vec![AgentMessageContent::Text("baz".into())])
       ]
     );
   }
