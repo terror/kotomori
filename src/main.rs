@@ -86,6 +86,9 @@ use {
       mistral::{
         Client as MistralClient, CompletionModel as MistralCompletionModel,
       },
+      moonshot::{
+        Client as MoonshotClient, CompletionModel as MoonshotCompletionModel,
+      },
       ollama::{
         Client as OllamaClient, CompletionModel as OllamaCompletionModel,
       },
@@ -214,6 +217,10 @@ mod mistral {
   pub(crate) type CompletionModel = super::MistralCompletionModel;
 }
 mod model;
+mod moonshot {
+  pub(crate) type Client = super::MoonshotClient;
+  pub(crate) type CompletionModel = super::MoonshotCompletionModel;
+}
 mod ollama {
   pub(crate) type Client = super::OllamaClient;
   pub(crate) type CompletionModel = super::OllamaCompletionModel;
