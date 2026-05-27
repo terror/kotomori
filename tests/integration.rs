@@ -35,6 +35,7 @@ struct Test {
 }
 
 struct Running {
+  _master: Box<dyn portable_pty::MasterPty + Send>,
   child: Option<Box<dyn portable_pty::Child + Send + Sync>>,
   output: Receiver<Vec<u8>>,
   parser: vt100::Parser,
@@ -279,6 +280,7 @@ impl Running {
     let writer = pair.master.take_writer()?;
 
     Ok(Self {
+      _master: pair.master,
       child: Some(child),
       output,
       parser: vt100::Parser::new(SCREEN_ROWS, SCREEN_COLS, 0),
