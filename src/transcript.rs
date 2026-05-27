@@ -35,22 +35,23 @@ impl Transcript {
     })
   }
 
-  pub(crate) fn finish_agent_message(&mut self) {
-    let AgentActivity::Streaming(message) =
-      std::mem::take(&mut self.active_agent_activity)
-    else {
-      return;
-    };
-
-    if message.is_empty() {
-      return;
+  pub(crate) fn finish_agent_activity(&mut self) {
+    match std::mem::take(&mut self.active_agent_activity) {
+      AgentActivity::Reasoning(reasoning) if !reasoning.is_empty() => {
+        self.entries.push(TranscriptEntry::Reasoning(reasoning));
+      }
+      AgentActivity::Streaming(message) if !message.is_empty() => {
+        self.entries.push(TranscriptEntry::Agent(message));
+      }
+      AgentActivity::Idle
+      | AgentActivity::Reasoning(_)
+      | AgentActivity::Streaming(_)
+      | AgentActivity::Waiting => {}
     }
-
-    self.entries.push(TranscriptEntry::Agent(message));
   }
 
   pub(crate) fn interrupt(&mut self) {
-    self.finish_agent_message();
+    self.finish_agent_activity();
     self.active_elapsed = Duration::ZERO;
     self.entries.push(TranscriptEntry::Interrupted);
   }
@@ -72,19 +73,61 @@ impl Transcript {
   }
 
   pub(crate) fn push_agent_delta(&mut self, delta: &str) {
-    match &mut self.active_agent_activity {
-      AgentActivity::Idle | AgentActivity::Waiting if delta.is_empty() => {
-        self.active_agent_activity = AgentActivity::Waiting;
-      }
-      AgentActivity::Idle | AgentActivity::Waiting => {
-        self.active_agent_activity = AgentActivity::Streaming(delta.into());
-      }
-      AgentActivity::Streaming(message) => message.push_str(delta),
-    }
+    self.active_agent_activity =
+      match std::mem::take(&mut self.active_agent_activity) {
+        AgentActivity::Idle | AgentActivity::Waiting if delta.is_empty() => {
+          AgentActivity::Waiting
+        }
+        AgentActivity::Idle | AgentActivity::Waiting => {
+          AgentActivity::Streaming(delta.into())
+        }
+        AgentActivity::Reasoning(reasoning) => {
+          if !reasoning.is_empty() {
+            self.entries.push(TranscriptEntry::Reasoning(reasoning));
+          }
+
+          if delta.is_empty() {
+            AgentActivity::Waiting
+          } else {
+            AgentActivity::Streaming(delta.into())
+          }
+        }
+        AgentActivity::Streaming(mut message) => {
+          message.push_str(delta);
+          AgentActivity::Streaming(message)
+        }
+      };
+  }
+
+  pub(crate) fn push_agent_reasoning_delta(&mut self, delta: &str) {
+    self.active_agent_activity =
+      match std::mem::take(&mut self.active_agent_activity) {
+        AgentActivity::Idle | AgentActivity::Waiting if delta.is_empty() => {
+          AgentActivity::Waiting
+        }
+        AgentActivity::Idle | AgentActivity::Waiting => {
+          AgentActivity::Reasoning(delta.into())
+        }
+        AgentActivity::Reasoning(mut reasoning) => {
+          reasoning.push_str(delta);
+          AgentActivity::Reasoning(reasoning)
+        }
+        AgentActivity::Streaming(message) => {
+          if !message.is_empty() {
+            self.entries.push(TranscriptEntry::Agent(message));
+          }
+
+          if delta.is_empty() {
+            AgentActivity::Waiting
+          } else {
+            AgentActivity::Reasoning(delta.into())
+          }
+        }
+      };
   }
 
   pub(crate) fn push_tool_call(&mut self, invocation: ToolInvocation) {
-    self.finish_agent_message();
+    self.finish_agent_activity();
 
     self.entries.push(TranscriptEntry::Tool {
       invocation,
@@ -145,6 +188,19 @@ impl Component for Transcript {
             Line::blank(),
           ]);
         }
+        TranscriptEntry::Reasoning(reasoning) => {
+          if !lines.last().is_some_and(|line| line == &Line::blank()) {
+            lines.push(Line::blank());
+          }
+
+          lines.push(vec![Span::styled(" Thinking", Style::DarkGray)].into());
+
+          lines.extend(reasoning.lines().map(|line| {
+            vec![Span::styled(format!("  {line}"), Style::DarkGray)].into()
+          }));
+
+          lines.push(Line::blank());
+        }
         TranscriptEntry::Tool { invocation, result } => {
           lines.extend(
             TranscriptToolInvocation::new(invocation, result.as_ref())
@@ -159,6 +215,29 @@ impl Component for Transcript {
 
     match &self.active_agent_activity {
       AgentActivity::Idle => {}
+      AgentActivity::Reasoning(reasoning) => {
+        if !lines.last().is_some_and(|line| line == &Line::blank()) {
+          lines.push(Line::blank());
+        }
+
+        lines.push(
+          vec![
+            Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
+            Span::styled(" Thinking...", Style::Gray),
+            Span::styled(
+              format!(" ({} • esc to interrupt)", self.active_elapsed.format()),
+              Style::DarkGray,
+            ),
+          ]
+          .into(),
+        );
+
+        lines.extend(reasoning.lines().map(|line| {
+          vec![Span::styled(format!("  {line}"), Style::DarkGray)].into()
+        }));
+
+        lines.push(Line::blank());
+      }
       AgentActivity::Streaming(message) => {
         if !lines.last().is_some_and(|line| line == &Line::blank()) {
           lines.push(Line::blank());
@@ -256,6 +335,50 @@ mod tests {
     );
 
     assert_eq!(transcript.messages(), vec![Message::new(Role::User, "foo")]);
+  }
+
+  #[test]
+  fn reasoning_rendering() {
+    let mut transcript = Transcript::default();
+
+    transcript.send("foo".into());
+    transcript.tick(Duration::from_millis(120));
+    transcript.push_agent_reasoning_delta("bar");
+
+    assert!(
+      transcript.render(80).ends_with(&[
+        Line::blank(),
+        vec![
+          Span::styled("✧", Style::CyanBold),
+          Span::styled(" Thinking...", Style::Gray),
+          Span::styled(" (0s • esc to interrupt)", Style::DarkGray),
+        ]
+        .into(),
+        vec![Span::styled("  bar", Style::DarkGray)].into(),
+        Line::blank(),
+      ])
+    );
+
+    transcript.push_agent_delta("baz");
+    transcript.finish_agent_activity();
+
+    assert!(transcript.render(80).ends_with(&[
+      Line::blank(),
+      vec![Span::styled(" Thinking", Style::DarkGray)].into(),
+      vec![Span::styled("  bar", Style::DarkGray)].into(),
+      Line::blank(),
+      Line::blank(),
+      Line::raw(" baz"),
+      Line::blank(),
+    ]));
+
+    assert_eq!(
+      transcript.messages(),
+      vec![
+        Message::new(Role::User, "foo"),
+        Message::new(Role::Agent, "baz")
+      ]
+    );
   }
 
   #[test]

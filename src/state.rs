@@ -101,9 +101,12 @@ impl State {
       Event::Action(action) => return self.handle_action(action),
       Event::AgentDone => {
         self.input_mode.clear_approval();
-        self.transcript.finish_agent_message();
+        self.transcript.finish_agent_activity();
       }
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
+      Event::AgentReasoningDelta(delta) => {
+        self.transcript.push_agent_reasoning_delta(&delta);
+      }
       Event::AgentToolCall(tool_call) => {
         self.transcript.push_tool_call(tool_call);
       }
