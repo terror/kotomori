@@ -165,15 +165,21 @@ impl Transcript {
 }
 
 impl Component for Transcript {
+  #[allow(clippy::too_many_lines)]
   fn render(&self, width: u16) -> Vec<Line> {
     let mut lines = Vec::new();
 
     for entry in &self.entries {
       match entry {
         TranscriptEntry::Agent(content) => {
+          if !lines.last().is_some_and(|line| line == &Line::blank()) {
+            lines.push(Line::blank());
+          }
+
           lines.extend(
-            once(Line::blank())
-              .chain(content.lines().map(|line| Line::raw(format!(" {line}"))))
+            content
+              .lines()
+              .map(|line| Line::raw(format!(" {line}")))
               .chain(once(Line::blank())),
           );
         }
@@ -193,15 +199,17 @@ impl Component for Transcript {
             lines.push(Line::blank());
           }
 
-          lines.push(vec![Span::styled(" Thinking", Style::DarkGray)].into());
-
           lines.extend(reasoning.lines().map(|line| {
-            vec![Span::styled(format!("  {line}"), Style::DarkGray)].into()
+            vec![Span::styled(format!(" {line}"), Style::DarkGray)].into()
           }));
 
           lines.push(Line::blank());
         }
         TranscriptEntry::Tool { invocation, result } => {
+          if !lines.last().is_some_and(|line| line == &Line::blank()) {
+            lines.push(Line::blank());
+          }
+
           lines.extend(
             TranscriptToolInvocation::new(invocation, result.as_ref())
               .render(width),
@@ -220,10 +228,16 @@ impl Component for Transcript {
           lines.push(Line::blank());
         }
 
+        lines.extend(reasoning.lines().map(|line| {
+          vec![Span::styled(format!(" {line}"), Style::DarkGray)].into()
+        }));
+
+        lines.push(Line::blank());
+
         lines.push(
           vec![
             Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
-            Span::styled(" Thinking...", Style::Gray),
+            Span::styled(" Working...", Style::Gray),
             Span::styled(
               format!(" ({} • esc to interrupt)", self.active_elapsed.format()),
               Style::DarkGray,
@@ -231,10 +245,6 @@ impl Component for Transcript {
           ]
           .into(),
         );
-
-        lines.extend(reasoning.lines().map(|line| {
-          vec![Span::styled(format!("  {line}"), Style::DarkGray)].into()
-        }));
 
         lines.push(Line::blank());
       }
@@ -348,13 +358,14 @@ mod tests {
     assert!(
       transcript.render(80).ends_with(&[
         Line::blank(),
+        vec![Span::styled(" bar", Style::DarkGray)].into(),
+        Line::blank(),
         vec![
           Span::styled("✧", Style::CyanBold),
-          Span::styled(" Thinking...", Style::Gray),
+          Span::styled(" Working...", Style::Gray),
           Span::styled(" (0s • esc to interrupt)", Style::DarkGray),
         ]
         .into(),
-        vec![Span::styled("  bar", Style::DarkGray)].into(),
         Line::blank(),
       ])
     );
@@ -364,9 +375,7 @@ mod tests {
 
     assert!(transcript.render(80).ends_with(&[
       Line::blank(),
-      vec![Span::styled(" Thinking", Style::DarkGray)].into(),
-      vec![Span::styled("  bar", Style::DarkGray)].into(),
-      Line::blank(),
+      vec![Span::styled(" bar", Style::DarkGray)].into(),
       Line::blank(),
       Line::raw(" baz"),
       Line::blank(),
@@ -405,6 +414,48 @@ mod tests {
     assert_eq!(
       transcript.messages(),
       vec![invocation.message(), result.message("foo")]
+    );
+  }
+
+  #[test]
+  fn tool_rendering_spacing() {
+    let mut transcript = Transcript::default();
+
+    let invocation = ToolInvocation {
+      id: "bar".into(),
+      kind: ToolInvocationKind::ListFiles(ListFilesTool {
+        cwd: Some(".".into()),
+      }),
+    };
+
+    transcript.push_agent("foo");
+    transcript.push_tool_call(invocation);
+
+    transcript
+      .push_tool_result("bar", ToolResult::command(Some(0), "baz\n", ""));
+
+    transcript.finish_agent_activity();
+
+    assert_eq!(
+      transcript.render(80),
+      [
+        Line::blank(),
+        Line::raw(" foo"),
+        Line::blank(),
+        vec![
+          Span::raw(" "),
+          Span::styled("●", Style::GreenBold),
+          Span::raw(" "),
+          Span::raw("Listed files in ."),
+        ]
+        .into(),
+        vec![
+          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("baz", Style::DarkGray),
+        ]
+        .into(),
+        Line::blank(),
+      ]
     );
   }
 }

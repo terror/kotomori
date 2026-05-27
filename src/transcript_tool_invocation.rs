@@ -84,8 +84,6 @@ impl Component for TranscriptToolInvocation<'_> {
 
     let (symbol, symbol_style, title) = self.status();
 
-    lines.push(Line::blank());
-
     lines.push(
       vec![
         Span::raw(" "),
