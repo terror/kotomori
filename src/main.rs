@@ -73,6 +73,9 @@ use {
         Client as AnthropicClient,
         completion::CompletionModel as AnthropicCompletionModel,
       },
+      deepseek::{
+        Client as DeepSeekClient, CompletionModel as DeepSeekCompletionModel,
+      },
       groq::{Client as GroqClient, CompletionModel as GroqCompletionModel},
       ollama::{
         Client as OllamaClient, CompletionModel as OllamaCompletionModel,
@@ -156,6 +159,10 @@ mod command;
 mod component;
 mod composer;
 mod cursor;
+mod deepseek {
+  pub(crate) type Client = super::DeepSeekClient;
+  pub(crate) type CompletionModel = super::DeepSeekCompletionModel;
+}
 mod diff;
 mod dimensions;
 mod duration_ext;
