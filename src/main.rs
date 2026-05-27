@@ -94,6 +94,9 @@ use {
         Client as OpenRouterClient,
         CompletionModel as OpenRouterCompletionModel,
       },
+      together::{
+        Client as TogetherClient, CompletionModel as TogetherCompletionModel,
+      },
       xai::{Client as XaiClient, CompletionModel as XaiCompletionModel},
     },
     streaming::StreamedAssistantContent,
@@ -236,6 +239,10 @@ mod span;
 mod state;
 mod style;
 mod terminal;
+mod together {
+  pub(crate) type Client = super::TogetherClient;
+  pub(crate) type CompletionModel = super::TogetherCompletionModel;
+}
 mod tool;
 mod tool_action_tense;
 mod tool_approval;
