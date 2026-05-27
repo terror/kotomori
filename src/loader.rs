@@ -78,6 +78,7 @@ mod tests {
 
     fs::create_dir(directory.path().join(".git")).unwrap();
     fs::create_dir_all(&child).unwrap();
+
     fs::write(directory.path().join(Loader::AGENTS), "foo\n").unwrap();
     fs::write(child.join(Loader::AGENTS), "bar\n").unwrap();
 
