@@ -76,6 +76,9 @@ use {
       deepseek::{
         Client as DeepSeekClient, CompletionModel as DeepSeekCompletionModel,
       },
+      gemini::{
+        Client as GeminiClient, CompletionModel as GeminiCompletionModel,
+      },
       groq::{Client as GroqClient, CompletionModel as GroqCompletionModel},
       mistral::{
         Client as MistralClient, CompletionModel as MistralCompletionModel,
@@ -177,6 +180,10 @@ mod executor;
 mod footer;
 mod frame;
 mod framed_lines;
+mod gemini {
+  pub(crate) type Client = super::GeminiClient;
+  pub(crate) type CompletionModel = super::GeminiCompletionModel;
+}
 mod groq {
   pub(crate) type Client = super::GroqClient;
   pub(crate) type CompletionModel = super::GroqCompletionModel;
