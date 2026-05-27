@@ -56,6 +56,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
       "deepseek" => Ok(Arc::new(Rig::deepseek(&model)?)),
       "fake" => Ok(Arc::new(Fake)),
       "groq" => Ok(Arc::new(Rig::groq(&model)?)),
+      "mistral" => Ok(Arc::new(Rig::mistral(&model)?)),
       "ollama" => Ok(Arc::new(Rig::ollama(&model)?)),
       "openai" => Ok(Arc::new(Rig::openai(&model)?)),
       "openrouter" => Ok(Arc::new(Rig::openrouter(&model)?)),
