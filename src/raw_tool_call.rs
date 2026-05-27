@@ -21,6 +21,18 @@ impl RawToolCall {
   }
 }
 
+impl From<ToolCall> for RawToolCall {
+  fn from(tool_call: ToolCall) -> Self {
+    let id = if tool_call.id.is_empty() {
+      tool_call.function.name.clone()
+    } else {
+      tool_call.id
+    };
+
+    Self::new(id, tool_call.function.name, tool_call.function.arguments)
+  }
+}
+
 impl Display for RawToolCall {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
     write!(f, "{} {}", self.name, self.arguments)

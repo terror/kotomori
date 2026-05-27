@@ -50,7 +50,7 @@ use {
   options::Options,
   patch_plan::PatchPlan,
   presented_frame::PresentedFrame,
-  provider::{Anthropic, Fake, Ollama, OpenAi, Provider},
+  provider::{Fake, Provider, Rig},
   provider_output::ProviderOutput,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},
@@ -59,16 +59,35 @@ use {
   render_planner::RenderPlanner,
   renderer::Renderer,
   request::Request,
+  rig::{
+    OneOrMany,
+    client::CompletionClient,
+    completion::{
+      AssistantContent, CompletionModel, CompletionRequest,
+      Message as RigMessage, ToolDefinition,
+    },
+    message::ToolCall,
+    providers::{
+      anthropic::{
+        Client as AnthropicClient,
+        completion::CompletionModel as AnthropicCompletionModel,
+      },
+      ollama::{
+        Client as OllamaClient, CompletionModel as OllamaCompletionModel,
+      },
+      openai::{CompletionModel as OpenAiCompletionModel, CompletionsClient},
+    },
+    streaming::StreamedAssistantContent,
+  },
   role::Role,
   schemars::JsonSchema,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
-  serde_json::{Value, json},
+  serde_json::Value,
   span::Span,
   state::State,
   std::{
     backtrace::BacktraceStatus,
     cmp::Ordering,
-    collections::BTreeMap,
     env,
     fmt::{self, Debug, Display, Formatter},
     fs::{self, File},
@@ -97,12 +116,6 @@ use {
   tool::Tool,
   tool_action_tense::ToolActionTense,
   tool_approval::ToolApproval,
-  tool_call_arguments::ToolCallArguments,
-  tool_call_builder::ToolCallBuilder,
-  tool_call_stream::ToolCallStream,
-  tool_call_stream_event::ToolCallStreamEvent,
-  tool_call_update::ToolCallUpdate,
-  tool_call_update_kind::ToolCallUpdateKind,
   tool_invocation::ToolInvocation,
   tool_invocation_kind::ToolInvocationKind,
   tool_registry::ToolRegistry,
@@ -121,25 +134,25 @@ use {
   write_ext::WriteExt,
 };
 
+#[cfg(test)]
+use serde_json::json;
+
 mod action;
 mod agent;
 mod agent_activity;
-mod approval_prompt;
-mod approval_request;
 mod anthropic {
-  pub(crate) use anthropic_sdk::{
-    Anthropic, AuthMethod, ClientConfig, ContentBlock, ContentBlockDelta,
-    ContentBlockParam, MessageContent, MessageCreateBuilder,
-    MessageCreateParams, MessageParam, MessageStreamEvent, Role, Tool,
-    types::ToolInputSchema,
-  };
+  pub(crate) type Client = super::AnthropicClient;
+  pub(crate) type CompletionModel = super::AnthropicCompletionModel;
 }
 mod app;
+mod approval_prompt;
+mod approval_request;
 mod arguments;
 mod changed_range;
 mod command;
 mod component;
 mod composer;
+mod cursor;
 mod diff;
 mod dimensions;
 mod duration_ext;
@@ -158,27 +171,14 @@ mod loader;
 mod message;
 mod message_kind;
 mod model;
-mod openai {
-  pub(crate) use async_openai::{
-    Client,
-    config::OpenAIConfig,
-    types::chat::{
-      ChatCompletionMessageToolCall, ChatCompletionMessageToolCallChunk,
-      ChatCompletionMessageToolCalls, ChatCompletionRequestAssistantMessage,
-      ChatCompletionRequestAssistantMessageContent,
-      ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
-      ChatCompletionRequestSystemMessageContent,
-      ChatCompletionRequestToolMessage,
-      ChatCompletionRequestToolMessageContent,
-      ChatCompletionRequestUserMessage,
-      ChatCompletionRequestUserMessageContent, ChatCompletionTool,
-      ChatCompletionTools, CreateChatCompletionRequest,
-      CreateChatCompletionRequestArgs, FunctionCall, FunctionObject,
-      ReasoningEffort,
-    },
-  };
+mod ollama {
+  pub(crate) type Client = super::OllamaClient;
+  pub(crate) type CompletionModel = super::OllamaCompletionModel;
 }
-mod cursor;
+mod openai {
+  pub(crate) type CompletionModel = super::OpenAiCompletionModel;
+  pub(crate) type CompletionsClient = super::CompletionsClient;
+}
 mod options;
 mod patch_plan;
 mod presented_frame;
@@ -198,12 +198,6 @@ mod terminal;
 mod tool;
 mod tool_action_tense;
 mod tool_approval;
-mod tool_call_arguments;
-mod tool_call_builder;
-mod tool_call_stream;
-mod tool_call_stream_event;
-mod tool_call_update;
-mod tool_call_update_kind;
 mod tool_invocation;
 mod tool_invocation_kind;
 mod tool_registry;

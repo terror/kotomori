@@ -1,13 +1,9 @@
 use super::*;
 
-mod anthropic;
 mod fake;
-mod ollama;
-mod openai;
+mod rig;
 
-pub(crate) use {
-  anthropic::Anthropic, fake::Fake, ollama::Ollama, openai::OpenAi,
-};
+pub(crate) use {fake::Fake, rig::Rig};
 
 #[async_trait]
 pub(crate) trait Provider: fmt::Debug + Send + Sync {

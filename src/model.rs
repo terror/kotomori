@@ -52,10 +52,10 @@ impl TryFrom<Model> for Arc<dyn Provider> {
 
   fn try_from(model: Model) -> Result<Self> {
     match model.provider.as_str() {
-      "anthropic" => Ok(Arc::new(Anthropic::new()?)),
+      "anthropic" => Ok(Arc::new(Rig::anthropic(&model)?)),
       "fake" => Ok(Arc::new(Fake)),
-      "ollama" => Ok(Arc::new(Ollama::new())),
-      "openai" => Ok(Arc::new(OpenAi::new())),
+      "ollama" => Ok(Arc::new(Rig::ollama(&model)?)),
+      "openai" => Ok(Arc::new(Rig::openai(&model)?)),
       provider => bail!("unknown provider `{provider}`"),
     }
   }
