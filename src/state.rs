@@ -3,7 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct State {
   composer: Composer,
-  pending_approval: Option<ApprovalRequest>,
+  input_mode: InputMode,
   should_quit: bool,
   transcript: Transcript,
 }
@@ -14,10 +14,44 @@ impl State {
   }
 
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
-    if self.pending_approval.is_some() {
-      return self.handle_approval_action(action);
+    match &self.input_mode {
+      InputMode::Approval(_) => self.handle_approval_action(action),
+      InputMode::Compose => self.handle_composer_action(action),
+    }
+  }
+
+  fn handle_approval_action(&mut self, action: Action) -> Vec<Effect> {
+    match action {
+      Action::Edit(input) if input.key == Key::Char('y') => {
+        self.resolve_approval(ToolApproval::Approved);
+      }
+      Action::Edit(input) if input.key == Key::Char('Y') => {
+        self.resolve_approval(ToolApproval::Approved);
+      }
+      Action::Edit(input) if input.key == Key::Char('n') => {
+        self.resolve_approval(ToolApproval::Denied);
+      }
+      Action::Edit(input) if input.key == Key::Char('N') => {
+        self.resolve_approval(ToolApproval::Denied);
+      }
+      Action::Interrupt => {
+        self.resolve_approval(ToolApproval::Denied);
+      }
+      Action::Quit => {
+        self.resolve_approval(ToolApproval::Denied);
+        self.quit();
+      }
+      Action::CompleteCommand
+      | Action::Edit(_)
+      | Action::SelectNextCommand
+      | Action::SelectPreviousCommand
+      | Action::Submit => {}
     }
 
+    Vec::new()
+  }
+
+  fn handle_composer_action(&mut self, action: Action) -> Vec<Effect> {
     match action {
       Action::CompleteCommand => {
         if !self.composer.complete_command() {
@@ -62,42 +96,11 @@ impl State {
     Vec::new()
   }
 
-  fn handle_approval_action(&mut self, action: Action) -> Vec<Effect> {
-    match action {
-      Action::Edit(input) if input.key == Key::Char('y') => {
-        self.resolve_approval(ToolApproval::Approved);
-      }
-      Action::Edit(input) if input.key == Key::Char('Y') => {
-        self.resolve_approval(ToolApproval::Approved);
-      }
-      Action::Edit(input) if input.key == Key::Char('n') => {
-        self.resolve_approval(ToolApproval::Denied);
-      }
-      Action::Edit(input) if input.key == Key::Char('N') => {
-        self.resolve_approval(ToolApproval::Denied);
-      }
-      Action::Interrupt => {
-        self.resolve_approval(ToolApproval::Denied);
-      }
-      Action::Quit => {
-        self.resolve_approval(ToolApproval::Denied);
-        self.quit();
-      }
-      Action::CompleteCommand
-      | Action::Edit(_)
-      | Action::SelectNextCommand
-      | Action::SelectPreviousCommand
-      | Action::Submit => {}
-    }
-
-    Vec::new()
-  }
-
   pub(crate) fn handle_event(&mut self, event: Event) -> Vec<Effect> {
     match event {
       Event::Action(action) => return self.handle_action(action),
       Event::AgentDone => {
-        self.pending_approval = None;
+        self.input_mode.clear_approval();
         self.transcript.finish_agent_message();
       }
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
@@ -105,16 +108,16 @@ impl State {
         self.transcript.push_tool_call(tool_call);
       }
       Event::AgentToolResult { id, result } => {
-        self.pending_approval = None;
+        self.input_mode.clear_approval();
         self.transcript.push_tool_result(&id, result);
       }
       Event::Error(error) => {
-        self.pending_approval = None;
+        self.input_mode.clear_approval();
         self.transcript.error(error);
       }
       Event::Tick(elapsed) => self.transcript.tick(elapsed),
       Event::ToolApprovalRequest(request) => {
-        self.pending_approval = Some(request);
+        self.input_mode = InputMode::Approval(request);
       }
     }
 
@@ -130,14 +133,14 @@ impl State {
     Ok(Self {
       composer: Composer::new(options.prompt.as_deref().unwrap_or_default())
         .footer(Footer::try_from(&options.model)?),
-      pending_approval: None,
+      input_mode: InputMode::Compose,
       should_quit: false,
       transcript: Transcript::default(),
     })
   }
 
   pub(crate) fn pending_approval(&self) -> Option<&ApprovalRequest> {
-    self.pending_approval.as_ref()
+    self.input_mode.approval()
   }
 
   fn quit(&mut self) {
@@ -149,14 +152,7 @@ impl State {
   }
 
   fn resolve_approval(&mut self, approval: ToolApproval) {
-    let Some(request) = self.pending_approval.take() else {
-      return;
-    };
-
-    match approval {
-      ToolApproval::Approved => request.approve(),
-      ToolApproval::Denied => request.deny(),
-    }
+    self.input_mode.resolve_approval(approval);
   }
 
   fn run_command(&mut self, command: Command) -> Vec<Effect> {

@@ -41,6 +41,7 @@ use {
   futures_util::StreamExt,
   header::Header,
   hint::Hint,
+  input_mode::InputMode,
   line::Line,
   message::Message,
   message_kind::MessageKind,
@@ -148,6 +149,7 @@ mod frame;
 mod framed_lines;
 mod header;
 mod hint;
+mod input_mode;
 mod line;
 mod message;
 mod message_kind;
