@@ -12,6 +12,7 @@ enum RigModel {
   Anthropic(anthropic::CompletionModel),
   Ollama(ollama::CompletionModel),
   OpenAi(openai::CompletionModel),
+  OpenRouter(openrouter::CompletionModel),
 }
 
 impl Rig {
@@ -85,6 +86,20 @@ impl Rig {
     })
   }
 
+  pub(crate) fn openrouter(model: &Model) -> Result<Self> {
+    let api_key = env::var("OPENROUTER_API_KEY").unwrap_or_default();
+
+    let client = openrouter::Client::builder().api_key(api_key).build()?;
+
+    let model = CompletionClient::completion_model(&client, model.name());
+
+    Ok(Self {
+      max_tokens: None,
+      model: RigModel::OpenRouter(model),
+      provider: "openrouter",
+    })
+  }
+
   async fn stream_model<M>(
     &self,
     model: &M,
@@ -144,6 +159,9 @@ impl Provider for Rig {
       }
       RigModel::Ollama(model) => self.stream_model(model, request, sink).await,
       RigModel::OpenAi(model) => self.stream_model(model, request, sink).await,
+      RigModel::OpenRouter(model) => {
+        self.stream_model(model, request, sink).await
+      }
     }
   }
 }
