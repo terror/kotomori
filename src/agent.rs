@@ -7,6 +7,7 @@ pub(crate) struct Agent {
   model: Model,
   provider: Arc<dyn Provider>,
   task: Option<task::JoinHandle<()>>,
+  tool_registry: ToolRegistry,
   yolo: bool,
 }
 
@@ -43,6 +44,7 @@ impl Agent {
       model: options.model.clone(),
       provider,
       task: None,
+      tool_registry: ToolRegistry::default(),
       yolo: options.yolo,
     })
   }
@@ -56,6 +58,7 @@ impl Agent {
       model: self.model.clone(),
       provider: self.provider.clone(),
       task: None,
+      tool_registry: self.tool_registry.clone(),
       yolo: self.yolo,
     };
 
@@ -70,15 +73,23 @@ impl Agent {
     let system = self.loader.load()?;
 
     loop {
-      let mut sink = ProviderSink::new(self.event_sender.clone());
+      let mut sink = ProviderSink::new(
+        self.event_sender.clone(),
+        self.tool_registry.clone(),
+      );
 
       let request = if system.is_empty() {
-        Request::new(self.model.clone(), messages.clone())
+        Request::new(
+          self.model.clone(),
+          messages.clone(),
+          self.tool_registry.clone(),
+        )
       } else {
         Request::with_system(
           self.model.clone(),
           messages.clone(),
           system.clone(),
+          self.tool_registry.clone(),
         )
       };
 
@@ -176,6 +187,7 @@ mod tests {
         requests: requests.clone(),
       }),
       task: None,
+      tool_registry: ToolRegistry::default(),
       yolo: false,
     };
 
@@ -256,6 +268,7 @@ mod tests {
         requests: requests.clone(),
       }),
       task: None,
+      tool_registry: ToolRegistry::default(),
       yolo: true,
     };
 

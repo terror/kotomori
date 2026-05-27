@@ -105,11 +105,12 @@ use {
   tool_call_update_kind::ToolCallUpdateKind,
   tool_invocation::ToolInvocation,
   tool_invocation_kind::ToolInvocationKind,
+  tool_registry::ToolRegistry,
   tool_result::ToolResult,
   tool_spec::ToolSpec,
   tools::{
     ApplyPatchTool, CommandTool, ListFilesTool, ReadFileTool, SearchFilesTool,
-    TOOLS, WriteFileTool,
+    WriteFileTool,
   },
   transcript::Transcript,
   transcript_entry::TranscriptEntry,
@@ -205,6 +206,7 @@ mod tool_call_update;
 mod tool_call_update_kind;
 mod tool_invocation;
 mod tool_invocation_kind;
+mod tool_registry;
 mod tool_result;
 mod tool_spec;
 mod tools;

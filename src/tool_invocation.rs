@@ -53,12 +53,15 @@ impl Display for ToolInvocation {
 mod tests {
   use super::*;
 
+  fn invocation(name: &str, arguments: Value) -> ToolInvocation {
+    ToolRegistry::default()
+      .invocation(RawToolCall::new("foo", name, arguments))
+      .unwrap()
+  }
+
   #[test]
   fn parses_apply_patch_tool_call() {
-    let invocation: ToolInvocation =
-      RawToolCall::new("foo", "apply_patch", json!({"patch": "bar"}))
-        .try_into()
-        .unwrap();
+    let invocation = invocation("apply_patch", json!({"patch": "bar"}));
 
     assert_eq!(
       invocation,
@@ -74,13 +77,10 @@ mod tests {
 
   #[test]
   fn parses_command_tool_call() {
-    let invocation: ToolInvocation = RawToolCall::new(
-      "foo",
+    let invocation = invocation(
       "command",
       json!({"program": "bar", "arguments": ["baz"], "cwd": null}),
-    )
-    .try_into()
-    .unwrap();
+    );
 
     assert_eq!(
       invocation,
@@ -97,10 +97,7 @@ mod tests {
 
   #[test]
   fn parses_list_files_tool_call() {
-    let invocation: ToolInvocation =
-      RawToolCall::new("foo", "list_files", json!({"cwd": "bar"}))
-        .try_into()
-        .unwrap();
+    let invocation = invocation("list_files", json!({"cwd": "bar"}));
 
     assert_eq!(
       invocation,
@@ -115,10 +112,7 @@ mod tests {
 
   #[test]
   fn parses_read_file_tool_call() {
-    let invocation: ToolInvocation =
-      RawToolCall::new("foo", "read_file", json!({"path": "bar"}))
-        .try_into()
-        .unwrap();
+    let invocation = invocation("read_file", json!({"path": "bar"}));
 
     assert_eq!(
       invocation,
@@ -136,13 +130,8 @@ mod tests {
 
   #[test]
   fn parses_search_files_tool_call() {
-    let invocation: ToolInvocation = RawToolCall::new(
-      "foo",
-      "search_files",
-      json!({"arguments": ["foo"], "cwd": "bar"}),
-    )
-    .try_into()
-    .unwrap();
+    let invocation =
+      invocation("search_files", json!({"arguments": ["foo"], "cwd": "bar"}));
 
     assert_eq!(
       invocation,
@@ -175,13 +164,8 @@ mod tests {
 
   #[test]
   fn parses_write_file_tool_call() {
-    let invocation: ToolInvocation = RawToolCall::new(
-      "foo",
-      "write_file",
-      json!({"content": "bar", "path": "baz"}),
-    )
-    .try_into()
-    .unwrap();
+    let invocation =
+      invocation("write_file", json!({"content": "bar", "path": "baz"}));
 
     assert_eq!(
       invocation,
@@ -198,8 +182,11 @@ mod tests {
 
   #[test]
   fn unknown_tool_errors() {
-    let result: Result<ToolInvocation> =
-      RawToolCall::new("foo", "bar", json!({})).try_into();
+    let result = ToolRegistry::default().invocation(RawToolCall::new(
+      "foo",
+      "bar",
+      json!({}),
+    ));
 
     assert_eq!(result.unwrap_err().to_string(), "unknown tool `bar`",);
   }

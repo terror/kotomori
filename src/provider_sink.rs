@@ -5,6 +5,7 @@ pub(crate) struct ProviderSink {
   content: String,
   event_sender: UnboundedSender<Event>,
   tool_calls: Vec<ToolInvocation>,
+  tool_registry: ToolRegistry,
 }
 
 impl ProviderSink {
@@ -23,16 +24,20 @@ impl ProviderSink {
     }
   }
 
-  pub(crate) fn new(event_sender: UnboundedSender<Event>) -> Self {
+  pub(crate) fn new(
+    event_sender: UnboundedSender<Event>,
+    tool_registry: ToolRegistry,
+  ) -> Self {
     Self {
       content: String::new(),
       event_sender,
       tool_calls: Vec::new(),
+      tool_registry,
     }
   }
 
   pub(crate) fn tool_call(&mut self, tool_call: RawToolCall) -> Result {
-    let tool_call = TryInto::<ToolInvocation>::try_into(tool_call)?;
+    let tool_call = self.tool_registry.invocation(tool_call)?;
 
     self.tool_calls.push(tool_call.clone());
 
