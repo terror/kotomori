@@ -43,7 +43,7 @@ impl Reflection {
 
     (self.content, self.id) = (text, id);
 
-    (!delta.is_empty()).then_some(delta.to_owned())
+    (!delta.is_empty()).then_some(delta.clone())
   }
 }
 
