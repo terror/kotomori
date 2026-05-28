@@ -1,5 +1,6 @@
 use super::*;
 
+mod approval_prompt;
 mod footer;
 mod framed_lines;
 mod header;
@@ -8,9 +9,9 @@ mod transcript;
 mod view;
 
 pub(crate) use {
-  footer::FooterComponent, framed_lines::FramedLinesComponent,
-  header::HeaderComponent, hint::HintComponent,
-  transcript::TranscriptComponent, view::ViewComponent,
+  approval_prompt::ApprovalPromptComponent, footer::FooterComponent,
+  framed_lines::FramedLinesComponent, header::HeaderComponent,
+  hint::HintComponent, transcript::TranscriptComponent, view::ViewComponent,
 };
 
 pub(crate) trait Component {
