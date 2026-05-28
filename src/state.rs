@@ -4,6 +4,7 @@ use super::*;
 pub(crate) struct State {
   composer: Composer,
   input_mode: InputMode,
+  session: Session,
   should_quit: bool,
   transcript: Transcript,
 }
@@ -102,6 +103,7 @@ impl State {
       Event::AgentDone => {
         self.input_mode.clear_approval();
         self.transcript.finish_agent_activity();
+        self.save_session();
       }
       Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
       Event::AgentReasoningDelta(delta) => {
@@ -109,14 +111,17 @@ impl State {
       }
       Event::AgentToolCall(tool_call) => {
         self.transcript.push_tool_call(tool_call);
+        self.save_session();
       }
       Event::AgentToolResult { id, result } => {
         self.input_mode.clear_approval();
         self.transcript.push_tool_result(&id, result);
+        self.save_session();
       }
       Event::Error(error) => {
         self.input_mode.clear_approval();
         self.transcript.error(error);
+        self.save_session();
       }
       Event::Tick(elapsed) => self.transcript.tick(elapsed),
       Event::ToolApprovalRequest(request) => {
@@ -140,17 +145,13 @@ impl State {
     self.input_mode.clear_approval();
     self.transcript.interrupt();
 
+    self.save_session();
+
     vec![Effect::InterruptAgent]
   }
 
   pub(crate) fn new(options: &Options) -> Result<Self> {
-    Ok(Self {
-      composer: Composer::new(options.prompt.as_deref().unwrap_or_default())
-        .footer(Footer::try_from(&options.model)?),
-      input_mode: InputMode::Compose,
-      should_quit: false,
-      transcript: Transcript::default(),
-    })
+    Self::with_session(options, Session::new(options)?)
   }
 
   pub(crate) fn pending_approval(&self) -> Option<&ApprovalRequest> {
@@ -171,13 +172,24 @@ impl State {
 
   fn run_command(&mut self, command: Command) -> Vec<Effect> {
     match command {
-      Command::Clear => self.transcript.clear(),
+      Command::Clear => {
+        self.transcript.clear();
+        self.save_session();
+      }
       Command::Quit => self.quit(),
     }
 
     self.reset_input();
 
     Vec::new()
+  }
+
+  fn save_session(&mut self) {
+    if let Err(error) = self.session.save(&self.transcript) {
+      self
+        .transcript
+        .error(format!("failed to save session: {error}"));
+    }
   }
 
   pub(crate) fn should_quit(&self) -> bool {
@@ -219,6 +231,7 @@ impl State {
     let input = input.to_string();
 
     self.transcript.send(input.clone());
+    self.save_session();
 
     let messages = self.transcript.messages();
 
@@ -229,6 +242,24 @@ impl State {
 
   pub(crate) fn transcript(&self) -> &Transcript {
     &self.transcript
+  }
+
+  pub(crate) fn with_session(
+    options: &Options,
+    mut session: Session,
+  ) -> Result<Self> {
+    let transcript = Transcript::with_entries(session.entries());
+
+    session.set_model(&options.model);
+
+    Ok(Self {
+      composer: Composer::new(options.prompt.as_deref().unwrap_or_default())
+        .footer(Footer::try_from(&options.model)?),
+      input_mode: InputMode::Compose,
+      session,
+      should_quit: false,
+      transcript,
+    })
   }
 }
 

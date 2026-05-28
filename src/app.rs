@@ -65,16 +65,7 @@ impl App {
   }
 
   pub(crate) fn new(options: &Options) -> Result<Self> {
-    let (event_sender, event_receiver) = mpsc::unbounded_channel();
-
-    let state = State::new(options)?;
-
-    Ok(Self {
-      agent: Agent::new(event_sender.clone(), options)?,
-      event_receiver,
-      event_sender,
-      state,
-    })
+    Self::with_state(options, State::new(options)?)
   }
 
   pub(crate) async fn run(mut self) -> Result {
@@ -120,5 +111,16 @@ impl App {
         }
       }
     });
+  }
+
+  pub(crate) fn with_state(options: &Options, state: State) -> Result<Self> {
+    let (event_sender, event_receiver) = mpsc::unbounded_channel();
+
+    Ok(Self {
+      agent: Agent::new(event_sender.clone(), options)?,
+      event_receiver,
+      event_sender,
+      state,
+    })
   }
 }

@@ -5,6 +5,7 @@ use {
   portable_pty::{CommandBuilder, PtySize, native_pty_system},
   std::{
     io::{self, Read, Write},
+    path::{Path, PathBuf},
     sync::{
       Mutex,
       mpsc::{self, Receiver, RecvTimeoutError},
@@ -38,6 +39,8 @@ enum Step {
 #[derive(Debug)]
 struct Test {
   arguments: Vec<String>,
+  cwd: Option<PathBuf>,
+  env: Vec<(String, String)>,
   steps: Vec<Step>,
   tempdir: TempDir,
 }
@@ -64,12 +67,22 @@ impl Test {
     self.write("\n")
   }
 
+  fn cwd(mut self, cwd: &Path) -> Self {
+    self.cwd = Some(cwd.into());
+    self
+  }
+
   fn down(self) -> Self {
     self.write("\x1b[B")
   }
 
   fn enter(self) -> Self {
     self.write("\r")
+  }
+
+  fn env(mut self, key: &str, value: &str) -> Self {
+    self.env.push((key.into(), value.into()));
+    self
   }
 
   fn escape(self) -> Self {
@@ -94,6 +107,8 @@ impl Test {
   fn new() -> Self {
     Self {
       arguments: Vec::new(),
+      cwd: None,
+      env: Vec::new(),
       steps: Vec::new(),
       tempdir: tempfile::Builder::new()
         .prefix("kotomori-test")
@@ -297,9 +312,14 @@ impl Running {
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_kotomori"));
 
     command.args(&test.arguments);
-    command.cwd(test.tempdir.path());
+    command.cwd(test.cwd.as_deref().unwrap_or(test.tempdir.path()));
+    command.env("KOTOMORI_HOME", test.tempdir.path().join("kotomori-home"));
     command.env("RUST_BACKTRACE", "0");
     command.env("TERM", "xterm-256color");
+
+    for (key, value) in &test.env {
+      command.env(key, value);
+    }
 
     let child = pair.slave.spawn_command(command)?;
     let output = Self::read_thread(pair.master.try_clone_reader()?);
@@ -516,6 +536,75 @@ fn prompt_round_trip() -> Result {
     .enter()
     .expect_screen_contains("foo")
     .expect_screen_contains("queued for mock:local: foo")
+    .quit()
+    .run()
+}
+
+#[test]
+fn resume_filters_and_loads_session() -> Result {
+  let state = tempfile::Builder::new()
+    .prefix("kotomori-state")
+    .tempdir()?;
+
+  let workspace = tempfile::Builder::new()
+    .prefix("kotomori-workspace")
+    .tempdir()?;
+
+  let other_workspace = tempfile::Builder::new()
+    .prefix("kotomori-workspace")
+    .tempdir()?;
+
+  let state = state.path().to_str().unwrap();
+
+  Test::new()
+    .cwd(other_workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("--model")
+    .argument("mock:local")
+    .type_text("qux")
+    .enter()
+    .expect_screen_contains("queued for mock:local: qux")
+    .quit()
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("--model")
+    .argument("mock:local")
+    .type_text("bar")
+    .enter()
+    .expect_screen_contains("queued for mock:local: bar")
+    .quit()
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("--model")
+    .argument("mock:local")
+    .type_text("foo")
+    .enter()
+    .expect_screen_contains("queued for mock:local: foo")
+    .quit()
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("--model")
+    .argument("mock:local")
+    .argument("resume")
+    .expect_screen_contains("foo")
+    .expect_screen_contains("bar")
+    .expect_screen_excludes("qux")
+    .type_text("bar")
+    .expect_screen_excludes("foo")
+    .enter()
+    .expect_screen_contains("queued for mock:local: bar")
+    .type_text("baz")
+    .enter()
+    .expect_screen_contains("queued for mock:local: baz")
     .quit()
     .run()
 }
