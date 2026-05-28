@@ -24,6 +24,7 @@ impl Request {
     self.model.name()
   }
 
+  #[cfg(test)]
   pub(crate) fn new(
     model: Model,
     messages: Vec<Message>,
