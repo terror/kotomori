@@ -11,9 +11,7 @@ use {
   changed_range::ChangedRange,
   clap::{Args, Parser},
   command::Command,
-  component::{
-    Component, FooterComponent, HeaderComponent, LineComponent, ViewComponent,
-  },
+  component::{Component, HeaderComponent, LineComponent, ViewComponent},
   composer::Composer,
   config::Config,
   crossterm::{
@@ -33,6 +31,7 @@ use {
   cursor::Cursor,
   diff::Diff,
   dimensions::Dimensions,
+  directory_display::DirectoryDisplay,
   duration_ext::DurationExt,
   effect::Effect,
   event::Event,
@@ -40,13 +39,16 @@ use {
   executor::Executor,
   frame::Frame,
   futures_util::StreamExt,
+  home::home_dir,
   indoc::indoc,
   input_mode::InputMode,
+  lexiclean::Lexiclean,
   loader::Loader,
   message::Message,
   model::Model,
   options::Options,
   patch_plan::PatchPlan,
+  path_ext::PathExt,
   presented_frame::PresentedFrame,
   provider::{Mock, Provider, Rig},
   provider_output::ProviderOutput,
@@ -201,6 +203,7 @@ mod deepseek {
 }
 mod diff;
 mod dimensions;
+mod directory_display;
 mod duration_ext;
 mod effect;
 mod event;
@@ -241,6 +244,7 @@ mod openrouter {
 }
 mod options;
 mod patch_plan;
+mod path_ext;
 mod perplexity {
   pub(crate) type Client = super::PerplexityClient;
   pub(crate) type CompletionModel = super::PerplexityCompletionModel;

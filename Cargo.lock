@@ -4070,7 +4070,9 @@ dependencies = [
  "confy",
  "crossterm",
  "futures-util",
+ "home",
  "indoc",
+ "lexiclean",
  "portable-pty",
  "ratatui-textarea",
  "rig",
@@ -4726,6 +4728,12 @@ checksum = "409851a618475d2d5796377cad353802345cba92c867d9fbcde9cf4eac4e14df"
 dependencies = [
  "lexical-util",
 ]
+
+[[package]]
+name = "lexiclean"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "441225017b106b9f902e97947a6d31e44ebcf274b91bdbfb51e5c477fcd468e5"
 
 [[package]]
 name = "libbz2-rs-sys"

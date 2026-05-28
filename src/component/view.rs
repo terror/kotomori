@@ -27,7 +27,10 @@ impl Component for ViewComponent<'_> {
           ComposerComponent::new(&self.state.composer).render(width)
         }
       })
-      .chain(self.state.footer.render(width))
+      .chain(
+        FooterComponent::new(&self.state.model, &self.state.directory)
+          .render(width),
+      )
       .collect()
   }
 }

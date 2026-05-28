@@ -4,17 +4,6 @@ use super::*;
 pub(crate) struct SessionStore;
 
 impl SessionStore {
-  pub(crate) fn display_directory(path: &Path) -> String {
-    match env::var_os("HOME").map(PathBuf::from) {
-      Some(home) => match path.strip_prefix(home) {
-        Ok(relative) if relative.as_os_str().is_empty() => "~".to_string(),
-        Ok(relative) => format!("~/{}", relative.display()),
-        Err(_) => path.display().to_string(),
-      },
-      None => path.display().to_string(),
-    }
-  }
-
   pub(crate) fn id() -> Result<String> {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
