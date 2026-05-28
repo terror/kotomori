@@ -2,15 +2,13 @@ use super::*;
 
 #[derive(Debug, Default)]
 pub(crate) struct Transcript {
-  active_agent_activity: AgentActivity,
-  active_elapsed: Duration,
-  active_frame: usize,
+  pub(crate) active_agent_activity: AgentActivity,
+  pub(crate) active_elapsed: Duration,
+  pub(crate) active_frame: usize,
   pub(crate) entries: Vec<TranscriptEntry>,
 }
 
 impl Transcript {
-  const FRAMES: &[&str] = &["✦", "✧", "✶", "✹", "✶", "✧"];
-
   pub(crate) fn clear(&mut self) {
     self.active_agent_activity = AgentActivity::Idle;
     self.active_elapsed = Duration::ZERO;
@@ -205,10 +203,6 @@ impl Transcript {
     self.entries.push(TranscriptEntry::User(input));
   }
 
-  fn spinner(frame: usize) -> &'static str {
-    Self::FRAMES[frame % Self::FRAMES.len()]
-  }
-
   pub(crate) fn tick(&mut self, elapsed: Duration) {
     if self.is_agent_active() {
       self.active_elapsed = self.active_elapsed.saturating_add(elapsed);
@@ -221,124 +215,6 @@ impl Transcript {
       entries,
       ..Self::default()
     }
-  }
-}
-
-impl Component for Transcript {
-  #[allow(clippy::too_many_lines)]
-  fn render(&self, width: u16) -> Vec<Line> {
-    let mut lines = Vec::new();
-
-    for entry in &self.entries {
-      match entry {
-        TranscriptEntry::Agent(content) => {
-          if !lines.last().is_some_and(|line| line == &Line::blank()) {
-            lines.push(Line::blank());
-          }
-
-          lines.extend(
-            content
-              .lines()
-              .map(|line| Line::raw(format!(" {line}")))
-              .chain(once(Line::blank())),
-          );
-        }
-        TranscriptEntry::Interrupted => {
-          lines.extend([
-            Line::blank(),
-            Line::from([Span::styled(
-              "■ Conversation interrupted, tell the model what to do differently.",
-              Style::RedBold,
-            )]),
-            Line::blank(),
-          ]);
-        }
-        TranscriptEntry::Reasoning(reasoning) => {
-          if !lines.last().is_some_and(|line| line == &Line::blank()) {
-            lines.push(Line::blank());
-          }
-
-          lines.extend(reasoning.lines().map(|line| {
-            Line::from([Span::styled(format!(" {line}"), Style::DarkGray)])
-          }));
-
-          lines.push(Line::blank());
-        }
-        TranscriptEntry::Tool { invocation, result } => {
-          if !lines.last().is_some_and(|line| line == &Line::blank()) {
-            lines.push(Line::blank());
-          }
-
-          lines.extend(
-            TranscriptToolInvocation::new(invocation, result.as_ref())
-              .render(width),
-          );
-        }
-        TranscriptEntry::User(content) => {
-          lines.extend(
-            Message::User(vec![UserMessageContent::Text(content.clone())])
-              .render(width),
-          );
-        }
-      }
-    }
-
-    match &self.active_agent_activity {
-      AgentActivity::Idle => {}
-      AgentActivity::Reasoning(reasoning) => {
-        if !lines.last().is_some_and(|line| line == &Line::blank()) {
-          lines.push(Line::blank());
-        }
-
-        lines.extend(reasoning.lines().map(|line| {
-          Line::from([Span::styled(format!(" {line}"), Style::DarkGray)])
-        }));
-
-        lines.push(Line::blank());
-
-        lines.push(Line::from([
-          Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
-          Span::styled(" Working...", Style::Gray),
-          Span::styled(
-            format!(" ({} • esc to interrupt)", self.active_elapsed.format()),
-            Style::DarkGray,
-          ),
-        ]));
-
-        lines.push(Line::blank());
-      }
-      AgentActivity::Streaming(message) => {
-        if !lines.last().is_some_and(|line| line == &Line::blank()) {
-          lines.push(Line::blank());
-        }
-
-        lines.extend(
-          message
-            .lines()
-            .map(|line| Line::raw(format!(" {line}")))
-            .chain(once(Line::blank())),
-        );
-      }
-      AgentActivity::Waiting => {
-        if !lines.last().is_some_and(|line| line == &Line::blank()) {
-          lines.push(Line::blank());
-        }
-
-        lines.extend([
-          Line::from([
-            Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
-            Span::styled(" Working...", Style::Gray),
-            Span::styled(
-              format!(" ({} • esc to interrupt)", self.active_elapsed.format()),
-              Style::DarkGray,
-            ),
-          ]),
-          Line::blank(),
-        ]);
-      }
-    }
-
-    lines
   }
 }
 
@@ -1029,129 +905,6 @@ mod tests {
       vec![
         Message::Agent(vec![AgentMessageContent::ToolCall(invocation)]),
         result.message("foo"),
-      ]
-    );
-  }
-
-  #[test]
-  fn render_active_waiting_spinner() {
-    let mut transcript = Transcript::default();
-
-    transcript.send("foo".into());
-
-    for elapsed in [
-      Duration::from_secs(30),
-      Duration::from_secs(30),
-      Duration::from_secs(30),
-      Duration::from_secs(21),
-    ] {
-      transcript.tick(elapsed);
-    }
-
-    assert!(transcript.render(80).ends_with(&[
-      Line::blank(),
-      Line::from([
-        Span::styled("✶", Style::CyanBold),
-        Span::styled(" Working...", Style::Gray),
-        Span::styled(" (1m 51s • esc to interrupt)", Style::DarkGray),
-      ]),
-      Line::blank(),
-    ]));
-
-    transcript.push_agent_delta("bar");
-
-    assert!(transcript.render(80).ends_with(&[
-      Line::blank(),
-      Line::raw(" bar"),
-      Line::blank(),
-    ]));
-  }
-
-  #[test]
-  fn render_interrupted_entry() {
-    let mut transcript = Transcript::default();
-
-    transcript.send("foo".into());
-    transcript.interrupt();
-
-    assert!(transcript.render(80).ends_with(&[
-      Line::blank(),
-      Line::from([Span::styled(
-        "■ Conversation interrupted, tell the model what to do differently.",
-        Style::RedBold,
-      )]),
-      Line::blank(),
-    ]));
-  }
-
-  #[test]
-  fn render_reasoning_activity() {
-    let mut transcript = Transcript::default();
-
-    transcript.send("foo".into());
-    transcript.tick(Duration::from_millis(120));
-    transcript.push_agent_reasoning_delta("bar");
-
-    assert!(transcript.render(80).ends_with(&[
-      Line::blank(),
-      Line::from([Span::styled(" bar", Style::DarkGray)]),
-      Line::blank(),
-      Line::from([
-        Span::styled("✧", Style::CyanBold),
-        Span::styled(" Working...", Style::Gray),
-        Span::styled(" (0s • esc to interrupt)", Style::DarkGray),
-      ]),
-      Line::blank(),
-    ]));
-
-    transcript.push_agent_delta("baz");
-    transcript.finish_agent_activity();
-
-    assert!(transcript.render(80).ends_with(&[
-      Line::blank(),
-      Line::from([Span::styled(" bar", Style::DarkGray)]),
-      Line::blank(),
-      Line::raw(" baz"),
-      Line::blank(),
-    ]));
-  }
-
-  #[test]
-  fn render_tool_spacing() {
-    let mut transcript = Transcript::default();
-
-    let invocation = ToolInvocation {
-      id: "bar".into(),
-      kind: ToolInvocationKind::ListFiles(ListFilesTool {
-        cwd: Some(".".into()),
-      }),
-    };
-
-    transcript.push_agent("foo");
-    transcript.push_tool_call(invocation);
-
-    transcript
-      .push_tool_result("bar", ToolResult::command(Some(0), "baz\n", ""));
-
-    transcript.finish_agent_activity();
-
-    assert_eq!(
-      transcript.render(80),
-      [
-        Line::blank(),
-        Line::raw(" foo"),
-        Line::blank(),
-        Line::from([
-          Span::raw(" "),
-          Span::styled("●", Style::GreenBold),
-          Span::raw(" "),
-          Span::raw("Listed files in ."),
-        ]),
-        Line::from([
-          Span::styled("   │ ", Style::DarkGray),
-          Span::styled("baz", Style::DarkGray),
-        ]),
-        Line::blank(),
       ]
     );
   }

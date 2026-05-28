@@ -18,7 +18,7 @@ impl Component for View<'_> {
       .chain(once(Line::blank()))
       .chain(Hint.render(width))
       .chain(once(Line::blank()))
-      .chain(self.state.transcript.render(width))
+      .chain(TranscriptComponent::new(&self.state.transcript).render(width))
       .chain(match &self.state.input_mode {
         InputMode::Approval(request) => {
           ApprovalPrompt::new(request).render(width)
