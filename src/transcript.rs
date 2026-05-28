@@ -67,8 +67,7 @@ impl Transcript {
   pub(crate) fn messages(&self) -> Vec<Message> {
     let mut messages = Vec::new();
 
-    let mut agent_content = Vec::new();
-    let mut tool_results = Vec::new();
+    let (mut agent_content, mut tool_results) = (Vec::new(), Vec::new());
 
     for (index, entry) in self.entries.iter().enumerate() {
       match entry {
