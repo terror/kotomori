@@ -1,9 +1,9 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct Hint;
+pub(crate) struct HintComponent;
 
-impl Component for Hint {
+impl Component for HintComponent {
   fn render(&self, _width: u16) -> Vec<Line> {
     vec![Line::from([
       Span::styled("Type a prompt. Press ", Style::DarkGray),

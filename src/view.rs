@@ -16,7 +16,7 @@ impl Component for View<'_> {
     once(Line::blank())
       .chain(HeaderComponent.render(width))
       .chain(once(Line::blank()))
-      .chain(Hint.render(width))
+      .chain(HintComponent.render(width))
       .chain(once(Line::blank()))
       .chain(TranscriptComponent::new(&self.state.transcript).render(width))
       .chain(match &self.state.input_mode {

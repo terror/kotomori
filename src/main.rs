@@ -12,7 +12,7 @@ use {
   changed_range::ChangedRange,
   clap::{Args, Parser},
   command::Command,
-  component::{Component, HeaderComponent, TranscriptComponent},
+  component::{Component, HeaderComponent, HintComponent, TranscriptComponent},
   composer::Composer,
   config::Config,
   crossterm::{
@@ -41,7 +41,6 @@ use {
   frame::Frame,
   framed_lines::FramedLines,
   futures_util::StreamExt,
-  hint::Hint,
   indoc::indoc,
   input_mode::InputMode,
   line::Line,
@@ -222,7 +221,6 @@ mod groq {
   pub(crate) type Client = super::GroqClient;
   pub(crate) type CompletionModel = super::GroqCompletionModel;
 }
-mod hint;
 mod input_mode;
 mod line;
 mod loader;
