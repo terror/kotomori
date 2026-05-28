@@ -134,7 +134,7 @@ impl ResumePicker {
 impl Component for ResumePicker {
   fn render(&self, width: u16) -> Vec<Line> {
     let mut lines = once(Line::blank())
-      .chain(Header.render(width))
+      .chain(HeaderComponent.render(width))
       .chain(once(Line::blank()))
       .chain(once(Line::from([
         Span::styled("Search previous sessions. Press ", Style::DarkGray),

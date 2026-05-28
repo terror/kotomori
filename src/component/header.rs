@@ -1,9 +1,9 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct Header;
+pub(crate) struct HeaderComponent;
 
-impl Component for Header {
+impl Component for HeaderComponent {
   fn render(&self, _width: u16) -> Vec<Line> {
     vec![Line::from([
       Span::styled(env!("CARGO_PKG_NAME"), Style::CyanBold),

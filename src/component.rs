@@ -1,7 +1,9 @@
 use super::*;
 
+mod header;
 mod transcript;
 
+pub(crate) use header::HeaderComponent;
 pub(crate) use transcript::TranscriptComponent;
 
 pub(crate) trait Component {

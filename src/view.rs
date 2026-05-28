@@ -14,7 +14,7 @@ impl<'a> View<'a> {
 impl Component for View<'_> {
   fn render(&self, width: u16) -> Vec<Line> {
     once(Line::blank())
-      .chain(Header.render(width))
+      .chain(HeaderComponent.render(width))
       .chain(once(Line::blank()))
       .chain(Hint.render(width))
       .chain(once(Line::blank()))
