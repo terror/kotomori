@@ -124,10 +124,15 @@ impl Agent {
   fn system_prompt(&self) -> Result<String> {
     let agents = self.loader.load()?;
 
+    let context = format!(
+      "Current working directory: {}\n\nWhen using tools, omit `cwd` to use the current working directory. Do not invent absolute paths.",
+      self.loader.cwd().display(),
+    );
+
     Ok(if agents.is_empty() {
-      SYSTEM_PROMPT.to_string()
+      format!("{}\n\n{context}", SYSTEM_PROMPT.as_str())
     } else {
-      format!("{}\n\n{agents}", SYSTEM_PROMPT.as_str())
+      format!("{}\n\n{context}\n\n{agents}", SYSTEM_PROMPT.as_str())
     })
   }
 }
@@ -196,10 +201,17 @@ mod tests {
 
   #[test]
   fn system_prompt() {
+    fn context(directory: &Path) -> String {
+      format!(
+        "Current working directory: {}\n\nWhen using tools, omit `cwd` to use the current working directory. Do not invent absolute paths.",
+        directory.display(),
+      )
+    }
+
     #[track_caller]
     fn case<F>(agents: Option<&str>, expected: F)
     where
-      F: FnOnce(&Path) -> String,
+      F: FnOnce(&Path, &Path) -> String,
     {
       let (event_sender, _event_receiver) = mpsc::unbounded_channel();
 
@@ -221,15 +233,21 @@ mod tests {
         yolo: true,
       };
 
-      assert_eq!(agent.system_prompt().unwrap(), expected(&agents_path));
+      assert_eq!(
+        agent.system_prompt().unwrap(),
+        expected(directory.path(), &agents_path)
+      );
     }
 
-    case(None, |_| SYSTEM_PROMPT.to_string());
+    case(None, |directory, _| {
+      format!("{}\n\n{}", SYSTEM_PROMPT.as_str(), context(directory))
+    });
 
-    case(Some("foo\n"), |agents_path| {
+    case(Some("foo\n"), |directory, agents_path| {
       format!(
-        "{}\n\n{}:\nfoo",
+        "{}\n\n{}\n\n{}:\nfoo",
         SYSTEM_PROMPT.as_str(),
+        context(directory),
         agents_path.display()
       )
     });

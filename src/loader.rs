@@ -26,6 +26,10 @@ impl Loader {
       .filter(|path| path.is_file())
   }
 
+  pub(crate) fn cwd(&self) -> &Path {
+    &self.cwd
+  }
+
   pub(crate) fn load(&self) -> Result<String> {
     let root = self.repository_root();
 
