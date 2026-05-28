@@ -20,10 +20,6 @@ impl Request {
     self.messages.iter()
   }
 
-  pub(crate) fn model(&self) -> &Model {
-    &self.model
-  }
-
   pub(crate) fn model_name(&self) -> &str {
     self.model.name()
   }
@@ -112,7 +108,7 @@ mod tests {
   #[test]
   fn chat_messages() {
     let request = Request::new(
-      "fake:foo".parse().unwrap(),
+      "mock:foo".parse().unwrap(),
       vec![
         Message::User(vec![UserMessageContent::Text("foo".into())]),
         Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
@@ -134,7 +130,7 @@ mod tests {
   #[test]
   fn last_user_message() {
     let request = Request::new(
-      "fake:foo".parse().unwrap(),
+      "mock:foo".parse().unwrap(),
       vec![
         Message::User(vec![UserMessageContent::Text("foo".into())]),
         Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
@@ -152,7 +148,7 @@ mod tests {
   #[test]
   fn rig_system_context() {
     let request = CompletionRequest::from(&Request::with_system(
-      "fake:foo".parse().unwrap(),
+      "mock:foo".parse().unwrap(),
       vec![Message::User(vec![UserMessageContent::Text("bar".into())])],
       "baz",
       ToolRegistry::default(),
@@ -167,7 +163,7 @@ mod tests {
   #[test]
   fn rig_tools() {
     let request = CompletionRequest::from(&Request::new(
-      "fake:foo".parse().unwrap(),
+      "mock:foo".parse().unwrap(),
       vec![Message::User(vec![UserMessageContent::Text("bar".into())])],
       ToolRegistry::new(vec![Tool::new::<ReadFileTool>()]),
     ));

@@ -50,7 +50,7 @@ use {
   options::Options,
   patch_plan::PatchPlan,
   presented_frame::PresentedFrame,
-  provider::{Fake, Provider, Rig},
+  provider::{Mock, Provider, Rig},
   provider_output::ProviderOutput,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, Input, Key, TextArea},

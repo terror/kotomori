@@ -239,7 +239,7 @@ mod tests {
   #[test]
   fn active_frame_ticks() {
     let mut state = State::new(&Options {
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
     })
@@ -291,7 +291,7 @@ mod tests {
   async fn approval_actions_resolve_pending_request() {
     async fn case(action: Action, expected: ToolApproval) {
       let mut state = State::new(&Options {
-        model: "fake:local".parse().unwrap(),
+        model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
       })
@@ -332,7 +332,7 @@ mod tests {
   #[test]
   fn command_autocomplete() {
     let mut state = State::new(&Options {
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       prompt: Some("/".into()),
       yolo: false,
     })
@@ -362,7 +362,7 @@ mod tests {
     #[track_caller]
     fn case(command: &str) {
       let mut state = State::new(&Options {
-        model: "fake:local".parse().unwrap(),
+        model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
       })
@@ -400,7 +400,7 @@ mod tests {
   #[test]
   fn error_clears_active_message() {
     let mut state = State::new(&Options {
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
     })
@@ -444,7 +444,7 @@ mod tests {
   #[test]
   fn interrupt_stops_active_agent() {
     let mut state = State::new(&Options {
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
     })
@@ -475,7 +475,7 @@ mod tests {
   #[test]
   fn quit_interrupts_active_agent() {
     let mut state = State::new(&Options {
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
     })
@@ -506,7 +506,7 @@ mod tests {
   #[tokio::test]
   async fn quit_interrupts_active_approval() {
     let mut state = State::new(&Options {
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
     })
@@ -542,7 +542,7 @@ mod tests {
   #[test]
   fn multiline_input() {
     let mut state = State::new(&Options {
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
     })
@@ -580,7 +580,7 @@ mod tests {
   #[test]
   fn unknown_command() {
     let mut state = State::new(&Options {
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       prompt: Some("/foobar".into()),
       yolo: false,
     })

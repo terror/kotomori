@@ -1,9 +1,9 @@
 use super::*;
 
-mod fake;
+mod mock;
 mod rig;
 
-pub(crate) use {fake::Fake, rig::Rig};
+pub(crate) use {mock::Mock, rig::Rig};
 
 #[async_trait]
 pub(crate) trait Provider: fmt::Debug + Send + Sync {

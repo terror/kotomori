@@ -256,7 +256,7 @@ mod tests {
     let agent = Agent {
       event_sender,
       loader: Loader::with_cwd(directory.path()),
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       provider: Arc::new(OrderedProvider {
         requests: requests.clone(),
       }),
@@ -304,7 +304,7 @@ mod tests {
     let agent = Agent {
       event_sender,
       loader: Loader::with_cwd(directory.path()),
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       provider: Arc::new(LoopProvider {
         requests: requests.clone(),
       }),
@@ -372,7 +372,7 @@ mod tests {
     let agent = Agent {
       event_sender,
       loader: Loader::with_cwd(directory.path()),
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       provider: Arc::new(LoopProvider {
         requests: requests.clone(),
       }),
@@ -440,7 +440,7 @@ mod tests {
     let agent = Agent {
       event_sender,
       loader: Loader::with_cwd(directory.path()),
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       provider: Arc::new(ReasoningProvider),
       task: None,
       tool_registry: ToolRegistry::default(),
