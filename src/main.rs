@@ -14,6 +14,7 @@ use {
   command::Command,
   component::Component,
   composer::Composer,
+  config::Config,
   crossterm::{
     cursor::{
       Hide, MoveDown, MoveTo, MoveToColumn, MoveToNextLine, MoveUp, Show,
@@ -118,6 +119,7 @@ use {
   session_file::SessionFile,
   session_store::SessionStore,
   session_summary::SessionSummary,
+  settings::Settings,
   smallvec::SmallVec,
   span::Span,
   state::State,
@@ -191,6 +193,7 @@ mod approval_request;
 mod arguments;
 mod changed_range;
 mod command;
+mod config;
 mod cohere {
   pub(crate) type Client = super::CohereClient;
   pub(crate) type CompletionModel = super::CohereCompletionModel;
@@ -269,6 +272,7 @@ mod session;
 mod session_file;
 mod session_store;
 mod session_summary;
+mod settings;
 mod span;
 mod state;
 mod style;

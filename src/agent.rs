@@ -34,18 +34,18 @@ impl Agent {
 
   pub(crate) fn new(
     event_sender: UnboundedSender<Event>,
-    options: &Options,
+    settings: &Settings,
   ) -> Result<Self> {
-    let provider = Arc::<dyn Provider>::try_from(options.model.clone())?;
+    let provider = Arc::<dyn Provider>::try_from(settings.model.clone())?;
 
     Ok(Self {
       event_sender,
       loader: Loader::new()?,
-      model: options.model.clone(),
+      model: settings.model.clone(),
       provider,
       task: None,
       tool_registry: ToolRegistry::default(),
-      yolo: options.yolo,
+      yolo: settings.yolo,
     })
   }
 

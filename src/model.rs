@@ -6,6 +6,36 @@ pub(crate) struct Model {
   pub(crate) provider: String,
 }
 
+impl Model {
+  pub(crate) fn new(provider: &str, name: &str) -> Result<Self> {
+    let provider = provider.trim();
+
+    if provider.is_empty() {
+      bail!("model provider cannot be empty");
+    }
+
+    let name = name.trim();
+
+    if name.is_empty() {
+      bail!("model name cannot be empty");
+    }
+
+    Ok(Self {
+      name: name.into(),
+      provider: provider.into(),
+    })
+  }
+}
+
+impl Default for Model {
+  fn default() -> Self {
+    Self {
+      name: "local".into(),
+      provider: "mock".into(),
+    }
+  }
+}
+
 impl Display for Model {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
     write!(f, "{}:{}", self.provider, self.name)
@@ -20,20 +50,7 @@ impl FromStr for Model {
       bail!("model must be PROVIDER:MODEL");
     };
 
-    let name = name.trim();
-
-    if provider.is_empty() {
-      bail!("model provider cannot be empty");
-    }
-
-    if name.is_empty() {
-      bail!("model name cannot be empty");
-    }
-
-    Ok(Self {
-      name: name.into(),
-      provider: provider.into(),
-    })
+    Self::new(provider, name)
   }
 }
 

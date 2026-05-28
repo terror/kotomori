@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) async fn run(mut options: Options) -> Result {
+pub(crate) async fn run(mut settings: Settings) -> Result {
   let sessions = SessionStore::list()?;
 
   if sessions.is_empty() {
@@ -14,11 +14,11 @@ pub(crate) async fn run(mut options: Options) -> Result {
 
   let session = SessionStore::load(&path)?;
 
-  options.model = session.file.model.parse().with_context(|| {
+  settings.model = session.file.model.parse().with_context(|| {
     format!("failed to parse session model {}", session.file.model)
   })?;
 
-  App::with_state(&options, State::with_session(&options, session)?)?
+  App::with_state(&settings, State::with_session(&settings, session)?)?
     .run()
     .await
 }

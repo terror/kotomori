@@ -11,11 +11,11 @@ pub(crate) struct Arguments {
 
 impl Arguments {
   pub(crate) async fn run(self) -> Result {
-    let options = self.options;
+    let settings = Settings::resolve(self.options, &Config::load()?)?;
 
     match self.subcommand {
-      Some(subcommand) => subcommand.run(options).await,
-      None => App::new(&options)?.run().await,
+      Some(subcommand) => subcommand.run(settings).await,
+      None => App::new(&settings)?.run().await,
     }
   }
 }

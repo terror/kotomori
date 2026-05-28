@@ -1,9 +1,9 @@
 use super::*;
 
-#[derive(Args, Clone, Debug)]
+#[derive(Args, Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Options {
-  #[arg(long, default_value = "mock:local", global = true)]
-  pub(crate) model: Model,
+  #[arg(long, global = true)]
+  pub(crate) model: Option<Model>,
   #[arg(short, long, global = true)]
   pub(crate) prompt: Option<String>,
   #[arg(long, global = true)]

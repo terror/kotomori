@@ -35,7 +35,7 @@ mod tests {
 
   #[test]
   fn composer_renders_while_agent_is_active() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
