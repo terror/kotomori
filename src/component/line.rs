@@ -1,11 +1,11 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Line {
+pub(crate) struct LineComponent {
   spans: SmallVec<[Span; 6]>,
 }
 
-impl Line {
+impl LineComponent {
   pub(crate) fn blank() -> Self {
     Self::raw("")
   }
@@ -17,8 +17,8 @@ impl Line {
   }
 }
 
-impl Component for Line {
-  fn render(&self, width: u16) -> Vec<Line> {
+impl Component for LineComponent {
+  fn render(&self, width: u16) -> Vec<LineComponent> {
     let max_width = usize::from(width.max(1));
 
     let mut lines = Vec::new();
@@ -31,7 +31,7 @@ impl Component for Line {
         let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
 
         if span_width > 0 && span_width + char_width > max_width {
-          lines.push(Line {
+          lines.push(LineComponent {
             spans: mem::take(&mut spans),
           });
 
@@ -53,16 +53,16 @@ impl Component for Line {
     }
 
     lines.push(if spans.is_empty() {
-      Line::blank()
+      LineComponent::blank()
     } else {
-      Line { spans }
+      LineComponent { spans }
     });
 
     lines
   }
 }
 
-impl Display for Line {
+impl Display for LineComponent {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     for span in &self.spans {
       if span.style == Style::None {
@@ -82,13 +82,13 @@ impl Display for Line {
   }
 }
 
-impl From<Line> for Vec<Span> {
-  fn from(line: Line) -> Self {
+impl From<LineComponent> for Vec<Span> {
+  fn from(line: LineComponent) -> Self {
     line.spans.into_vec()
   }
 }
 
-impl From<Vec<Span>> for Line {
+impl From<Vec<Span>> for LineComponent {
   fn from(spans: Vec<Span>) -> Self {
     Self {
       spans: spans.into(),
@@ -96,7 +96,7 @@ impl From<Vec<Span>> for Line {
   }
 }
 
-impl<const N: usize> From<[Span; N]> for Line {
+impl<const N: usize> From<[Span; N]> for LineComponent {
   fn from(spans: [Span; N]) -> Self {
     Self {
       spans: spans.into_iter().collect(),
@@ -110,13 +110,13 @@ mod tests {
 
   #[test]
   fn displays_blank_line() {
-    assert_eq!(Line::blank().to_string(), "");
+    assert_eq!(LineComponent::blank().to_string(), "");
   }
 
   #[test]
   fn displays_mixed_styled_and_raw_text() {
     assert_eq!(
-      Line::from([
+      LineComponent::from([
         Span::raw("a"),
         Span::styled("b", Style::CyanBold),
         Span::raw("c"),
@@ -128,13 +128,13 @@ mod tests {
 
   #[test]
   fn displays_raw_text() {
-    assert_eq!(Line::raw("foo").to_string(), "foo");
+    assert_eq!(LineComponent::raw("foo").to_string(), "foo");
   }
 
   #[test]
   fn displays_styled_text() {
     assert_eq!(
-      Line::from([Span::styled("foo", Style::CyanBold)]).to_string(),
+      LineComponent::from([Span::styled("foo", Style::CyanBold)]).to_string(),
       "\x1b[36;1mfoo\x1b[0m",
     );
   }
@@ -142,7 +142,7 @@ mod tests {
   #[test]
   fn line_with_six_spans_uses_inline_smallvec_storage() {
     assert!(
-      !Line::from([
+      !LineComponent::from([
         Span::raw("a"),
         Span::raw("b"),
         Span::raw("c"),
@@ -158,34 +158,37 @@ mod tests {
   #[test]
   fn rendering_accounts_for_wide_characters() {
     assert_eq!(
-      Line::raw("a界b").render(3),
-      [Line::raw("a界"), Line::raw("b")],
+      LineComponent::raw("a界b").render(3),
+      [LineComponent::raw("a界"), LineComponent::raw("b")],
     );
   }
 
   #[test]
   fn rendering_keeps_zero_width_combining_marks_with_line() {
     assert_eq!(
-      Line::raw("e\u{0301}x").render(1),
-      [Line::raw("e\u{0301}"), Line::raw("x")],
+      LineComponent::raw("e\u{0301}x").render(1),
+      [LineComponent::raw("e\u{0301}"), LineComponent::raw("x")],
     );
   }
 
   #[test]
   fn rendering_merges_adjacent_spans_with_same_style() {
     assert_eq!(
-      Line::from([
+      LineComponent::from([
         Span::styled("foo", Style::CyanBold),
         Span::styled("bar", Style::CyanBold),
       ])
       .render(6),
-      [Line::from([Span::styled("foobar", Style::CyanBold)])],
+      [LineComponent::from([Span::styled(
+        "foobar",
+        Style::CyanBold
+      )])],
     );
   }
 
   #[test]
   fn rendering_preserves_plain_text_content() {
-    let line = Line::from([
+    let line = LineComponent::from([
       Span::raw("foo"),
       Span::styled("bar", Style::CyanBold),
       Span::raw("baz"),
@@ -204,12 +207,12 @@ mod tests {
   #[test]
   fn rendering_preserves_style_boundaries() {
     assert_eq!(
-      Line::from([
+      LineComponent::from([
         Span::styled("foo", Style::CyanBold),
         Span::styled("bar", Style::DarkGray),
       ])
       .render(6),
-      [Line::from([
+      [LineComponent::from([
         Span::styled("foo", Style::CyanBold),
         Span::styled("bar", Style::DarkGray),
       ])],
@@ -219,34 +222,37 @@ mod tests {
   #[test]
   fn renders_across_style_boundaries() {
     assert_eq!(
-      Line::from([
+      LineComponent::from([
         Span::styled("foo", Style::CyanBold),
         Span::styled("bar", Style::DarkGray),
       ])
       .render(4),
       [
-        Line::from([
+        LineComponent::from([
           Span::styled("foo", Style::CyanBold),
           Span::styled("b", Style::DarkGray),
         ]),
-        Line::from([Span::styled("ar", Style::DarkGray)]),
+        LineComponent::from([Span::styled("ar", Style::DarkGray)]),
       ],
     );
   }
 
   #[test]
   fn renders_blank_line() {
-    assert_eq!(Line::blank().render(3), [Line::blank()]);
+    assert_eq!(LineComponent::blank().render(3), [LineComponent::blank()]);
   }
 
   #[test]
   fn renders_raw_text_at_various_widths() {
     #[track_caller]
     fn case(width: u16, expected: &[&str]) {
-      let expected =
-        expected.iter().copied().map(Line::raw).collect::<Vec<_>>();
+      let expected = expected
+        .iter()
+        .copied()
+        .map(LineComponent::raw)
+        .collect::<Vec<_>>();
 
-      assert_eq!(Line::raw("foo").render(width), expected);
+      assert_eq!(LineComponent::raw("foo").render(width), expected);
     }
 
     case(0, &["f", "o", "o"]);
@@ -259,10 +265,10 @@ mod tests {
   #[test]
   fn renders_styled_text_at_width() {
     assert_eq!(
-      Line::from([Span::styled("foobar", Style::CyanBold)]).render(3),
+      LineComponent::from([Span::styled("foobar", Style::CyanBold)]).render(3),
       [
-        Line::from([Span::styled("foo", Style::CyanBold)]),
-        Line::from([Span::styled("bar", Style::CyanBold)]),
+        LineComponent::from([Span::styled("foo", Style::CyanBold)]),
+        LineComponent::from([Span::styled("bar", Style::CyanBold)]),
       ],
     );
   }
@@ -270,8 +276,8 @@ mod tests {
   #[test]
   fn renders_styled_text_that_exactly_fits_width() {
     assert_eq!(
-      Line::from([Span::styled("foo", Style::CyanBold)]).render(3),
-      [Line::from([Span::styled("foo", Style::CyanBold)])],
+      LineComponent::from([Span::styled("foo", Style::CyanBold)]).render(3),
+      [LineComponent::from([Span::styled("foo", Style::CyanBold)])],
     );
   }
 }

@@ -12,11 +12,11 @@ impl<'a> TranscriptComponent<'a> {
     Self { state }
   }
 
-  fn render_agent_activity(&self) -> Vec<Line> {
+  fn render_agent_activity(&self) -> Vec<LineComponent> {
     let mut lines = Vec::new();
 
     let working = || {
-      Line::from([
+      LineComponent::from([
         Span::styled(
           Self::FRAMES[self.state.active_frame % Self::FRAMES.len()],
           Style::CyanBold,
@@ -36,63 +36,83 @@ impl<'a> TranscriptComponent<'a> {
       AgentActivity::Idle => {}
       AgentActivity::Reasoning(reasoning) => {
         lines.extend(reasoning.lines().map(|line| {
-          Line::from([Span::styled(format!(" {line}"), Style::DarkGray)])
+          LineComponent::from([Span::styled(
+            format!(" {line}"),
+            Style::DarkGray,
+          )])
         }));
 
-        lines.extend([Line::blank(), working(), Line::blank()]);
+        lines.extend([
+          LineComponent::blank(),
+          working(),
+          LineComponent::blank(),
+        ]);
       }
       AgentActivity::Streaming(message) => {
-        lines.extend(message.lines().map(|line| Line::raw(format!(" {line}"))));
+        lines.extend(
+          message
+            .lines()
+            .map(|line| LineComponent::raw(format!(" {line}"))),
+        );
 
-        lines.push(Line::blank());
+        lines.push(LineComponent::blank());
       }
       AgentActivity::Waiting => {
-        lines.extend([working(), Line::blank()]);
+        lines.extend([working(), LineComponent::blank()]);
       }
     }
 
     lines
   }
 
-  fn render_entries(&self, width: u16) -> Vec<Line> {
+  fn render_entries(&self, width: u16) -> Vec<LineComponent> {
     let mut lines = Vec::new();
 
     for entry in &self.state.entries {
       match entry {
         TranscriptEntry::Agent(content) => {
-          if !matches!(lines.last(), Some(line) if line == &Line::blank()) {
-            lines.push(Line::blank());
+          if !matches!(lines.last(), Some(line) if line == &LineComponent::blank())
+          {
+            lines.push(LineComponent::blank());
           }
 
-          lines
-            .extend(content.lines().map(|line| Line::raw(format!(" {line}"))));
+          lines.extend(
+            content
+              .lines()
+              .map(|line| LineComponent::raw(format!(" {line}"))),
+          );
 
-          lines.push(Line::blank());
+          lines.push(LineComponent::blank());
         }
         TranscriptEntry::Interrupted => {
           lines.extend([
-            Line::blank(),
-            Line::from([Span::styled(
+            LineComponent::blank(),
+            LineComponent::from([Span::styled(
               "■ Conversation interrupted, tell the model what to do differently.",
               Style::RedBold,
             )]),
-            Line::blank(),
+            LineComponent::blank(),
           ]);
         }
         TranscriptEntry::Reasoning(reasoning) => {
-          if !matches!(lines.last(), Some(line) if line == &Line::blank()) {
-            lines.push(Line::blank());
+          if !matches!(lines.last(), Some(line) if line == &LineComponent::blank())
+          {
+            lines.push(LineComponent::blank());
           }
 
           lines.extend(reasoning.lines().map(|line| {
-            Line::from([Span::styled(format!(" {line}"), Style::DarkGray)])
+            LineComponent::from([Span::styled(
+              format!(" {line}"),
+              Style::DarkGray,
+            )])
           }));
 
-          lines.push(Line::blank());
+          lines.push(LineComponent::blank());
         }
         TranscriptEntry::Tool { invocation, result } => {
-          if !matches!(lines.last(), Some(line) if line == &Line::blank()) {
-            lines.push(Line::blank());
+          if !matches!(lines.last(), Some(line) if line == &LineComponent::blank())
+          {
+            lines.push(LineComponent::blank());
           }
 
           lines.extend(
@@ -116,7 +136,7 @@ impl<'a> TranscriptComponent<'a> {
 }
 
 impl Component for TranscriptComponent<'_> {
-  fn render(&self, width: u16) -> Vec<Line> {
+  fn render(&self, width: u16) -> Vec<LineComponent> {
     self
       .render_entries(width)
       .into_iter()
@@ -141,15 +161,15 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        Line::from([Span::styled(" foo", Style::DarkGray)]),
-        Line::from([Span::styled(" bar", Style::DarkGray)]),
-        Line::blank(),
-        Line::from([
+        LineComponent::from([Span::styled(" foo", Style::DarkGray)]),
+        LineComponent::from([Span::styled(" bar", Style::DarkGray)]),
+        LineComponent::blank(),
+        LineComponent::from([
           Span::styled("✧", Style::CyanBold),
           Span::styled(" Working...", Style::Gray),
           Span::styled(" (1m 1s • esc to interrupt)", Style::DarkGray),
         ]),
-        Line::blank(),
+        LineComponent::blank(),
       ]
     );
   }
@@ -165,7 +185,11 @@ mod tests {
 
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
-      [Line::raw(" foo"), Line::raw(" bar"), Line::blank()]
+      [
+        LineComponent::raw(" foo"),
+        LineComponent::raw(" bar"),
+        LineComponent::blank()
+      ]
     );
   }
 
@@ -181,12 +205,12 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        Line::from([
+        LineComponent::from([
           Span::styled("✶", Style::CyanBold),
           Span::styled(" Working...", Style::Gray),
           Span::styled(" (1m 51s • esc to interrupt)", Style::DarkGray),
         ]),
-        Line::blank(),
+        LineComponent::blank(),
       ]
     );
   }
@@ -199,10 +223,10 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        Line::blank(),
-        Line::raw(" foo"),
-        Line::raw(" bar"),
-        Line::blank(),
+        LineComponent::blank(),
+        LineComponent::raw(" foo"),
+        LineComponent::raw(" bar"),
+        LineComponent::blank(),
       ]
     );
   }
@@ -225,13 +249,13 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        Line::blank(),
-        Line::raw(" foo"),
-        Line::blank(),
-        Line::from([Span::styled(" bar", Style::DarkGray)]),
-        Line::blank(),
-        Line::raw(" baz"),
-        Line::blank(),
+        LineComponent::blank(),
+        LineComponent::raw(" foo"),
+        LineComponent::blank(),
+        LineComponent::from([Span::styled(" bar", Style::DarkGray)]),
+        LineComponent::blank(),
+        LineComponent::raw(" baz"),
+        LineComponent::blank(),
       ]
     );
   }
@@ -244,12 +268,12 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        Line::blank(),
-        Line::from([Span::styled(
+        LineComponent::blank(),
+        LineComponent::from([Span::styled(
           "■ Conversation interrupted, tell the model what to do differently.",
           Style::RedBold,
         )]),
-        Line::blank(),
+        LineComponent::blank(),
       ]
     );
   }
@@ -264,10 +288,10 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        Line::blank(),
-        Line::from([Span::styled(" foo", Style::DarkGray)]),
-        Line::from([Span::styled(" bar", Style::DarkGray)]),
-        Line::blank(),
+        LineComponent::blank(),
+        LineComponent::from([Span::styled(" foo", Style::DarkGray)]),
+        LineComponent::from([Span::styled(" bar", Style::DarkGray)]),
+        LineComponent::blank(),
       ]
     );
   }
@@ -292,20 +316,20 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        Line::blank(),
-        Line::raw(" foo"),
-        Line::blank(),
-        Line::from([
+        LineComponent::blank(),
+        LineComponent::raw(" foo"),
+        LineComponent::blank(),
+        LineComponent::from([
           Span::raw(" "),
           Span::styled("●", Style::GreenBold),
           Span::raw(" "),
           Span::raw("Listed files in ."),
         ]),
-        Line::from([
+        LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
           Span::styled("baz", Style::DarkGray),
         ]),
-        Line::blank(),
+        LineComponent::blank(),
       ]
     );
   }
@@ -328,17 +352,17 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        Line::from([Span::styled("─".repeat(80), Style::DarkGray)]),
-        Line::raw("foo"),
-        Line::from([Span::styled("─".repeat(80), Style::DarkGray)]),
-        Line::blank(),
-        Line::from([
+        LineComponent::from([Span::styled("─".repeat(80), Style::DarkGray)]),
+        LineComponent::raw("foo"),
+        LineComponent::from([Span::styled("─".repeat(80), Style::DarkGray)]),
+        LineComponent::blank(),
+        LineComponent::from([
           Span::raw(" "),
           Span::styled("●", Style::CyanBold),
           Span::raw(" "),
           Span::raw("Listing files"),
         ]),
-        Line::blank(),
+        LineComponent::blank(),
       ]
     );
   }
@@ -362,32 +386,32 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        Line::blank(),
-        Line::from([
+        LineComponent::blank(),
+        LineComponent::from([
           Span::raw(" "),
           Span::styled("●", Style::RedBold),
           Span::raw(" "),
           Span::raw("Failed running foo bar"),
         ]),
-        Line::from([
+        LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
           Span::styled("cwd ", Style::DarkGray),
           Span::raw("baz"),
         ]),
-        Line::from([
+        LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
           Span::styled("exit ", Style::DarkGray),
           Span::raw("1"),
         ]),
-        Line::from([
+        LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
           Span::styled("qux", Style::DarkGray),
         ]),
-        Line::from([
+        LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
           Span::styled("quux", Style::DarkGray),
         ]),
-        Line::blank(),
+        LineComponent::blank(),
       ]
     );
   }
@@ -411,30 +435,30 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(10),
       [
-        Line::blank(),
-        Line::from([
+        LineComponent::blank(),
+        LineComponent::from([
           Span::raw(" "),
           Span::styled("●", Style::GreenBold),
           Span::raw(" "),
           Span::raw("Listed files"),
         ]),
-        Line::from([
+        LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
           Span::styled("fooba...", Style::DarkGray),
         ]),
-        Line::from([
+        LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
           Span::styled("bar", Style::DarkGray),
         ]),
-        Line::from([
+        LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
           Span::styled("baz", Style::DarkGray),
         ]),
-        Line::from([
+        LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
           Span::styled("... 1 more line", Style::DarkGray),
         ]),
-        Line::blank(),
+        LineComponent::blank(),
       ]
     );
   }
@@ -456,14 +480,14 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        Line::blank(),
-        Line::from([
+        LineComponent::blank(),
+        LineComponent::from([
           Span::raw(" "),
           Span::styled("●", Style::CyanBold),
           Span::raw(" "),
           Span::raw("Listing files in baz"),
         ]),
-        Line::blank(),
+        LineComponent::blank(),
       ]
     );
   }
@@ -477,11 +501,11 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(3),
       [
-        Line::from([Span::styled("───", Style::DarkGray)]),
-        Line::raw("foo"),
-        Line::raw("bar"),
-        Line::raw("baz"),
-        Line::from([Span::styled("───", Style::DarkGray)]),
+        LineComponent::from([Span::styled("───", Style::DarkGray)]),
+        LineComponent::raw("foo"),
+        LineComponent::raw("bar"),
+        LineComponent::raw("baz"),
+        LineComponent::from([Span::styled("───", Style::DarkGray)]),
       ]
     );
   }

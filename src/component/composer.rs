@@ -12,7 +12,7 @@ impl<'a> ComposerComponent<'a> {
 }
 
 impl Component for ComposerComponent<'_> {
-  fn render(&self, width: u16) -> Vec<Line> {
+  fn render(&self, width: u16) -> Vec<LineComponent> {
     let cursor = self.composer.cursor();
 
     let selected = self.composer.selected_command_index();
@@ -20,7 +20,7 @@ impl Component for ComposerComponent<'_> {
     let mut lines = FramedLinesComponent::new(
       self.composer.lines().iter().enumerate().map(|(row, line)| {
         if cursor.0 != row {
-          return Line::raw(line);
+          return LineComponent::raw(line);
         }
 
         let mut chars = line.chars();
@@ -29,7 +29,7 @@ impl Component for ComposerComponent<'_> {
         let under_cursor = chars.next().unwrap_or(' ');
         let after = chars.collect::<String>();
 
-        Line::from([
+        LineComponent::from([
           Span::raw(before),
           Span::styled(under_cursor.to_string(), Style::Reverse),
           Span::raw(after),
@@ -45,7 +45,7 @@ impl Component for ComposerComponent<'_> {
           _ => Style::Gray,
         };
 
-        Line::from([
+        LineComponent::from([
           Span::styled(command.input(), input_style),
           Span::styled("  ", Style::DarkGray),
           Span::styled(command.description(), Style::DarkGray),
@@ -69,7 +69,7 @@ mod tests {
 
     assert_eq!(
       lines[3],
-      Line::from([
+      LineComponent::from([
         Span::styled("/clear", Style::CyanBold),
         Span::styled("  ", Style::DarkGray),
         Span::styled("Clear the transcript", Style::DarkGray),
@@ -78,7 +78,7 @@ mod tests {
 
     assert_eq!(
       lines[4],
-      Line::from([
+      LineComponent::from([
         Span::styled("/quit", Style::Gray),
         Span::styled("  ", Style::DarkGray),
         Span::styled("Quit kotomori", Style::DarkGray),

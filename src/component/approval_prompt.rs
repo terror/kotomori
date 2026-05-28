@@ -12,15 +12,15 @@ impl<'a> ApprovalPromptComponent<'a> {
 }
 
 impl Component for ApprovalPromptComponent<'_> {
-  fn render(&self, width: u16) -> Vec<Line> {
+  fn render(&self, width: u16) -> Vec<LineComponent> {
     [
-      Line::from([
+      LineComponent::from([
         Span::styled("?", Style::CyanBold),
         Span::raw(" Approve "),
         Span::raw(self.request.invocation.to_string()),
         Span::raw("?"),
       ]),
-      Line::from([
+      LineComponent::from([
         Span::styled("y", Style::GreenBold),
         Span::styled(" approve  ", Style::DarkGray),
         Span::styled("n", Style::RedBold),
