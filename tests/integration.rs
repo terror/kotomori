@@ -5,7 +5,10 @@ use {
   portable_pty::{CommandBuilder, PtySize, native_pty_system},
   std::{
     io::{self, Read, Write},
-    sync::mpsc::{self, Receiver, RecvTimeoutError},
+    sync::{
+      Mutex,
+      mpsc::{self, Receiver, RecvTimeoutError},
+    },
     thread,
     time::{Duration, Instant},
   },
@@ -18,7 +21,9 @@ const EXPECT_TIMEOUT: Duration = Duration::from_secs(5);
 const READ_INTERVAL: Duration = Duration::from_millis(20);
 const SCREEN_COLS: u16 = 80;
 const SCREEN_ROWS: u16 = 24;
+const SETTLE_INTERVAL: Duration = Duration::from_millis(200);
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(3);
+static PTY_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug)]
 enum Step {
@@ -26,6 +31,7 @@ enum Step {
   ExpectScreenContains(String),
   ExpectScreenExcludes(String),
   Quit,
+  Wait(Duration),
   Write(Vec<u8>),
 }
 
@@ -54,12 +60,20 @@ impl Test {
     self.write("\x03")
   }
 
+  fn ctrl_j(self) -> Self {
+    self.write("\n")
+  }
+
   fn down(self) -> Self {
     self.write("\x1b[B")
   }
 
   fn enter(self) -> Self {
     self.write("\r")
+  }
+
+  fn escape(self) -> Self {
+    self.write("\x1b")
   }
 
   fn expect_exit(mut self, code: u32) -> Self {
@@ -94,6 +108,8 @@ impl Test {
   }
 
   fn run(self) -> Result {
+    let _guard = PTY_LOCK.lock().unwrap();
+
     let mut running = Running::spawn(&self)?;
 
     running.expect_screen_contains("kotomori", STARTUP_TIMEOUT)?;
@@ -112,6 +128,9 @@ impl Test {
         Step::Quit => {
           running.quit()?;
         }
+        Step::Wait(duration) => {
+          thread::sleep(duration);
+        }
         Step::Write(bytes) => {
           running.write(&bytes)?;
         }
@@ -127,6 +146,11 @@ impl Test {
 
   fn type_text(mut self, text: &str) -> Self {
     self.steps.push(Step::Write(text.as_bytes().into()));
+    self
+  }
+
+  fn wait(mut self, duration: Duration) -> Self {
+    self.steps.push(Step::Wait(duration));
     self
   }
 
@@ -396,6 +420,22 @@ fn approval_prompt_denies_command() -> Result {
 }
 
 #[test]
+fn approval_prompt_denies_command_with_escape() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:approval-required-command")
+    .type_text("foo")
+    .enter()
+    .expect_screen_contains("Approve echo bar?")
+    .escape()
+    .expect_screen_contains("Failed running echo bar")
+    .expect_screen_contains("permission denied")
+    .expect_screen_contains("done")
+    .quit()
+    .run()
+}
+
+#[test]
 fn command_completion_clears() -> Result {
   Test::new()
     .argument("--model")
@@ -428,6 +468,19 @@ fn command_completion_quits() -> Result {
 }
 
 #[test]
+fn initial_prompt_submits() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:local")
+    .argument("--prompt")
+    .argument("foo")
+    .enter()
+    .expect_screen_contains("queued for mock:local: foo")
+    .quit()
+    .run()
+}
+
+#[test]
 fn interrupt_active_agent() -> Result {
   Test::new()
     .argument("--model")
@@ -436,6 +489,20 @@ fn interrupt_active_agent() -> Result {
     .enter()
     .ctrl_c()
     .expect_screen_contains("Conversation interrupted")
+    .quit()
+    .run()
+}
+
+#[test]
+fn multiline_input() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:local")
+    .type_text("foo")
+    .ctrl_j()
+    .type_text("bar")
+    .enter()
+    .expect_screen_contains("queued for mock:local: foo\n bar")
     .quit()
     .run()
 }
@@ -454,6 +521,22 @@ fn prompt_round_trip() -> Result {
 }
 
 #[test]
+fn second_turn_conversation() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:local")
+    .type_text("foo")
+    .enter()
+    .expect_screen_contains("queued for mock:local: foo")
+    .wait(SETTLE_INTERVAL)
+    .type_text("bar")
+    .enter()
+    .expect_screen_contains("queued for mock:local: bar")
+    .quit()
+    .run()
+}
+
+#[test]
 fn unknown_command() -> Result {
   Test::new()
     .argument("--model")
@@ -461,6 +544,22 @@ fn unknown_command() -> Result {
     .type_text("/foobar")
     .enter()
     .expect_screen_contains("Unrecognized command '/foobar'")
+    .quit()
+    .run()
+}
+
+#[test]
+fn yolo_skips_approval() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:approval-required-command")
+    .argument("--yolo")
+    .type_text("foo")
+    .enter()
+    .expect_screen_contains("Ran echo bar")
+    .expect_screen_contains("bar")
+    .expect_screen_contains("done")
+    .expect_screen_excludes("Approve echo bar?")
     .quit()
     .run()
 }
