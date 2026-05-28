@@ -1,17 +1,17 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct ApprovalPrompt<'a> {
+pub(crate) struct ApprovalPromptComponent<'a> {
   request: &'a ApprovalRequest,
 }
 
-impl<'a> ApprovalPrompt<'a> {
+impl<'a> ApprovalPromptComponent<'a> {
   pub(crate) fn new(request: &'a ApprovalRequest) -> Self {
     Self { request }
   }
 }
 
-impl Component for ApprovalPrompt<'_> {
+impl Component for ApprovalPromptComponent<'_> {
   fn render(&self, width: u16) -> Vec<Line> {
     [
       Line::from([

@@ -5,7 +5,6 @@ use {
   agent_message_content::AgentMessageContent,
   anyhow::{Context, Error, bail},
   app::App,
-  approval_prompt::ApprovalPrompt,
   approval_request::ApprovalRequest,
   arguments::Arguments,
   async_trait::async_trait,
@@ -186,7 +185,6 @@ mod anthropic {
   pub(crate) type CompletionModel = super::AnthropicCompletionModel;
 }
 mod app;
-mod approval_prompt;
 mod approval_request;
 mod arguments;
 mod changed_range;

@@ -21,7 +21,7 @@ impl Component for ViewComponent<'_> {
       .chain(TranscriptComponent::new(&self.state.transcript).render(width))
       .chain(match &self.state.input_mode {
         InputMode::Approval(request) => {
-          ApprovalPrompt::new(request).render(width)
+          ApprovalPromptComponent::new(request).render(width)
         }
         InputMode::Compose => self.state.composer.render(width),
       })
