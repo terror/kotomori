@@ -237,7 +237,7 @@ mod tests {
   use super::*;
 
   #[test]
-  fn active_frame_ticks() {
+  fn agent_events_update_transcript() {
     let mut state = State::new(&Options {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
@@ -245,92 +245,493 @@ mod tests {
     })
     .unwrap();
 
-    state.handle_event(Event::Action(Action::Submit));
-
-    assert!(
-      state.transcript().render(80).ends_with(&[
-        Line::blank(),
-        vec![
-          Span::styled("✦", Style::CyanBold),
-          Span::styled(" Working...", Style::Gray),
-          Span::styled(" (0s • esc to interrupt)", Style::DarkGray),
-        ]
-        .into(),
-        Line::blank(),
-      ])
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])]
+      }]
     );
 
-    state.handle_event(Event::Tick(Duration::from_millis(120)));
+    state.handle_event(Event::AgentReasoningDelta("bar".into()));
+    state.handle_event(Event::AgentDelta("baz".into()));
 
-    assert!(
-      state.transcript().render(80).ends_with(&[
-        Line::blank(),
-        vec![
-          Span::styled("✧", Style::CyanBold),
-          Span::styled(" Working...", Style::Gray),
-          Span::styled(" (0s • esc to interrupt)", Style::DarkGray),
-        ]
-        .into(),
-        Line::blank(),
-      ])
-    );
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    };
+
+    state.handle_event(Event::AgentToolCall(invocation.clone()));
+
+    let result = ToolResult::command(Some(0), "qux", "");
+
+    state.handle_event(Event::AgentToolResult {
+      id: "foo".into(),
+      result: result.clone(),
+    });
 
     state.handle_event(Event::AgentDone);
-    state.handle_event(Event::Tick(Duration::from_millis(120)));
 
-    assert!(
-      !state
-        .transcript()
-        .render(80)
-        .iter()
-        .any(|line| line.to_string().contains("Working"))
+    assert_eq!(
+      state.transcript().messages(),
+      vec![
+        Message::User(vec![UserMessageContent::Text("foo".into())]),
+        Message::Agent(vec![AgentMessageContent::Text("baz".into())]),
+        invocation.message(),
+        result.message("foo"),
+      ],
     );
   }
 
   #[tokio::test]
-  async fn approval_actions_resolve_pending_request() {
-    async fn case(action: Action, expected: ToolApproval) {
-      let mut state = State::new(&Options {
-        model: "mock:local".parse().unwrap(),
-        prompt: Some(String::new()),
-        yolo: false,
-      })
-      .unwrap();
+  async fn approval_approves_with_lowercase_y() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
 
-      let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-        id: "foo".into(),
-        kind: ToolInvocationKind::Command(CommandTool {
-          arguments: Vec::new(),
-          cwd: None,
-          program: "bar".into(),
-        }),
-      });
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
 
-      state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_event(Event::ToolApprovalRequest(request));
 
-      assert!(state.pending_approval().is_some());
+    assert!(state.pending_approval().is_some());
 
-      state.handle_event(Event::Action(action));
-
-      assert_eq!(response_receiver.await.unwrap(), expected);
-
-      assert!(state.pending_approval().is_none());
-    }
-
-    case(
-      Action::Edit(Input {
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Edit(Input {
         key: Key::Char('y'),
         ..Default::default()
-      }),
-      ToolApproval::Approved,
-    )
-    .await;
+      }))),
+      Vec::new()
+    );
 
-    case(Action::Interrupt, ToolApproval::Denied).await;
+    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
+
+    assert!(state.pending_approval().is_none());
+  }
+
+  #[tokio::test]
+  async fn approval_approves_with_uppercase_y() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    assert!(state.pending_approval().is_some());
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char('Y'),
+        ..Default::default()
+      }))),
+      Vec::new()
+    );
+
+    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
+
+    assert!(state.pending_approval().is_none());
   }
 
   #[test]
-  fn command_autocomplete() {
+  fn approval_complete_command_leaves_request_pending() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::CompleteCommand)),
+      Vec::new()
+    );
+
+    assert!(state.pending_approval().is_some());
+  }
+
+  #[tokio::test]
+  async fn approval_denies_with_escape() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    assert!(state.pending_approval().is_some());
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Interrupt)),
+      Vec::new()
+    );
+
+    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
+
+    assert!(state.pending_approval().is_none());
+  }
+
+  #[tokio::test]
+  async fn approval_denies_with_lowercase_n() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    assert!(state.pending_approval().is_some());
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char('n'),
+        ..Default::default()
+      }))),
+      Vec::new()
+    );
+
+    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
+
+    assert!(state.pending_approval().is_none());
+  }
+
+  #[tokio::test]
+  async fn approval_denies_with_quit() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    assert!(state.pending_approval().is_some());
+
+    assert_eq!(state.handle_event(Event::Action(Action::Quit)), Vec::new());
+    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
+
+    assert!(state.pending_approval().is_none());
+    assert!(state.should_quit());
+  }
+
+  #[tokio::test]
+  async fn approval_denies_with_uppercase_n() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    assert!(state.pending_approval().is_some());
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char('N'),
+        ..Default::default()
+      }))),
+      Vec::new()
+    );
+
+    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
+
+    assert!(state.pending_approval().is_none());
+  }
+
+  #[test]
+  fn approval_edit_other_key_leaves_request_pending() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char('x'),
+        ..Default::default()
+      }))),
+      Vec::new()
+    );
+
+    assert!(state.pending_approval().is_some());
+  }
+
+  #[test]
+  fn approval_select_next_command_leaves_request_pending() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::SelectNextCommand)),
+      Vec::new()
+    );
+
+    assert!(state.pending_approval().is_some());
+  }
+
+  #[test]
+  fn approval_select_previous_command_leaves_request_pending() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::SelectPreviousCommand)),
+      Vec::new()
+    );
+
+    assert!(state.pending_approval().is_some());
+  }
+
+  #[test]
+  fn approval_submit_leaves_request_pending() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Vec::new()
+    );
+
+    assert!(state.pending_approval().is_some());
+  }
+
+  #[tokio::test]
+  async fn approval_terminal_agent_done_drops_pending_request() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_event(Event::AgentDone);
+
+    assert!(state.pending_approval().is_none());
+    assert!(response_receiver.await.is_err());
+  }
+
+  #[tokio::test]
+  async fn approval_terminal_agent_tool_result_drops_pending_request() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+
+    state.handle_event(Event::AgentToolResult {
+      id: "foo".into(),
+      result: ToolResult::content("bar"),
+    });
+
+    assert!(state.pending_approval().is_none());
+    assert!(response_receiver.await.is_err());
+  }
+
+  #[tokio::test]
+  async fn approval_terminal_error_drops_pending_request() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_event(Event::Error("bar".into()));
+
+    assert!(state.pending_approval().is_none());
+    assert!(response_receiver.await.is_err());
+  }
+
+  #[test]
+  fn blank_submit_does_nothing() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("  ".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Vec::new()
+    );
+
+    assert!(state.transcript().messages().is_empty());
+
+    assert_eq!(state.input_text(), "  ");
+  }
+
+  #[test]
+  fn command_autocomplete_select_next() {
     let mut state = State::new(&Options {
       model: "mock:local".parse().unwrap(),
       prompt: Some("/".into()),
@@ -351,50 +752,180 @@ mod tests {
     state.handle_event(Event::Action(Action::CompleteCommand));
 
     assert_eq!(state.input_text(), "/quit");
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    assert!(state.should_quit());
   }
 
   #[test]
-  fn command_clear() {
-    #[track_caller]
-    fn case(command: &str) {
-      let mut state = State::new(&Options {
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("foo".into()),
-        yolo: false,
-      })
-      .unwrap();
+  fn command_autocomplete_select_previous() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("/".into()),
+      yolo: false,
+    })
+    .unwrap();
 
-      assert_eq!(
-        state.handle_event(Event::Action(Action::Submit)),
-        vec![Effect::RunAgent {
-          messages: vec![Message::User(vec![UserMessageContent::Text(
-            "foo".into()
-          )])]
-        }]
-      );
+    assert_eq!(
+      state
+        .composer()
+        .commands()
+        .map(Command::name)
+        .collect::<Vec<_>>(),
+      vec!["clear", "quit"],
+    );
 
-      state.handle_event(Event::AgentDelta("bar".into()));
-      state.handle_event(Event::AgentDone);
+    state.handle_event(Event::Action(Action::SelectPreviousCommand));
+    state.handle_event(Event::Action(Action::CompleteCommand));
 
-      for c in command.chars() {
-        state.handle_event(Event::Action(Action::Edit(Input {
-          key: Key::Char(c),
-          ..Default::default()
-        })));
-      }
+    assert_eq!(state.input_text(), "/quit");
+  }
 
-      state.handle_event(Event::Action(Action::Submit));
+  #[test]
+  fn command_clear_from_empty_slash() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
 
-      assert_eq!(state.transcript().messages(), &[]);
-      assert_eq!(state.input_text(), "");
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])]
+      }]
+    );
+
+    state.handle_event(Event::AgentDelta("bar".into()));
+    state.handle_event(Event::AgentDone);
+
+    state.handle_event(Event::Action(Action::Edit(Input {
+      key: Key::Char('/'),
+      ..Default::default()
+    })));
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Vec::new()
+    );
+
+    assert!(state.transcript().messages().is_empty());
+
+    assert_eq!(state.input_text(), "");
+  }
+
+  #[test]
+  fn command_clear_from_name() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])]
+      }]
+    );
+
+    state.handle_event(Event::AgentDelta("bar".into()));
+    state.handle_event(Event::AgentDone);
+
+    for c in "/clear".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
     }
 
-    case("/");
-    case("/c");
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Vec::new()
+    );
+
+    assert!(state.transcript().messages().is_empty());
+
+    assert_eq!(state.input_text(), "");
+  }
+
+  #[test]
+  fn command_clear_from_prefix() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])]
+      }]
+    );
+
+    state.handle_event(Event::AgentDelta("bar".into()));
+    state.handle_event(Event::AgentDone);
+
+    for c in "/c".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Vec::new()
+    );
+
+    assert!(state.transcript().messages().is_empty());
+
+    assert_eq!(state.input_text(), "");
+  }
+
+  #[test]
+  fn command_quit_from_name() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("/quit".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Vec::new()
+    );
+
+    assert!(state.should_quit());
+
+    assert_eq!(state.input_text(), "");
+  }
+
+  #[test]
+  fn command_quit_from_prefix() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("/q".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Vec::new()
+    );
+
+    assert!(state.should_quit());
+
+    assert_eq!(state.input_text(), "");
   }
 
   #[test]
@@ -473,6 +1004,56 @@ mod tests {
   }
 
   #[test]
+  fn multiline_input() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some(String::new()),
+      yolo: false,
+    })
+    .unwrap();
+
+    for c in "foo".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    state.handle_event(Event::Action(Action::Edit(Input {
+      key: Key::Enter,
+      ..Default::default()
+    })));
+
+    for c in "bar".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo\nbar".into()
+        )])]
+      }]
+    );
+  }
+
+  #[test]
+  fn new_uses_empty_prompt_by_default() {
+    let state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(state.input_text(), "");
+  }
+
+  #[test]
   fn quit_interrupts_active_agent() {
     let mut state = State::new(&Options {
       model: "mock:local".parse().unwrap(),
@@ -540,25 +1121,22 @@ mod tests {
   }
 
   #[test]
-  fn multiline_input() {
+  fn submit_is_ignored_while_agent_active() {
     let mut state = State::new(&Options {
       model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
+      prompt: Some("foo".into()),
       yolo: false,
     })
     .unwrap();
 
-    for c in "foo".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    state.handle_event(Event::Action(Action::Edit(Input {
-      key: Key::Enter,
-      ..Default::default()
-    })));
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])]
+      }]
+    );
 
     for c in "bar".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -569,12 +1147,36 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
+      Vec::new()
+    );
+
+    assert_eq!(state.input_text(), "bar");
+
+    assert_eq!(
+      state.transcript().messages(),
+      vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
+    );
+  }
+
+  #[test]
+  fn submit_trims_input() {
+    let mut state = State::new(&Options {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("  foo  ".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
         messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo\nbar".into()
+          "foo".into()
         )])]
       }]
     );
+
+    assert_eq!(state.input_text(), "");
   }
 
   #[test]
@@ -590,7 +1192,7 @@ mod tests {
 
     assert_eq!(
       state.transcript().messages(),
-      &[Message::Agent(vec![AgentMessageContent::Text(
+      vec![Message::Agent(vec![AgentMessageContent::Text(
         "Unrecognized command '/foobar'. Type \"/\" for a list of supported commands.".into()
       )])]
     );
