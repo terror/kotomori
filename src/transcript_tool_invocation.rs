@@ -32,11 +32,10 @@ impl<'a> TranscriptToolInvocation<'a> {
   }
 
   fn output_line(value: impl Into<String>) -> Line {
-    vec![
+    Line::from([
       Span::styled(Self::GUTTER, Style::DarkGray),
       Span::styled(value.into(), Style::DarkGray),
-    ]
-    .into()
+    ])
   }
 
   fn preview(line: &str, width: usize) -> String {
@@ -84,23 +83,19 @@ impl Component for TranscriptToolInvocation<'_> {
 
     let (symbol, symbol_style, title) = self.status();
 
-    lines.push(
-      vec![
-        Span::raw(" "),
-        Span::styled(symbol, symbol_style),
-        Span::raw(" "),
-        Span::raw(title),
-      ]
-      .into(),
-    );
+    lines.push(Line::from([
+      Span::raw(" "),
+      Span::styled(symbol, symbol_style),
+      Span::raw(" "),
+      Span::raw(title),
+    ]));
 
     lines.extend(self.details().into_iter().map(|(label, value)| {
-      vec![
+      Line::from([
         Span::styled(Self::GUTTER, Style::DarkGray),
         Span::styled(format!("{label} "), Style::DarkGray),
         Span::raw(value),
-      ]
-      .into()
+      ])
     }));
 
     if let Some(output) = self.result.and_then(ToolResult::output) {

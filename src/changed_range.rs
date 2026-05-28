@@ -37,6 +37,14 @@ mod tests {
   }
 
   #[test]
+  fn between_detects_added_blank_tail() {
+    assert_eq!(
+      ChangedRange::between(&lines(&["foo"]), &lines(&["foo", ""])),
+      Some(ChangedRange { first: 1, last: 1 }),
+    );
+  }
+
+  #[test]
   fn between_detects_added_tail() {
     assert_eq!(
       ChangedRange::between(
@@ -108,6 +116,14 @@ mod tests {
   }
 
   #[test]
+  fn between_detects_removed_blank_tail() {
+    assert_eq!(
+      ChangedRange::between(&lines(&["foo", ""]), &lines(&["foo"])),
+      Some(ChangedRange { first: 1, last: 1 }),
+    );
+  }
+
+  #[test]
   fn between_detects_removed_tail() {
     assert_eq!(
       ChangedRange::between(
@@ -131,22 +147,6 @@ mod tests {
         &lines(&["foo", "bar", "baz"])
       ),
       None,
-    );
-  }
-
-  #[test]
-  fn between_detects_added_blank_tail() {
-    assert_eq!(
-      ChangedRange::between(&lines(&["foo"]), &lines(&["foo", ""])),
-      Some(ChangedRange { first: 1, last: 1 }),
-    );
-  }
-
-  #[test]
-  fn between_detects_removed_blank_tail() {
-    assert_eq!(
-      ChangedRange::between(&lines(&["foo", ""]), &lines(&["foo"])),
-      Some(ChangedRange { first: 1, last: 1 }),
     );
   }
 }

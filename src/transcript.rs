@@ -36,7 +36,7 @@ impl Transcript {
   }
 
   pub(crate) fn finish_agent_activity(&mut self) {
-    match std::mem::take(&mut self.active_agent_activity) {
+    match mem::take(&mut self.active_agent_activity) {
       AgentActivity::Reasoning(reasoning) if !reasoning.is_empty() => {
         self.entries.push(TranscriptEntry::Reasoning(reasoning));
       }
@@ -74,7 +74,7 @@ impl Transcript {
 
   pub(crate) fn push_agent_delta(&mut self, delta: &str) {
     self.active_agent_activity =
-      match std::mem::take(&mut self.active_agent_activity) {
+      match mem::take(&mut self.active_agent_activity) {
         AgentActivity::Idle | AgentActivity::Waiting if delta.is_empty() => {
           AgentActivity::Waiting
         }
@@ -101,7 +101,7 @@ impl Transcript {
 
   pub(crate) fn push_agent_reasoning_delta(&mut self, delta: &str) {
     self.active_agent_activity =
-      match std::mem::take(&mut self.active_agent_activity) {
+      match mem::take(&mut self.active_agent_activity) {
         AgentActivity::Idle | AgentActivity::Waiting if delta.is_empty() => {
           AgentActivity::Waiting
         }
@@ -186,11 +186,10 @@ impl Component for Transcript {
         TranscriptEntry::Interrupted => {
           lines.extend([
             Line::blank(),
-            vec![Span::styled(
+            Line::from([Span::styled(
               "■ Conversation interrupted, tell the model what to do differently.",
               Style::RedBold,
-            )]
-            .into(),
+            )]),
             Line::blank(),
           ]);
         }
@@ -200,7 +199,7 @@ impl Component for Transcript {
           }
 
           lines.extend(reasoning.lines().map(|line| {
-            vec![Span::styled(format!(" {line}"), Style::DarkGray)].into()
+            Line::from([Span::styled(format!(" {line}"), Style::DarkGray)])
           }));
 
           lines.push(Line::blank());
@@ -232,22 +231,19 @@ impl Component for Transcript {
         }
 
         lines.extend(reasoning.lines().map(|line| {
-          vec![Span::styled(format!(" {line}"), Style::DarkGray)].into()
+          Line::from([Span::styled(format!(" {line}"), Style::DarkGray)])
         }));
 
         lines.push(Line::blank());
 
-        lines.push(
-          vec![
-            Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
-            Span::styled(" Working...", Style::Gray),
-            Span::styled(
-              format!(" ({} • esc to interrupt)", self.active_elapsed.format()),
-              Style::DarkGray,
-            ),
-          ]
-          .into(),
-        );
+        lines.push(Line::from([
+          Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
+          Span::styled(" Working...", Style::Gray),
+          Span::styled(
+            format!(" ({} • esc to interrupt)", self.active_elapsed.format()),
+            Style::DarkGray,
+          ),
+        ]));
 
         lines.push(Line::blank());
       }
@@ -269,15 +265,14 @@ impl Component for Transcript {
         }
 
         lines.extend([
-          vec![
+          Line::from([
             Span::styled(Self::spinner(self.active_frame), Style::CyanBold),
             Span::styled(" Working...", Style::Gray),
             Span::styled(
               format!(" ({} • esc to interrupt)", self.active_elapsed.format()),
               Style::DarkGray,
             ),
-          ]
-          .into(),
+          ]),
           Line::blank(),
         ]);
       }
@@ -306,18 +301,15 @@ mod tests {
       transcript.tick(elapsed);
     }
 
-    assert!(
-      transcript.render(80).ends_with(&[
-        Line::blank(),
-        vec![
-          Span::styled("✶", Style::CyanBold),
-          Span::styled(" Working...", Style::Gray),
-          Span::styled(" (1m 51s • esc to interrupt)", Style::DarkGray),
-        ]
-        .into(),
-        Line::blank(),
-      ])
-    );
+    assert!(transcript.render(80).ends_with(&[
+      Line::blank(),
+      Line::from([
+        Span::styled("✶", Style::CyanBold),
+        Span::styled(" Working...", Style::Gray),
+        Span::styled(" (1m 51s • esc to interrupt)", Style::DarkGray),
+      ]),
+      Line::blank(),
+    ]));
 
     transcript.push_agent_delta("bar");
 
@@ -335,17 +327,14 @@ mod tests {
     transcript.send("foo".into());
     transcript.interrupt();
 
-    assert!(
-      transcript.render(80).ends_with(&[
-        Line::blank(),
-        vec![Span::styled(
-          "■ Conversation interrupted, tell the model what to do differently.",
-          Style::RedBold,
-        )]
-        .into(),
-        Line::blank(),
-      ])
-    );
+    assert!(transcript.render(80).ends_with(&[
+      Line::blank(),
+      Line::from([Span::styled(
+        "■ Conversation interrupted, tell the model what to do differently.",
+        Style::RedBold,
+      )]),
+      Line::blank(),
+    ]));
 
     assert_eq!(
       transcript.messages(),
@@ -361,27 +350,24 @@ mod tests {
     transcript.tick(Duration::from_millis(120));
     transcript.push_agent_reasoning_delta("bar");
 
-    assert!(
-      transcript.render(80).ends_with(&[
-        Line::blank(),
-        vec![Span::styled(" bar", Style::DarkGray)].into(),
-        Line::blank(),
-        vec![
-          Span::styled("✧", Style::CyanBold),
-          Span::styled(" Working...", Style::Gray),
-          Span::styled(" (0s • esc to interrupt)", Style::DarkGray),
-        ]
-        .into(),
-        Line::blank(),
-      ])
-    );
+    assert!(transcript.render(80).ends_with(&[
+      Line::blank(),
+      Line::from([Span::styled(" bar", Style::DarkGray)]),
+      Line::blank(),
+      Line::from([
+        Span::styled("✧", Style::CyanBold),
+        Span::styled(" Working...", Style::Gray),
+        Span::styled(" (0s • esc to interrupt)", Style::DarkGray),
+      ]),
+      Line::blank(),
+    ]));
 
     transcript.push_agent_delta("baz");
     transcript.finish_agent_activity();
 
     assert!(transcript.render(80).ends_with(&[
       Line::blank(),
-      vec![Span::styled(" bar", Style::DarkGray)].into(),
+      Line::from([Span::styled(" bar", Style::DarkGray)]),
       Line::blank(),
       Line::raw(" baz"),
       Line::blank(),
@@ -448,18 +434,16 @@ mod tests {
         Line::blank(),
         Line::raw(" foo"),
         Line::blank(),
-        vec![
+        Line::from([
           Span::raw(" "),
           Span::styled("●", Style::GreenBold),
           Span::raw(" "),
           Span::raw("Listed files in ."),
-        ]
-        .into(),
-        vec![
+        ]),
+        Line::from([
           Span::styled("   │ ", Style::DarkGray),
           Span::styled("baz", Style::DarkGray),
-        ]
-        .into(),
+        ]),
         Line::blank(),
       ]
     );

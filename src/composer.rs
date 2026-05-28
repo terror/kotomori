@@ -136,7 +136,7 @@ impl Component for Composer {
         let under_cursor = chars.next().unwrap_or(' ');
         let after = chars.collect::<String>();
 
-        Line::from(vec![
+        Line::from([
           Span::raw(before),
           Span::styled(under_cursor.to_string(), Style::Reverse),
           Span::raw(after),
@@ -155,7 +155,7 @@ impl Component for Composer {
         _ => Style::Gray,
       };
 
-      Line::from(vec![
+      Line::from([
         Span::styled(command.input(), input_style),
         Span::styled("  ", Style::DarkGray),
         Span::styled(command.description(), Style::DarkGray),
@@ -176,22 +176,20 @@ mod tests {
 
     assert_eq!(
       lines[3],
-      vec![
+      Line::from([
         Span::styled("/clear", Style::CyanBold),
         Span::styled("  ", Style::DarkGray),
         Span::styled("Clear the transcript", Style::DarkGray),
-      ]
-      .into()
+      ])
     );
 
     assert_eq!(
       lines[4],
-      vec![
+      Line::from([
         Span::styled("/quit", Style::Gray),
         Span::styled("  ", Style::DarkGray),
         Span::styled("Quit kotomori", Style::DarkGray),
-      ]
-      .into()
+      ])
     );
   }
 
@@ -202,7 +200,7 @@ mod tests {
     assert!(
       !composer
         .render(80)
-        .contains(&vec![Span::styled("foo", Style::DarkGray)].into())
+        .contains(&Line::from([Span::styled("foo", Style::DarkGray)]))
     );
   }
 
@@ -212,7 +210,7 @@ mod tests {
 
     assert_eq!(
       composer.render(80)[3],
-      vec![Span::styled("bar", Style::DarkGray)].into()
+      Line::from([Span::styled("bar", Style::DarkGray)])
     );
   }
 }

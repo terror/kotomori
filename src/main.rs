@@ -111,6 +111,7 @@ use {
   schemars::JsonSchema,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
   serde_json::Value,
+  smallvec::SmallVec,
   span::Span,
   state::State,
   std::{
@@ -121,6 +122,7 @@ use {
     fs::{self, File},
     io::{self, BufRead, Read, Stdout, Write},
     iter::once,
+    mem,
     ops::RangeInclusive,
     path::{Path, PathBuf},
     process::{self, Stdio},

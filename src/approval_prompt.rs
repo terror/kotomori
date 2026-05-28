@@ -14,13 +14,13 @@ impl<'a> ApprovalPrompt<'a> {
 impl Component for ApprovalPrompt<'_> {
   fn render(&self, width: u16) -> Vec<Line> {
     [
-      Line::from(vec![
+      Line::from([
         Span::styled("?", Style::CyanBold),
         Span::raw(" Approve "),
         Span::raw(self.request.invocation().to_string()),
         Span::raw("?"),
       ]),
-      Line::from(vec![
+      Line::from([
         Span::styled("y", Style::GreenBold),
         Span::styled(" approve  ", Style::DarkGray),
         Span::styled("n", Style::RedBold),

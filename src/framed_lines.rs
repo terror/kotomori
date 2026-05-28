@@ -24,7 +24,7 @@ impl Component for FramedLines {
     let border = "─".repeat(usize::from(width));
 
     let border_line =
-      || vec![Span::styled(border.clone(), Style::DarkGray)].into();
+      || Line::from([Span::styled(border.clone(), Style::DarkGray)]);
 
     once(border_line())
       .chain(self.lines.iter().flat_map(|line| line.render(width)))
@@ -42,10 +42,10 @@ mod tests {
     assert_eq!(
       FramedLines::raw(["foobar"]).render(3),
       [
-        vec![Span::styled("───", Style::DarkGray)].into(),
+        Line::from([Span::styled("───", Style::DarkGray)]),
         Line::raw("foo"),
         Line::raw("bar"),
-        vec![Span::styled("───", Style::DarkGray)].into(),
+        Line::from([Span::styled("───", Style::DarkGray)]),
       ]
     );
   }

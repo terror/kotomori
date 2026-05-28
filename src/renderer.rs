@@ -297,6 +297,42 @@ mod tests {
   use super::*;
 
   #[test]
+  fn appending_blank_line_scrolls() {
+    let frame = Frame::new(
+      vec!["foo".into()],
+      Dimensions {
+        height: 1,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(1, 1),
+      )),
+    };
+
+    let mut stdout = Vec::new();
+
+    subject
+      .draw_rendered(&mut stdout, vec!["foo".into(), String::new()], 80, 1)
+      .unwrap();
+
+    assert_eq!(
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[?2026h\r\n\x1b[2K\x1b[?2026l",
+    );
+
+    assert_eq!(
+      subject.presented.as_ref().unwrap().viewport,
+      Viewport::anchored_to_bottom(2, 1),
+    );
+  }
+
+  #[test]
   fn appending_lines_scrolls() {
     let frame = Frame::new(
       vec!["foo".into()],
@@ -366,15 +402,16 @@ mod tests {
       subject.presented.as_ref().unwrap().viewport,
       Viewport::anchored_to_bottom(3, 1),
     );
+
     assert_eq!(subject.presented.as_ref().unwrap().cursor, Cursor::new(2),);
   }
 
   #[test]
-  fn appending_blank_line_scrolls() {
+  fn clears_visible_lines_when_frame_becomes_empty() {
     let frame = Frame::new(
       vec!["foo".into()],
       Dimensions {
-        height: 1,
+        height: 24,
         width: 80,
       },
     );
@@ -384,24 +421,24 @@ mod tests {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
-        Viewport::anchored_to_bottom(1, 1),
+        Viewport::anchored_to_bottom(1, 24),
       )),
     };
 
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(&mut stdout, vec!["foo".into(), String::new()], 80, 1)
+      .draw_rendered(&mut stdout, Vec::new(), 80, 24)
       .unwrap();
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\r\n\x1b[2K\x1b[?2026l",
+      "\x1b[?2026h\r\x1b[2K\x1b[?2026l",
     );
 
     assert_eq!(
-      subject.presented.as_ref().unwrap().viewport,
-      Viewport::anchored_to_bottom(2, 1),
+      subject.presented.as_ref().unwrap().frame.lines,
+      Vec::<String>::new(),
     );
   }
 
@@ -500,6 +537,53 @@ mod tests {
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
       "\x1b[?2026h\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
+    );
+  }
+
+  #[test]
+  fn patches_when_shrink_moves_viewport_up() {
+    let frame = Frame::new(
+      vec![
+        "foo".into(),
+        "bar".into(),
+        "baz".into(),
+        "qux".into(),
+        "quux".into(),
+      ],
+      Dimensions {
+        height: 3,
+        width: 80,
+      },
+    );
+
+    let mut subject = Renderer {
+      max_lines_rendered: frame.len(),
+      presented: Some(PresentedFrame::new(
+        Cursor::new(frame.last_row()),
+        frame,
+        Viewport::anchored_to_bottom(5, 3),
+      )),
+    };
+
+    let mut stdout = Vec::new();
+
+    subject
+      .draw_rendered(
+        &mut stdout,
+        vec!["foo".into(), "bar".into(), "bob".into(), "qux".into()],
+        80,
+        3,
+      )
+      .unwrap();
+
+    assert_eq!(
+      String::from_utf8(stdout).unwrap(),
+      "\x1b[?2026h\x1b[2A\r\x1b[2Kbob\r\n\x1b[2Kqux\r\n\x1b[2K\x1b[1A\x1b[?2026l",
+    );
+
+    assert_eq!(
+      subject.presented.as_ref().unwrap().viewport,
+      Viewport::new(2, 3),
     );
   }
 
@@ -676,89 +760,6 @@ mod tests {
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
       "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
-    );
-  }
-
-  #[test]
-  fn patches_when_shrink_moves_viewport_up() {
-    let frame = Frame::new(
-      vec![
-        "foo".into(),
-        "bar".into(),
-        "baz".into(),
-        "qux".into(),
-        "quux".into(),
-      ],
-      Dimensions {
-        height: 3,
-        width: 80,
-      },
-    );
-
-    let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
-      presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
-        frame,
-        Viewport::anchored_to_bottom(5, 3),
-      )),
-    };
-
-    let mut stdout = Vec::new();
-
-    subject
-      .draw_rendered(
-        &mut stdout,
-        vec!["foo".into(), "bar".into(), "bob".into(), "qux".into()],
-        80,
-        3,
-      )
-      .unwrap();
-
-    assert_eq!(
-      String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[2A\r\x1b[2Kbob\r\n\x1b[2Kqux\r\n\x1b[2K\x1b[1A\x1b[?2026l",
-    );
-
-    assert_eq!(
-      subject.presented.as_ref().unwrap().viewport,
-      Viewport::new(2, 3),
-    );
-  }
-
-  #[test]
-  fn clears_visible_lines_when_frame_becomes_empty() {
-    let frame = Frame::new(
-      vec!["foo".into()],
-      Dimensions {
-        height: 24,
-        width: 80,
-      },
-    );
-
-    let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
-      presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
-        frame,
-        Viewport::anchored_to_bottom(1, 24),
-      )),
-    };
-
-    let mut stdout = Vec::new();
-
-    subject
-      .draw_rendered(&mut stdout, Vec::new(), 80, 24)
-      .unwrap();
-
-    assert_eq!(
-      String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\r\x1b[2K\x1b[?2026l",
-    );
-
-    assert_eq!(
-      subject.presented.as_ref().unwrap().frame.lines,
-      Vec::<String>::new(),
     );
   }
 
