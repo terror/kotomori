@@ -1,17 +1,17 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct View<'a> {
+pub(crate) struct ViewComponent<'a> {
   state: &'a State,
 }
 
-impl<'a> View<'a> {
+impl<'a> ViewComponent<'a> {
   pub(crate) fn new(state: &'a State) -> Self {
     Self { state }
   }
 }
 
-impl Component for View<'_> {
+impl Component for ViewComponent<'_> {
   fn render(&self, width: u16) -> Vec<Line> {
     once(Line::blank())
       .chain(HeaderComponent.render(width))
@@ -48,7 +48,7 @@ mod tests {
     assert!(state.transcript.is_agent_active());
 
     assert!(
-      View::new(&state)
+      ViewComponent::new(&state)
         .render(80)
         .iter()
         .any(|line| line.to_string().contains("mock · local ·"))
@@ -75,7 +75,7 @@ mod tests {
 
     state.input_mode = InputMode::Approval(request);
 
-    let lines = View::new(&state).render(80);
+    let lines = ViewComponent::new(&state).render(80);
 
     let approval = lines
       .iter()
@@ -99,7 +99,7 @@ mod tests {
     })
     .unwrap();
 
-    let lines = View::new(&state).render(80);
+    let lines = ViewComponent::new(&state).render(80);
 
     let command = lines
       .iter()

@@ -78,7 +78,7 @@ impl App {
     let mut tick_interval = interval(Self::TICK_INTERVAL);
 
     while !self.state.should_quit {
-      renderer.draw(&mut terminal.stdout, &View::new(&self.state))?;
+      renderer.draw(&mut terminal.stdout, &ViewComponent::new(&self.state))?;
 
       tokio::select! {
         event = self.event_receiver.recv() => {

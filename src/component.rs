@@ -5,12 +5,13 @@ mod framed_lines;
 mod header;
 mod hint;
 mod transcript;
+mod view;
 
-pub(crate) use footer::FooterComponent;
-pub(crate) use framed_lines::FramedLinesComponent;
-pub(crate) use header::HeaderComponent;
-pub(crate) use hint::HintComponent;
-pub(crate) use transcript::TranscriptComponent;
+pub(crate) use {
+  footer::FooterComponent, framed_lines::FramedLinesComponent,
+  header::HeaderComponent, hint::HintComponent,
+  transcript::TranscriptComponent, view::ViewComponent,
+};
 
 pub(crate) trait Component {
   fn render(&self, width: u16) -> Vec<super::Line>;
