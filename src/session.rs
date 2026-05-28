@@ -9,14 +9,14 @@ pub(crate) struct Session {
 impl Session {
   const VERSION: u32 = 1;
 
-  fn file(settings: &Settings) -> Result<(PathBuf, SessionFile)> {
+  pub(crate) fn new(settings: &Settings) -> Result<Self> {
     let now = SessionStore::now()?;
 
     let id = SessionStore::id()?;
 
-    Ok((
-      SessionStore::sessions_dir()?.join(format!("{id}.json")),
-      SessionFile {
+    Ok(Self {
+      path: SessionStore::sessions_dir()?.join(format!("{id}.json")),
+      file: SessionFile {
         created_at: now,
         cwd: env::current_dir().context("failed to read current directory")?,
         entries: Vec::new(),
@@ -26,13 +26,7 @@ impl Session {
         updated_at: now,
         version: Self::VERSION,
       },
-    ))
-  }
-
-  pub(crate) fn new(settings: &Settings) -> Result<Self> {
-    let (path, file) = Self::file(settings)?;
-
-    Ok(Self { file, path })
+    })
   }
 
   pub(crate) fn save(&mut self, transcript: &Transcript) -> Result {
