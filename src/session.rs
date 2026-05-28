@@ -7,6 +7,7 @@ pub(crate) struct Session {
 }
 
 impl Session {
+  const TITLE_LENGTH: usize = 80;
   const VERSION: u32 = 1;
 
   pub(crate) fn new(settings: &Settings) -> Result<Self> {
@@ -48,7 +49,12 @@ impl Session {
   pub(crate) fn title(entries: &[TranscriptEntry]) -> Option<String> {
     entries.iter().find_map(|entry| match entry {
       TranscriptEntry::User(content) => {
-        let title = SessionStore::compact(content);
+        let title = content
+          .split_whitespace()
+          .collect::<Vec<_>>()
+          .join(" ")
+          .as_str()
+          .truncate(Self::TITLE_LENGTH);
 
         (!title.is_empty()).then_some(title)
       }
