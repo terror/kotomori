@@ -18,10 +18,12 @@ impl Component for View<'_> {
       .chain(once(Line::blank()))
       .chain(Hint.render(width))
       .chain(once(Line::blank()))
-      .chain(self.state.transcript().render(width))
-      .chain(match self.state.pending_approval() {
-        Some(request) => ApprovalPrompt::new(request).render(width),
-        None => self.state.composer().render(width),
+      .chain(self.state.transcript.render(width))
+      .chain(match &self.state.input_mode {
+        InputMode::Approval(request) => {
+          ApprovalPrompt::new(request).render(width)
+        }
+        InputMode::Compose => self.state.composer.render(width),
       })
       .collect()
   }
@@ -42,7 +44,7 @@ mod tests {
 
     state.handle_event(Event::Action(Action::Submit));
 
-    assert!(state.transcript().is_agent_active());
+    assert!(state.transcript.is_agent_active());
 
     assert!(
       View::new(&state)

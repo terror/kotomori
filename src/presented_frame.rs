@@ -23,16 +23,16 @@ impl PresentedFrame {
   }
 
   pub(crate) fn previous_viewport(&self, next: &Frame) -> Viewport {
-    let height = next.dimensions.height();
+    let height = next.dimensions.height;
 
     if self.frame.dimensions.height == next.dimensions.height {
-      Viewport::new(self.viewport.top(), height)
+      Viewport::new(self.viewport.top, height)
     } else {
       Viewport::anchored_to_bottom(
         self
           .viewport
-          .top()
-          .saturating_add(self.frame.dimensions.height()),
+          .top
+          .saturating_add(self.frame.dimensions.height),
         height,
       )
     }
@@ -45,7 +45,7 @@ impl From<Frame> for PresentedFrame {
       cursor: Cursor::new(frame.last_row()),
       viewport: Viewport::anchored_to_bottom(
         frame.len(),
-        frame.dimensions.height(),
+        frame.dimensions.height,
       ),
       frame,
     }

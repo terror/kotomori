@@ -68,14 +68,6 @@ impl SessionSummary {
       updated_at: file.updated_at,
     }
   }
-
-  pub(crate) fn path(&self) -> &Path {
-    &self.path
-  }
-
-  pub(crate) fn title(&self) -> &str {
-    &self.title
-  }
 }
 
 #[cfg(test)]

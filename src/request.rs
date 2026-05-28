@@ -2,26 +2,19 @@ use super::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Request {
-  messages: Vec<Message>,
-  model: Model,
-  system: Option<String>,
-  tool_registry: ToolRegistry,
+  pub(crate) messages: Vec<Message>,
+  pub(crate) model: Model,
+  pub(crate) system: Option<String>,
+  pub(crate) tool_registry: ToolRegistry,
 }
 
 impl Request {
   pub(crate) fn last_user_message(&self) -> Option<&Message> {
     self
-      .messages()
+      .messages
+      .iter()
       .rev()
       .find(|message| message.user_content().is_some())
-  }
-
-  pub(crate) fn messages(&self) -> impl DoubleEndedIterator<Item = &Message> {
-    self.messages.iter()
-  }
-
-  pub(crate) fn model_name(&self) -> &str {
-    self.model.name()
   }
 
   #[cfg(test)]
@@ -36,14 +29,6 @@ impl Request {
       system: None,
       tool_registry,
     }
-  }
-
-  pub(crate) fn system(&self) -> Option<&str> {
-    self.system.as_deref()
-  }
-
-  pub(crate) fn tools(&self) -> impl Iterator<Item = &Tool> {
-    self.tool_registry.tools()
   }
 
   pub(crate) fn with_system(
@@ -72,10 +57,11 @@ impl Request {
 impl From<&Request> for CompletionRequest {
   fn from(request: &Request) -> Self {
     let messages = request
-      .system()
+      .system
+      .as_deref()
       .map(RigMessage::system)
       .into_iter()
-      .chain(request.messages().map(Into::into))
+      .chain(request.messages.iter().map(Into::into))
       .collect::<Vec<_>>();
 
     let chat_history = if messages.is_empty() {
@@ -92,12 +78,12 @@ impl From<&Request> for CompletionRequest {
       chat_history,
       documents: Vec::new(),
       max_tokens: None,
-      model: Some(request.model_name().into()),
+      model: Some(request.model.name.clone()),
       output_schema: None,
       preamble: None,
       temperature: None,
       tool_choice: None,
-      tools: request.tools().map(Into::into).collect(),
+      tools: request.tool_registry.tools.iter().map(Into::into).collect(),
     }
   }
 }
@@ -117,10 +103,10 @@ mod tests {
       ToolRegistry::default(),
     );
 
-    assert_eq!(request.model_name(), "foo");
+    assert_eq!(request.model.name, "foo");
 
     assert_eq!(
-      request.messages().cloned().collect::<Vec<_>>(),
+      request.messages,
       vec![
         Message::User(vec![UserMessageContent::Text("foo".into())]),
         Message::Agent(vec![AgentMessageContent::Text("bar".into())]),

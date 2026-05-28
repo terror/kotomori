@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ToolRegistry {
-  tools: Arc<[Tool]>,
+  pub(crate) tools: Arc<[Tool]>,
 }
 
 impl ToolRegistry {
@@ -25,10 +25,6 @@ impl ToolRegistry {
     Self {
       tools: tools.into(),
     }
-  }
-
-  pub(crate) fn tools(&self) -> impl Iterator<Item = &Tool> {
-    self.tools.iter()
   }
 }
 

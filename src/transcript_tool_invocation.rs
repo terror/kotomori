@@ -15,7 +15,7 @@ impl<'a> TranscriptToolInvocation<'a> {
 
     if let Some(exit_status) = self
       .result
-      .and_then(ToolResult::exit_status)
+      .and_then(|result| result.exit_status)
       .filter(|exit_status| *exit_status != 0)
     {
       details.push(("exit", exit_status.to_string()));

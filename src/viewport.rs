@@ -5,8 +5,8 @@
 /// not currently addressable without scrolling.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Viewport {
-  height: usize,
-  top: usize,
+  pub(crate) height: usize,
+  pub(crate) top: usize,
 }
 
 impl Viewport {
@@ -19,10 +19,6 @@ impl Viewport {
 
   pub(crate) fn bottom(self) -> usize {
     self.top.saturating_add(self.height.saturating_sub(1))
-  }
-
-  pub(crate) fn height(self) -> usize {
-    self.height
   }
 
   pub(crate) fn new(top: usize, height: usize) -> Self {
@@ -38,10 +34,6 @@ impl Viewport {
       height: self.height,
       top: self.top.saturating_add(rows),
     }
-  }
-
-  pub(crate) fn top(self) -> usize {
-    self.top
   }
 }
 
@@ -100,11 +92,6 @@ mod tests {
   }
 
   #[test]
-  fn height_returns_viewport_height() {
-    assert_eq!(Viewport::new(7, 13).height(), 13);
-  }
-
-  #[test]
   fn new_sets_top_and_height() {
     assert_eq!(Viewport::new(7, 13), Viewport { top: 7, height: 13 },);
   }
@@ -144,10 +131,5 @@ mod tests {
         top: usize::MAX,
       },
     );
-  }
-
-  #[test]
-  fn top_returns_viewport_top() {
-    assert_eq!(Viewport::new(7, 13).top(), 7);
   }
 }

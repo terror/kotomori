@@ -99,7 +99,7 @@ impl ResumePicker {
     let mut renderer = Renderer::new();
 
     loop {
-      renderer.draw(terminal.stdout_mut(), &self)?;
+      renderer.draw(&mut terminal.stdout, &self)?;
 
       let event =
         crossterm_event::read().context("failed to read terminal input")?;
@@ -113,7 +113,7 @@ impl ResumePicker {
       }
 
       if let Some(action) = self.handle_key(key) {
-        renderer.finish(terminal.stdout_mut())?;
+        renderer.finish(&mut terminal.stdout)?;
 
         return Ok(match action {
           ResumePickerAction::Cancel => None,
@@ -127,7 +127,7 @@ impl ResumePicker {
     self
       .filtered()
       .get(self.selected)
-      .map(|session| session.path().to_owned())
+      .map(|session| session.path.clone())
   }
 }
 
@@ -174,7 +174,7 @@ impl Component for ResumePicker {
 
       lines.push(Line::from([
         Span::styled(marker, style),
-        Span::styled(session.title(), style),
+        Span::styled(session.title.as_str(), style),
         Span::styled("  ", Style::DarkGray),
         Span::styled(session.detail(), Style::DarkGray),
       ]));

@@ -126,7 +126,7 @@ impl Agent {
 
     let context = format!(
       "Current working directory: {}\n\nWhen using tools, omit `cwd` to use the current working directory. Do not invent absolute paths.",
-      self.loader.cwd().display(),
+      self.loader.cwd.display(),
     );
 
     Ok(if agents.is_empty() {
@@ -158,7 +158,7 @@ mod tests {
 
         let index = requests.len();
 
-        requests.push(request.messages().cloned().collect());
+        requests.push(request.messages);
 
         index
       };
@@ -270,7 +270,7 @@ mod tests {
 
         let index = requests.len();
 
-        requests.push(request.messages().cloned().collect());
+        requests.push(request.messages);
 
         index
       };
@@ -311,7 +311,7 @@ mod tests {
 
         let index = requests.len();
 
-        requests.push(request.messages().cloned().collect());
+        requests.push(request.messages);
 
         index
       };

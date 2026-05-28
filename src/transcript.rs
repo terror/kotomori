@@ -5,7 +5,7 @@ pub(crate) struct Transcript {
   active_agent_activity: AgentActivity,
   active_elapsed: Duration,
   active_frame: usize,
-  entries: Vec<TranscriptEntry>,
+  pub(crate) entries: Vec<TranscriptEntry>,
 }
 
 impl Transcript {
@@ -15,10 +15,6 @@ impl Transcript {
     self.active_agent_activity = AgentActivity::Idle;
     self.active_elapsed = Duration::ZERO;
     self.entries.clear();
-  }
-
-  pub(crate) fn entries(&self) -> &[TranscriptEntry] {
-    &self.entries
   }
 
   pub(crate) fn error(&mut self, error: String) {

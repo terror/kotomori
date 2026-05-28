@@ -7,7 +7,7 @@ use super::*;
 /// which lets rendering code account for terminal scrollback between writes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Cursor {
-  row: usize,
+  pub(crate) row: usize,
 }
 
 impl Cursor {
@@ -29,10 +29,6 @@ impl Cursor {
 
   pub(crate) fn new(row: usize) -> Self {
     Self { row }
-  }
-
-  pub(crate) fn row(self) -> usize {
-    self.row
   }
 }
 
@@ -66,6 +62,6 @@ mod tests {
 
   #[test]
   fn new_stores_row() {
-    assert_eq!(Cursor::new(10).row(), 10);
+    assert_eq!(Cursor::new(10).row, 10);
   }
 }

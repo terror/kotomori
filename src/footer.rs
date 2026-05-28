@@ -35,7 +35,7 @@ impl TryFrom<&Model> for Footer {
     };
 
     Ok(Self {
-      text: format!("{} · {} · {directory}", model.provider(), model.name()),
+      text: format!("{} · {} · {directory}", model.provider, model.name),
     })
   }
 }

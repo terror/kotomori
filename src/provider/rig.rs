@@ -38,7 +38,7 @@ impl Rig {
       .base_url(base_url)
       .build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     let max_tokens = env::var("ANTHROPIC_MAX_TOKENS")
       .ok()
@@ -57,7 +57,7 @@ impl Rig {
 
     let client = cohere::Client::builder().api_key(api_key).build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
@@ -71,7 +71,7 @@ impl Rig {
 
     let client = deepseek::Client::builder().api_key(api_key).build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
@@ -85,7 +85,7 @@ impl Rig {
 
     let client = gemini::Client::builder().api_key(api_key).build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
@@ -99,7 +99,7 @@ impl Rig {
 
     let client = groq::Client::builder().api_key(api_key).build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
@@ -113,7 +113,7 @@ impl Rig {
 
     let client = mistral::Client::builder().api_key(api_key).build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
@@ -133,7 +133,7 @@ impl Rig {
 
     let client = builder.build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
@@ -156,7 +156,7 @@ impl Rig {
       .base_url(base_url)
       .build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
@@ -176,7 +176,7 @@ impl Rig {
 
     let client = builder.build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
@@ -190,7 +190,7 @@ impl Rig {
 
     let client = openrouter::Client::builder().api_key(api_key).build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
@@ -204,7 +204,7 @@ impl Rig {
 
     let client = perplexity::Client::builder().api_key(api_key).build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
@@ -259,7 +259,7 @@ impl Rig {
 
     let client = together::Client::builder().api_key(api_key).build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
@@ -273,7 +273,7 @@ impl Rig {
 
     let client = xai::Client::builder().api_key(api_key).build()?;
 
-    let model = CompletionClient::completion_model(&client, model.name());
+    let model = CompletionClient::completion_model(&client, &model.name);
 
     Ok(Self {
       max_tokens: None,
