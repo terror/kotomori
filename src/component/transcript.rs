@@ -9,26 +9,63 @@ impl<'a> TranscriptComponent<'a> {
   pub(crate) fn new(state: &'a Transcript) -> Self {
     Self { state }
   }
-}
 
-impl Component for TranscriptComponent<'_> {
-  #[allow(clippy::too_many_lines)]
-  fn render(&self, width: u16) -> Vec<Line> {
+  fn render_agent_activity(&self) -> Vec<Line> {
+    let mut lines = Vec::new();
+
+    let working = || {
+      Line::from([
+        Span::styled(
+          Transcript::spinner(self.state.active_frame),
+          Style::CyanBold,
+        ),
+        Span::styled(" Working...", Style::Gray),
+        Span::styled(
+          format!(
+            " ({} • esc to interrupt)",
+            self.state.active_elapsed.format()
+          ),
+          Style::DarkGray,
+        ),
+      ])
+    };
+
+    match &self.state.active_agent_activity {
+      AgentActivity::Idle => {}
+      AgentActivity::Reasoning(reasoning) => {
+        lines.extend(reasoning.lines().map(|line| {
+          Line::from([Span::styled(format!(" {line}"), Style::DarkGray)])
+        }));
+
+        lines.extend([Line::blank(), working(), Line::blank()]);
+      }
+      AgentActivity::Streaming(message) => {
+        lines.extend(message.lines().map(|line| Line::raw(format!(" {line}"))));
+
+        lines.push(Line::blank());
+      }
+      AgentActivity::Waiting => {
+        lines.extend([working(), Line::blank()]);
+      }
+    }
+
+    lines
+  }
+
+  fn render_entries(&self, width: u16) -> Vec<Line> {
     let mut lines = Vec::new();
 
     for entry in &self.state.entries {
       match entry {
         TranscriptEntry::Agent(content) => {
-          if !lines.last().is_some_and(|line| line == &Line::blank()) {
+          if !matches!(lines.last(), Some(line) if line == &Line::blank()) {
             lines.push(Line::blank());
           }
 
-          lines.extend(
-            content
-              .lines()
-              .map(|line| Line::raw(format!(" {line}")))
-              .chain(once(Line::blank())),
-          );
+          lines
+            .extend(content.lines().map(|line| Line::raw(format!(" {line}"))));
+
+          lines.push(Line::blank());
         }
         TranscriptEntry::Interrupted => {
           lines.extend([
@@ -41,7 +78,7 @@ impl Component for TranscriptComponent<'_> {
           ]);
         }
         TranscriptEntry::Reasoning(reasoning) => {
-          if !lines.last().is_some_and(|line| line == &Line::blank()) {
+          if !matches!(lines.last(), Some(line) if line == &Line::blank()) {
             lines.push(Line::blank());
           }
 
@@ -52,7 +89,7 @@ impl Component for TranscriptComponent<'_> {
           lines.push(Line::blank());
         }
         TranscriptEntry::Tool { invocation, result } => {
-          if !lines.last().is_some_and(|line| line == &Line::blank()) {
+          if !matches!(lines.last(), Some(line) if line == &Line::blank()) {
             lines.push(Line::blank());
           }
 
@@ -70,74 +107,17 @@ impl Component for TranscriptComponent<'_> {
       }
     }
 
-    match &self.state.active_agent_activity {
-      AgentActivity::Idle => {}
-      AgentActivity::Reasoning(reasoning) => {
-        if !lines.last().is_some_and(|line| line == &Line::blank()) {
-          lines.push(Line::blank());
-        }
-
-        lines.extend(reasoning.lines().map(|line| {
-          Line::from([Span::styled(format!(" {line}"), Style::DarkGray)])
-        }));
-
-        lines.push(Line::blank());
-
-        lines.push(Line::from([
-          Span::styled(
-            Transcript::spinner(self.state.active_frame),
-            Style::CyanBold,
-          ),
-          Span::styled(" Working...", Style::Gray),
-          Span::styled(
-            format!(
-              " ({} • esc to interrupt)",
-              self.state.active_elapsed.format()
-            ),
-            Style::DarkGray,
-          ),
-        ]));
-
-        lines.push(Line::blank());
-      }
-      AgentActivity::Streaming(message) => {
-        if !lines.last().is_some_and(|line| line == &Line::blank()) {
-          lines.push(Line::blank());
-        }
-
-        lines.extend(
-          message
-            .lines()
-            .map(|line| Line::raw(format!(" {line}")))
-            .chain(once(Line::blank())),
-        );
-      }
-      AgentActivity::Waiting => {
-        if !lines.last().is_some_and(|line| line == &Line::blank()) {
-          lines.push(Line::blank());
-        }
-
-        lines.extend([
-          Line::from([
-            Span::styled(
-              Transcript::spinner(self.state.active_frame),
-              Style::CyanBold,
-            ),
-            Span::styled(" Working...", Style::Gray),
-            Span::styled(
-              format!(
-                " ({} • esc to interrupt)",
-                self.state.active_elapsed.format()
-              ),
-              Style::DarkGray,
-            ),
-          ]),
-          Line::blank(),
-        ]);
-      }
-    }
-
     lines
+  }
+}
+
+impl Component for TranscriptComponent<'_> {
+  fn render(&self, width: u16) -> Vec<Line> {
+    self
+      .render_entries(width)
+      .into_iter()
+      .chain(self.render_agent_activity())
+      .collect()
   }
 }
 
@@ -164,7 +144,6 @@ mod tests {
       TranscriptComponent::new(&transcript)
         .render(80)
         .ends_with(&[
-          Line::blank(),
           Line::from([
             Span::styled("✶", Style::CyanBold),
             Span::styled(" Working...", Style::Gray),
@@ -179,7 +158,7 @@ mod tests {
     assert!(
       TranscriptComponent::new(&transcript)
         .render(80)
-        .ends_with(&[Line::blank(), Line::raw(" bar"), Line::blank(),])
+        .ends_with(&[Line::raw(" bar"), Line::blank(),])
     );
   }
 
@@ -228,7 +207,6 @@ mod tests {
       TranscriptComponent::new(&transcript)
         .render(80)
         .ends_with(&[
-          Line::blank(),
           Line::from([Span::styled(" bar", Style::DarkGray)]),
           Line::blank(),
           Line::from([
