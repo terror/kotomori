@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub(crate) enum ToolInvocationKind {
   ApplyPatch(ApplyPatchTool),

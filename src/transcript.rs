@@ -17,6 +17,10 @@ impl Transcript {
     self.entries.clear();
   }
 
+  pub(crate) fn entries(&self) -> &[TranscriptEntry] {
+    &self.entries
+  }
+
   pub(crate) fn error(&mut self, error: String) {
     self.active_agent_activity = AgentActivity::Idle;
     self.active_elapsed = Duration::ZERO;
@@ -58,6 +62,10 @@ impl Transcript {
 
   pub(crate) fn is_agent_active(&self) -> bool {
     !matches!(self.active_agent_activity, AgentActivity::Idle)
+  }
+
+  pub(crate) fn is_empty(&self) -> bool {
+    self.entries.is_empty() && !self.is_agent_active()
   }
 
   pub(crate) fn messages(&self) -> Vec<Message> {
@@ -210,6 +218,13 @@ impl Transcript {
     if self.is_agent_active() {
       self.active_elapsed = self.active_elapsed.saturating_add(elapsed);
       self.active_frame = self.active_frame.wrapping_add(1);
+    }
+  }
+
+  pub(crate) fn with_entries(entries: Vec<TranscriptEntry>) -> Self {
+    Self {
+      entries,
+      ..Self::default()
     }
   }
 }

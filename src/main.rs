@@ -61,6 +61,8 @@ use {
   render_planner::RenderPlanner,
   renderer::Renderer,
   request::Request,
+  resume_picker::ResumePicker,
+  resume_picker_action::ResumePickerAction,
   rig::{
     OneOrMany,
     client::CompletionClient,
@@ -112,13 +114,18 @@ use {
   schemars::JsonSchema,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
   serde_json::Value,
+  session::Session,
+  session_file::SessionFile,
+  session_store::SessionStore,
+  session_summary::SessionSummary,
   smallvec::SmallVec,
   span::Span,
   state::State,
   std::{
     backtrace::BacktraceStatus,
-    cmp::Ordering,
+    cmp::{Ordering, Reverse},
     env,
+    ffi::OsStr,
     fmt::{self, Debug, Display, Formatter},
     fs::{self, File},
     io::{self, BufRead, Read, Stdout, Write},
@@ -128,12 +135,16 @@ use {
     path::{Path, PathBuf},
     process::{self, Stdio},
     str::{self, FromStr},
-    sync::{Arc, LazyLock, Mutex},
+    sync::{
+      Arc, LazyLock, Mutex,
+      atomic::{self, AtomicU64},
+    },
     thread,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
   },
   strum::{EnumIter, IntoEnumIterator},
   style::Style,
+  subcommand::Subcommand,
   terminal::Terminal,
   tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
@@ -252,9 +263,16 @@ mod render_plan;
 mod render_planner;
 mod renderer;
 mod request;
+mod resume_picker;
+mod resume_picker_action;
+mod session;
+mod session_file;
+mod session_store;
+mod session_summary;
 mod span;
 mod state;
 mod style;
+mod subcommand;
 mod terminal;
 mod together {
   pub(crate) type Client = super::TogetherClient;

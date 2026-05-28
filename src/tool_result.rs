@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct ToolResult {
   content: Option<String>,
   error: Option<String>,

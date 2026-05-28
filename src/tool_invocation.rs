@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 pub(crate) struct ToolInvocation {
   pub(crate) id: String,
   pub(crate) kind: ToolInvocationKind,
