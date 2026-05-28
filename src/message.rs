@@ -30,6 +30,12 @@ impl Component for Message {
       Self::Agent(content) => content
         .iter()
         .flat_map(|content| match content {
+          AgentMessageContent::Reasoning(reasoning) => reasoning
+            .split('\n')
+            .map(|line| {
+              Line::from([Span::styled(format!(" {line}"), Style::DarkGray)])
+            })
+            .collect::<Vec<_>>(),
           AgentMessageContent::Text(text) => {
             text.split('\n').map(Line::raw).collect::<Vec<_>>()
           }
@@ -64,6 +70,9 @@ impl From<&Message> for RigMessage {
           content
             .iter()
             .map(|content| match content {
+              AgentMessageContent::Reasoning(reasoning) => {
+                AssistantContent::reasoning(reasoning.clone())
+              }
               AgentMessageContent::Text(text) => {
                 AssistantContent::text(text.clone())
               }
@@ -120,6 +129,7 @@ mod tests {
     };
 
     let message = Message::Agent(vec![
+      AgentMessageContent::Reasoning("qux".into()),
       AgentMessageContent::Text("foo".into()),
       AgentMessageContent::ToolCall(invocation),
       AgentMessageContent::Text("baz".into()),
@@ -129,6 +139,7 @@ mod tests {
       RigMessage::from(&message),
       RigMessage::Assistant {
         content: OneOrMany::many(vec![
+          AssistantContent::reasoning("qux"),
           AssistantContent::text("foo"),
           AssistantContent::tool_call(
             "foo",

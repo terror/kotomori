@@ -61,11 +61,66 @@ impl Transcript {
   }
 
   pub(crate) fn messages(&self) -> Vec<Message> {
-    self
-      .entries
-      .iter()
-      .flat_map(TranscriptEntry::messages)
-      .collect()
+    let mut messages = Vec::new();
+
+    let mut agent_content = Vec::new();
+    let mut tool_results = Vec::new();
+
+    for (index, entry) in self.entries.iter().enumerate() {
+      match entry {
+        TranscriptEntry::Agent(content) => {
+          agent_content.push(AgentMessageContent::Text(content.clone()));
+        }
+        TranscriptEntry::Interrupted => {}
+        TranscriptEntry::Reasoning(reasoning) => {
+          agent_content.push(AgentMessageContent::Reasoning(reasoning.clone()));
+        }
+        TranscriptEntry::Tool { invocation, result } => {
+          let next_is_tool = matches!(
+            self.entries.get(index + 1),
+            Some(TranscriptEntry::Tool { .. })
+          );
+
+          if agent_content.is_empty() && !next_is_tool {
+            messages.push(invocation.message());
+          } else {
+            agent_content
+              .push(AgentMessageContent::ToolCall(invocation.clone()));
+          }
+
+          if let Some(result) = result {
+            tool_results.push(result.message(invocation.id.clone()));
+          }
+
+          if !next_is_tool {
+            if !agent_content.is_empty() {
+              messages.push(Message::Agent(mem::take(&mut agent_content)));
+            }
+
+            messages.append(&mut tool_results);
+          }
+        }
+        TranscriptEntry::User(content) => {
+          if !agent_content.is_empty() {
+            messages.push(Message::Agent(mem::take(&mut agent_content)));
+          }
+
+          messages.append(&mut tool_results);
+
+          messages.push(Message::User(vec![UserMessageContent::Text(
+            content.clone(),
+          )]));
+        }
+      }
+    }
+
+    if !agent_content.is_empty() {
+      messages.push(Message::Agent(agent_content));
+    }
+
+    messages.append(&mut tool_results);
+
+    messages
   }
 
   pub(crate) fn push_agent(&mut self, content: impl Into<String>) {
@@ -377,7 +432,10 @@ mod tests {
       transcript.messages(),
       vec![
         Message::User(vec![UserMessageContent::Text("foo".into())]),
-        Message::Agent(vec![AgentMessageContent::Text("baz".into())])
+        Message::Agent(vec![
+          AgentMessageContent::Reasoning("bar".into()),
+          AgentMessageContent::Text("baz".into()),
+        ])
       ]
     );
   }
@@ -406,6 +464,77 @@ mod tests {
     assert_eq!(
       transcript.messages(),
       vec![invocation.message(), result.message("foo")]
+    );
+  }
+
+  #[test]
+  fn reasoning_is_preserved_with_tool_messages() {
+    let mut transcript = Transcript::default();
+
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "echo".into(),
+      }),
+    };
+
+    transcript.push_agent_reasoning_delta("baz");
+    transcript.push_tool_call(invocation.clone());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![
+        AgentMessageContent::Reasoning("baz".into()),
+        AgentMessageContent::ToolCall(invocation),
+      ])]
+    );
+  }
+
+  #[test]
+  fn adjacent_tool_messages_share_an_agent_message() {
+    let mut transcript = Transcript::default();
+
+    let foo = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "echo".into(),
+      }),
+    };
+
+    let baz = ToolInvocation {
+      id: "baz".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "echo".into(),
+      }),
+    };
+
+    transcript.push_agent_reasoning_delta("foo");
+    transcript.push_tool_call(foo.clone());
+    transcript.push_tool_call(baz.clone());
+
+    let foo_result = ToolResult::content("bar");
+    let baz_result = ToolResult::content("bar");
+
+    transcript.push_tool_result("foo", foo_result.clone());
+    transcript.push_tool_result("baz", baz_result.clone());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![
+        Message::Agent(vec![
+          AgentMessageContent::Reasoning("foo".into()),
+          AgentMessageContent::ToolCall(foo),
+          AgentMessageContent::ToolCall(baz),
+        ]),
+        foo_result.message("foo"),
+        baz_result.message("baz"),
+      ]
     );
   }
 

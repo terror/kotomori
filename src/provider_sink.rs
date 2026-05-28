@@ -15,7 +15,9 @@ impl ProviderSink {
     if !delta.is_empty() {
       match self.content.last_mut() {
         Some(AgentMessageContent::Text(text)) => text.push_str(&delta),
-        Some(AgentMessageContent::ToolCall(_)) | None => {
+        Some(AgentMessageContent::Reasoning(_))
+        | Some(AgentMessageContent::ToolCall(_))
+        | None => {
           self.content.push(AgentMessageContent::Text(delta.clone()));
         }
       }
@@ -44,6 +46,7 @@ impl ProviderSink {
 
   pub(crate) fn reasoning(&mut self, reasoning: Reasoning) -> Result {
     if let Some(delta) = self.reasoning_buffer.push_reasoning(reasoning) {
+      self.push_reasoning_delta(&delta);
       self.event_sender.send(Event::AgentReasoningDelta(delta))?;
     }
 
@@ -56,10 +59,30 @@ impl ProviderSink {
     delta: impl Into<String>,
   ) -> Result {
     if let Some(delta) = self.reasoning_buffer.push_delta(id, delta) {
+      self.push_reasoning_delta(&delta);
       self.event_sender.send(Event::AgentReasoningDelta(delta))?;
     }
 
     Ok(())
+  }
+
+  fn push_reasoning_delta(&mut self, delta: &str) {
+    if delta.is_empty() {
+      return;
+    }
+
+    match self.content.last_mut() {
+      Some(AgentMessageContent::Reasoning(reasoning)) => {
+        reasoning.push_str(delta);
+      }
+      Some(AgentMessageContent::Text(_))
+      | Some(AgentMessageContent::ToolCall(_))
+      | None => {
+        self
+          .content
+          .push(AgentMessageContent::Reasoning(delta.to_owned()));
+      }
+    }
   }
 
   pub(crate) fn tool_call(&mut self, tool_call: RawToolCall) -> Result {

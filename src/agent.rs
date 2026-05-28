@@ -193,6 +193,47 @@ mod tests {
   }
 
   #[derive(Debug)]
+  struct ReasoningLoopProvider {
+    requests: Arc<Mutex<Vec<Vec<Message>>>>,
+  }
+
+  #[async_trait]
+  impl Provider for ReasoningLoopProvider {
+    async fn stream(
+      &self,
+      request: Request,
+      sink: &mut ProviderSink,
+    ) -> Result {
+      let index = {
+        let mut requests = self.requests.lock().unwrap();
+
+        let index = requests.len();
+
+        requests.push(request.messages().cloned().collect());
+
+        index
+      };
+
+      if index == 0 {
+        sink.reasoning_delta(None, "baz")?;
+        sink.tool_call(RawToolCall::new(
+          "foo",
+          "command",
+          json!({
+            "arguments": ["bar"],
+            "cwd": null,
+            "program": "echo",
+          }),
+        ))?;
+      } else {
+        sink.delta("done")?;
+      }
+
+      Ok(())
+    }
+  }
+
+  #[derive(Debug)]
   struct OrderedProvider {
     requests: Arc<Mutex<Vec<Vec<Message>>>>,
   }
@@ -243,6 +284,53 @@ mod tests {
         program: "echo".into(),
       }),
     }
+  }
+
+  #[tokio::test]
+  async fn preserves_reasoning_with_tool_calls() {
+    let (event_sender, _event_receiver) = mpsc::unbounded_channel();
+
+    let directory = tempfile::tempdir().unwrap();
+
+    let requests = Arc::new(Mutex::new(Vec::new()));
+
+    let agent = Agent {
+      event_sender,
+      loader: Loader::with_cwd(directory.path()),
+      model: "mock:local".parse().unwrap(),
+      provider: Arc::new(ReasoningLoopProvider {
+        requests: requests.clone(),
+      }),
+      task: None,
+      tool_registry: ToolRegistry::default(),
+      yolo: true,
+    };
+
+    agent
+      .stream(vec![Message::User(vec![UserMessageContent::Text(
+        "foo".into(),
+      )])])
+      .await
+      .unwrap();
+
+    let requests = requests.lock().unwrap();
+
+    let tool_result = ToolResult::command(Some(0), "bar\n", "");
+
+    assert_eq!(
+      *requests,
+      [
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+        vec![
+          Message::User(vec![UserMessageContent::Text("foo".into())]),
+          Message::Agent(vec![
+            AgentMessageContent::Reasoning("baz".into()),
+            AgentMessageContent::ToolCall(command_invocation()),
+          ]),
+          tool_result.message("foo"),
+        ],
+      ],
+    );
   }
 
   #[tokio::test]
