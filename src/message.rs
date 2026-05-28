@@ -108,6 +108,42 @@ mod tests {
   use {super::*, serde_json::json};
 
   #[test]
+  fn rig_ordered_agent_content() {
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::ReadFile(ReadFileTool {
+        cwd: None,
+        end_line: None,
+        path: "bar".into(),
+        start_line: None,
+      }),
+    };
+
+    let message = Message::Agent(vec![
+      AgentMessageContent::Text("foo".into()),
+      AgentMessageContent::ToolCall(invocation),
+      AgentMessageContent::Text("baz".into()),
+    ]);
+
+    assert_eq!(
+      RigMessage::from(&message),
+      RigMessage::Assistant {
+        content: OneOrMany::many(vec![
+          AssistantContent::text("foo"),
+          AssistantContent::tool_call(
+            "foo",
+            "read_file",
+            json!({"path": "bar"})
+          ),
+          AssistantContent::text("baz"),
+        ])
+        .unwrap(),
+        id: None,
+      },
+    );
+  }
+
+  #[test]
   fn rig_tool_messages() {
     let invocation = ToolInvocation {
       id: "foo".into(),
@@ -142,42 +178,6 @@ mod tests {
         "foo",
         serde_json::to_string(&ToolResult::content("bar")).unwrap()
       )
-    );
-  }
-
-  #[test]
-  fn rig_ordered_agent_content() {
-    let invocation = ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::ReadFile(ReadFileTool {
-        cwd: None,
-        end_line: None,
-        path: "bar".into(),
-        start_line: None,
-      }),
-    };
-
-    let message = Message::Agent(vec![
-      AgentMessageContent::Text("foo".into()),
-      AgentMessageContent::ToolCall(invocation),
-      AgentMessageContent::Text("baz".into()),
-    ]);
-
-    assert_eq!(
-      RigMessage::from(&message),
-      RigMessage::Assistant {
-        content: OneOrMany::many(vec![
-          AssistantContent::text("foo"),
-          AssistantContent::tool_call(
-            "foo",
-            "read_file",
-            json!({"path": "bar"})
-          ),
-          AssistantContent::text("baz"),
-        ])
-        .unwrap(),
-        id: None,
-      },
     );
   }
 }

@@ -14,7 +14,7 @@ impl Footer {
 
 impl Component for Footer {
   fn render(&self, _width: u16) -> Vec<Line> {
-    vec![vec![Span::styled(&self.text, Style::DarkGray)].into()]
+    vec![Line::from([Span::styled(&self.text, Style::DarkGray)])]
   }
 }
 

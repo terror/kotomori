@@ -22,7 +22,7 @@ impl InputMode {
   }
 
   pub(crate) fn resolve_approval(&mut self, approval: ToolApproval) {
-    let Self::Approval(request) = std::mem::take(self) else {
+    let Self::Approval(request) = mem::take(self) else {
       return;
     };
 

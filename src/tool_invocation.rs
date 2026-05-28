@@ -146,23 +146,6 @@ mod tests {
   }
 
   #[test]
-  fn serializes_tool_arguments() {
-    let invocation = ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
-        cwd: None,
-        program: "baz".into(),
-      }),
-    };
-
-    assert_eq!(
-      invocation.arguments(),
-      json!({"arguments": ["bar"], "program": "baz"}),
-    );
-  }
-
-  #[test]
   fn parses_write_file_tool_call() {
     let invocation =
       invocation("write_file", json!({"content": "bar", "path": "baz"}));
@@ -177,6 +160,23 @@ mod tests {
           path: "baz".into(),
         }),
       },
+    );
+  }
+
+  #[test]
+  fn serializes_tool_arguments() {
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "baz".into(),
+      }),
+    };
+
+    assert_eq!(
+      invocation.arguments(),
+      json!({"arguments": ["bar"], "program": "baz"}),
     );
   }
 
