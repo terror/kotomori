@@ -7,8 +7,15 @@ pub(crate) struct Mock;
 impl Provider for Mock {
   async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result {
     match request.model_name() {
-      "command" => {
-        if request.has_tool_result() {
+      "approval-required-command" => {
+        let has_tool_result = request.messages().any(|message| match message {
+          Message::Agent(_) => false,
+          Message::User(content) => content.iter().any(|content| {
+            matches!(content, UserMessageContent::ToolResult { .. })
+          }),
+        });
+
+        if has_tool_result {
           sink.delta("done")?;
         } else {
           sink.tool_call(RawToolCall::new(

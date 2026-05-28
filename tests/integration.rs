@@ -367,7 +367,7 @@ impl Drop for Running {
 fn approval_prompt_approves_command() -> Result {
   Test::new()
     .argument("--model")
-    .argument("mock:command")
+    .argument("mock:approval-required-command")
     .type_text("foo")
     .enter()
     .expect_screen_contains("Approve echo bar?")
@@ -383,7 +383,7 @@ fn approval_prompt_approves_command() -> Result {
 fn approval_prompt_denies_command() -> Result {
   Test::new()
     .argument("--model")
-    .argument("mock:command")
+    .argument("mock:approval-required-command")
     .type_text("foo")
     .enter()
     .expect_screen_contains("Approve echo bar?")

@@ -9,17 +9,6 @@ pub(crate) struct Request {
 }
 
 impl Request {
-  pub(crate) fn has_tool_result(&self) -> bool {
-    self.messages().any(|message| {
-      matches!(
-        message,
-        Message::User(content) if content
-          .iter()
-          .any(|content| matches!(content, UserMessageContent::ToolResult { .. }))
-      )
-    })
-  }
-
   pub(crate) fn last_user_message(&self) -> Option<&Message> {
     self
       .messages()
@@ -154,27 +143,6 @@ mod tests {
       request.last_user_message().unwrap().content().unwrap(),
       "baz"
     );
-  }
-
-  #[test]
-  fn detects_tool_results() {
-    #[track_caller]
-    fn case(messages: Vec<Message>, expected: bool) {
-      let request = Request::new(
-        "mock:foo".parse().unwrap(),
-        messages,
-        ToolRegistry::default(),
-      );
-
-      assert_eq!(request.has_tool_result(), expected);
-    }
-
-    case(
-      vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-      false,
-    );
-
-    case(vec![ToolResult::content("bar").message("foo")], true);
   }
 
   #[test]
