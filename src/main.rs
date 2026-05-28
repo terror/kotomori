@@ -53,7 +53,7 @@ use {
   provider::{Mock, Provider, Rig},
   provider_output::ProviderOutput,
   provider_sink::ProviderSink,
-  ratatui_textarea::{CursorMove, Input, Key, TextArea},
+  ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
   reasoning_buffer::ReasoningBuffer,
   render_plan::RenderPlan,

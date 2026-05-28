@@ -23,7 +23,9 @@ impl Component for ViewComponent<'_> {
         InputMode::Approval(request) => {
           ApprovalPromptComponent::new(request).render(width)
         }
-        InputMode::Compose => self.state.composer.render(width),
+        InputMode::Compose => {
+          ComposerComponent::new(&self.state.composer).render(width)
+        }
       })
       .chain(self.state.footer.render(width))
       .collect()
