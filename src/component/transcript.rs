@@ -102,8 +102,10 @@ impl<'a> TranscriptComponent<'a> {
         }
         TranscriptEntry::User(content) => {
           lines.extend(
-            Message::User(vec![UserMessageContent::Text(content.clone())])
-              .render(width),
+            MessageComponent::new(&Message::User(vec![
+              UserMessageContent::Text(content.clone()),
+            ]))
+            .render(width),
           );
         }
       }

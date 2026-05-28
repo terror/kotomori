@@ -11,10 +11,7 @@ use {
   changed_range::ChangedRange,
   clap::{Args, Parser},
   command::Command,
-  component::{
-    Component, FooterComponent, FramedLinesComponent, HeaderComponent,
-    ViewComponent,
-  },
+  component::{Component, FooterComponent, HeaderComponent, ViewComponent},
   composer::Composer,
   config::Config,
   crossterm::{

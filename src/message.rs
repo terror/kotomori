@@ -24,44 +24,6 @@ impl Message {
   }
 }
 
-impl Component for Message {
-  fn render(&self, width: u16) -> Vec<Line> {
-    match self {
-      Self::Agent(content) => content
-        .iter()
-        .flat_map(|content| match content {
-          AgentMessageContent::Reasoning(reasoning) => reasoning
-            .split('\n')
-            .map(|line| {
-              Line::from([Span::styled(format!(" {line}"), Style::DarkGray)])
-            })
-            .collect::<Vec<_>>(),
-          AgentMessageContent::Text(text) => {
-            text.split('\n').map(Line::raw).collect::<Vec<_>>()
-          }
-          AgentMessageContent::ToolCall(invocation) => {
-            vec![Line::raw(invocation.to_string())]
-          }
-        })
-        .collect(),
-      Self::User(content) => content
-        .iter()
-        .flat_map(|content| match content {
-          UserMessageContent::Text(text) => {
-            FramedLinesComponent::raw(text.split('\n')).render(width)
-          }
-          UserMessageContent::ToolResult { result, .. } => result
-            .output()
-            .unwrap_or_default()
-            .split('\n')
-            .map(Line::raw)
-            .collect::<Vec<_>>(),
-        })
-        .collect(),
-    }
-  }
-}
-
 impl From<&Message> for RigMessage {
   fn from(message: &Message) -> Self {
     match message {

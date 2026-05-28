@@ -6,13 +6,14 @@ mod footer;
 mod framed_lines;
 mod header;
 mod hint;
+mod message;
 mod transcript;
 mod view;
 
 pub(crate) use {
   approval_prompt::ApprovalPromptComponent, composer::ComposerComponent,
   footer::FooterComponent, framed_lines::FramedLinesComponent,
-  header::HeaderComponent, hint::HintComponent,
+  header::HeaderComponent, hint::HintComponent, message::MessageComponent,
   transcript::TranscriptComponent, view::ViewComponent,
 };
 
