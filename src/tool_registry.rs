@@ -28,18 +28,20 @@ impl ToolRegistry {
   }
 }
 
+macro_rules! tool_registry_tools {
+  ($( $variant:ident($tool:ty), )*) => {
+    vec![
+      $(
+        Tool::new::<$tool>(),
+      )*
+    ]
+  };
+}
+
 impl Default for ToolRegistry {
   fn default() -> Self {
-    static DEFAULT: LazyLock<ToolRegistry> = LazyLock::new(|| {
-      ToolRegistry::new(vec![
-        Tool::new::<ApplyPatchTool>(),
-        Tool::new::<CommandTool>(),
-        Tool::new::<ListFilesTool>(),
-        Tool::new::<ReadFileTool>(),
-        Tool::new::<SearchFilesTool>(),
-        Tool::new::<WriteFileTool>(),
-      ])
-    });
+    static DEFAULT: LazyLock<ToolRegistry> =
+      LazyLock::new(|| ToolRegistry::new(define_tools!(tool_registry_tools)));
 
     DEFAULT.clone()
   }

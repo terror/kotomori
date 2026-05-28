@@ -1,17 +1,36 @@
 use super::*;
 
+macro_rules! define_tools {
+  ($macro:ident) => {
+    $macro! {
+      ApplyPatch(ApplyPatchTool),
+      Command(CommandTool),
+      ListFiles(ListFilesTool),
+      ReadFile(ReadFileTool),
+      SearchFiles(SearchFilesTool),
+      WriteFile(WriteFileTool),
+    }
+  };
+}
+
+macro_rules! impl_from_tools {
+  ($( $variant:ident($tool:ty), )*) => {
+    $(
+      impl From<$tool> for ToolInvocationKind {
+        fn from(tool: $tool) -> Self {
+          Self::$variant(tool)
+        }
+      }
+    )*
+  };
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ApplyPatchTool {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) cwd: Option<PathBuf>,
   pub(crate) patch: String,
-}
-
-impl From<ApplyPatchTool> for ToolInvocationKind {
-  fn from(tool: ApplyPatchTool) -> Self {
-    Self::ApplyPatch(tool)
-  }
 }
 
 #[async_trait]
@@ -80,12 +99,6 @@ impl Display for CommandTool {
   }
 }
 
-impl From<CommandTool> for ToolInvocationKind {
-  fn from(tool: CommandTool) -> Self {
-    Self::Command(tool)
-  }
-}
-
 #[async_trait]
 impl ToolSpec for CommandTool {
   const DESCRIPTION: &'static str = "Run a command and capture stdout, stderr, and exit status. Do not use this to list project files; use list_files instead.";
@@ -140,12 +153,6 @@ pub(crate) struct ListFilesTool {
   pub(crate) cwd: Option<PathBuf>,
 }
 
-impl From<ListFilesTool> for ToolInvocationKind {
-  fn from(tool: ListFilesTool) -> Self {
-    Self::ListFiles(tool)
-  }
-}
-
 #[async_trait]
 impl ToolSpec for ListFilesTool {
   const DESCRIPTION: &'static str = "List project files while respecting .gitignore and other standard ignore rules.";
@@ -195,12 +202,6 @@ pub(crate) struct ReadFileTool {
   pub(crate) path: PathBuf,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) start_line: Option<usize>,
-}
-
-impl From<ReadFileTool> for ToolInvocationKind {
-  fn from(tool: ReadFileTool) -> Self {
-    Self::ReadFile(tool)
-  }
 }
 
 #[async_trait]
@@ -254,12 +255,6 @@ pub(crate) struct SearchFilesTool {
   pub(crate) arguments: Vec<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) cwd: Option<PathBuf>,
-}
-
-impl From<SearchFilesTool> for ToolInvocationKind {
-  fn from(tool: SearchFilesTool) -> Self {
-    Self::SearchFiles(tool)
-  }
 }
 
 #[async_trait]
@@ -333,12 +328,6 @@ pub(crate) struct WriteFileTool {
   pub(crate) path: PathBuf,
 }
 
-impl From<WriteFileTool> for ToolInvocationKind {
-  fn from(tool: WriteFileTool) -> Self {
-    Self::WriteFile(tool)
-  }
-}
-
 #[async_trait]
 impl ToolSpec for WriteFileTool {
   const DESCRIPTION: &'static str = "Write a UTF-8 text file.";
@@ -387,6 +376,8 @@ impl ToolSpec for WriteFileTool {
       })
   }
 }
+
+define_tools!(impl_from_tools);
 
 #[cfg(test)]
 mod tests {
