@@ -9,8 +9,6 @@ pub(crate) struct Transcript {
 }
 
 impl Transcript {
-  const FRAMES: &[&str] = &["✦", "✧", "✶", "✹", "✶", "✧"];
-
   pub(crate) fn clear(&mut self) {
     self.active_agent_activity = AgentActivity::Idle;
     self.active_elapsed = Duration::ZERO;
@@ -203,10 +201,6 @@ impl Transcript {
     self.active_elapsed = Duration::ZERO;
     self.active_frame = 0;
     self.entries.push(TranscriptEntry::User(input));
-  }
-
-  pub(crate) fn spinner(frame: usize) -> &'static str {
-    Self::FRAMES[frame % Self::FRAMES.len()]
   }
 
   pub(crate) fn tick(&mut self, elapsed: Duration) {

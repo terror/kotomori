@@ -6,6 +6,8 @@ pub(crate) struct TranscriptComponent<'a> {
 }
 
 impl<'a> TranscriptComponent<'a> {
+  const FRAMES: &'static [&'static str] = &["✦", "✧", "✶", "✹", "✶", "✧"];
+
   pub(crate) fn new(state: &'a Transcript) -> Self {
     Self { state }
   }
@@ -16,7 +18,7 @@ impl<'a> TranscriptComponent<'a> {
     let working = || {
       Line::from([
         Span::styled(
-          Transcript::spinner(self.state.active_frame),
+          Self::FRAMES[self.state.active_frame % Self::FRAMES.len()],
           Style::CyanBold,
         ),
         Span::styled(" Working...", Style::Gray),
