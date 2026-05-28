@@ -73,16 +73,25 @@ impl App {
 
     let mut renderer = Renderer::new();
 
-    self.start_background_tasks();
+    self.listen_for_input();
+
+    let mut tick_interval = interval(Self::TICK_INTERVAL);
 
     while !self.state.should_quit {
       renderer.draw(&mut terminal.stdout, &View::new(&self.state))?;
 
-      let Some(event) = self.event_receiver.recv().await else {
-        break;
-      };
+      tokio::select! {
+        event = self.event_receiver.recv() => {
+          let Some(event) = event else {
+            break;
+          };
 
-      self.handle_event(event);
+          self.handle_event(event);
+        }
+        _ = tick_interval.tick() => {
+          self.handle_event(Event::Tick(Self::TICK_INTERVAL));
+        }
+      }
 
       self.drain_pending_events();
     }
@@ -90,27 +99,6 @@ impl App {
     renderer.finish(&mut terminal.stdout)?;
 
     Ok(())
-  }
-
-  fn start_background_tasks(&self) {
-    self.listen_for_input();
-    self.start_tick_loop();
-  }
-
-  fn start_tick_loop(&self) {
-    let sender = self.event_sender.clone();
-
-    tokio::spawn(async move {
-      let mut interval = interval(Self::TICK_INTERVAL);
-
-      loop {
-        interval.tick().await;
-
-        if sender.send(Event::Tick(Self::TICK_INTERVAL)).is_err() {
-          return;
-        }
-      }
-    });
   }
 
   pub(crate) fn with_state(settings: &Settings, state: State) -> Result<Self> {
