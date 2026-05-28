@@ -1,18 +1,6 @@
 use super::*;
 
 pub(crate) trait StrExt {
-  /// Return at most `len` characters from the start of the string.
-  ///
-  /// If the string contains more than `len` characters, the returned string is
-  /// suffixed with `...` to indicate that text was omitted. The suffix is not
-  /// included in `len`, so the returned string may contain up to `len + 3`
-  /// bytes. Truncation is based on Unicode scalar values rather than bytes, so
-  /// the returned string is always valid UTF-8 and never splits a character
-  /// encoding.
-  ///
-  /// If the string contains `len` or fewer characters, it is returned unchanged
-  /// aside from allocation into a new `String`. Passing `0` returns an empty
-  /// string for empty input and `...` for non-empty input.
   fn truncate(&self, len: usize) -> String;
 }
 
