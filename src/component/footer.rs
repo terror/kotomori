@@ -13,8 +13,11 @@ impl FooterComponent {
 }
 
 impl Component for FooterComponent {
-  fn render(&self, _width: u16) -> Vec<Line> {
-    vec![Line::from([Span::styled(&self.text, Style::DarkGray)])]
+  fn render(&self, _width: u16) -> Vec<LineComponent> {
+    vec![LineComponent::from([Span::styled(
+      &self.text,
+      Style::DarkGray,
+    )])]
   }
 }
 
@@ -48,7 +51,7 @@ mod tests {
   fn rendering() {
     assert_eq!(
       FooterComponent::raw("foo").render(80),
-      [Line::from([Span::styled("foo", Style::DarkGray)])]
+      [LineComponent::from([Span::styled("foo", Style::DarkGray)])]
     );
   }
 }

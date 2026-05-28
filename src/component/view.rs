@@ -12,12 +12,12 @@ impl<'a> ViewComponent<'a> {
 }
 
 impl Component for ViewComponent<'_> {
-  fn render(&self, width: u16) -> Vec<Line> {
-    once(Line::blank())
+  fn render(&self, width: u16) -> Vec<LineComponent> {
+    once(LineComponent::blank())
       .chain(HeaderComponent.render(width))
-      .chain(once(Line::blank()))
+      .chain(once(LineComponent::blank()))
       .chain(HintComponent.render(width))
-      .chain(once(Line::blank()))
+      .chain(once(LineComponent::blank()))
       .chain(TranscriptComponent::new(&self.state.transcript).render(width))
       .chain(match &self.state.input_mode {
         InputMode::Approval(request) => {

@@ -59,7 +59,7 @@ impl<'a> TranscriptToolInvocationComponent<'a> {
 }
 
 impl Component for TranscriptToolInvocationComponent<'_> {
-  fn render(&self, width: u16) -> Vec<Line> {
+  fn render(&self, width: u16) -> Vec<LineComponent> {
     let mut lines = Vec::new();
 
     let (symbol, symbol_style, title) = match self.result {
@@ -70,7 +70,7 @@ impl Component for TranscriptToolInvocationComponent<'_> {
       None => ("●", Style::CyanBold, self.invocation.progressive_tense()),
     };
 
-    lines.push(Line::from([
+    lines.push(LineComponent::from([
       Span::raw(" "),
       Span::styled(symbol, symbol_style),
       Span::raw(" "),
@@ -78,7 +78,7 @@ impl Component for TranscriptToolInvocationComponent<'_> {
     ]));
 
     lines.extend(self.details().into_iter().map(|(label, value)| {
-      Line::from([
+      LineComponent::from([
         Span::styled(Self::GUTTER, Style::DarkGray),
         Span::styled(format!("{label} "), Style::DarkGray),
         Span::raw(value),
@@ -94,7 +94,7 @@ impl Component for TranscriptToolInvocationComponent<'_> {
         .collect::<Vec<_>>();
 
       lines.extend(output_lines.iter().take(Self::OUTPUT_LIMIT).map(|line| {
-        Line::from([
+        LineComponent::from([
           Span::styled(Self::GUTTER, Style::DarkGray),
           Span::styled(Self::preview(line, output_width), Style::DarkGray),
         ])
@@ -103,7 +103,7 @@ impl Component for TranscriptToolInvocationComponent<'_> {
       let omitted = output_lines.len().saturating_sub(Self::OUTPUT_LIMIT);
 
       if omitted > 0 {
-        lines.push(Line::from([
+        lines.push(LineComponent::from([
           Span::styled(Self::GUTTER, Style::DarkGray),
           Span::styled(
             format!(
@@ -116,7 +116,7 @@ impl Component for TranscriptToolInvocationComponent<'_> {
       }
     }
 
-    lines.push(Line::blank());
+    lines.push(LineComponent::blank());
 
     lines
   }

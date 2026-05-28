@@ -11,7 +11,9 @@ use {
   changed_range::ChangedRange,
   clap::{Args, Parser},
   command::Command,
-  component::{Component, FooterComponent, HeaderComponent, ViewComponent},
+  component::{
+    Component, FooterComponent, HeaderComponent, LineComponent, ViewComponent,
+  },
   composer::Composer,
   config::Config,
   crossterm::{
@@ -40,7 +42,6 @@ use {
   futures_util::StreamExt,
   indoc::indoc,
   input_mode::InputMode,
-  line::Line,
   loader::Loader,
   message::Message,
   model::Model,
@@ -215,7 +216,6 @@ mod groq {
   pub(crate) type CompletionModel = super::GroqCompletionModel;
 }
 mod input_mode;
-mod line;
 mod loader;
 mod message;
 mod mistral {

@@ -132,30 +132,30 @@ impl ResumePicker {
 }
 
 impl Component for ResumePicker {
-  fn render(&self, width: u16) -> Vec<Line> {
-    let mut lines = once(Line::blank())
+  fn render(&self, width: u16) -> Vec<LineComponent> {
+    let mut lines = once(LineComponent::blank())
       .chain(HeaderComponent.render(width))
-      .chain(once(Line::blank()))
-      .chain(once(Line::from([
+      .chain(once(LineComponent::blank()))
+      .chain(once(LineComponent::from([
         Span::styled("Search previous sessions. Press ", Style::DarkGray),
         Span::styled("Enter", Style::Gray),
         Span::styled(" to resume, ", Style::DarkGray),
         Span::styled("Esc", Style::Gray),
         Span::styled(" to cancel.", Style::DarkGray),
       ])))
-      .chain(once(Line::blank()))
-      .chain(once(Line::from([
+      .chain(once(LineComponent::blank()))
+      .chain(once(LineComponent::from([
         Span::styled("Search: ", Style::DarkGray),
         Span::raw(&self.query),
         Span::styled(" ", Style::Reverse),
       ])))
-      .chain(once(Line::blank()))
+      .chain(once(LineComponent::blank()))
       .collect::<Vec<_>>();
 
     let filtered = self.filtered();
 
     if filtered.is_empty() {
-      lines.push(Line::from([Span::styled(
+      lines.push(LineComponent::from([Span::styled(
         "No matching sessions.",
         Style::DarkGray,
       )]));
@@ -172,7 +172,7 @@ impl Component for ResumePicker {
 
       let marker = if index == self.selected { "> " } else { "  " };
 
-      lines.push(Line::from([
+      lines.push(LineComponent::from([
         Span::styled(marker, style),
         Span::styled(session.title.as_str(), style),
         Span::styled("  ", Style::DarkGray),
