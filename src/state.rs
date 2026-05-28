@@ -281,8 +281,11 @@ mod tests {
       state.transcript().messages(),
       vec![
         Message::User(vec![UserMessageContent::Text("foo".into())]),
-        Message::Agent(vec![AgentMessageContent::Text("baz".into())]),
-        invocation.message(),
+        Message::Agent(vec![
+          AgentMessageContent::Reasoning("bar".into()),
+          AgentMessageContent::Text("baz".into()),
+          AgentMessageContent::ToolCall(invocation),
+        ]),
         result.message("foo"),
       ],
     );

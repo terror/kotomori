@@ -8,7 +8,7 @@ pub(crate) struct ProviderOutput {
 impl ProviderOutput {
   pub(crate) fn tool_calls(&self) -> impl Iterator<Item = &ToolInvocation> {
     self.content.iter().filter_map(|content| match content {
-      AgentMessageContent::Text(_) => None,
+      AgentMessageContent::Reasoning(_) | AgentMessageContent::Text(_) => None,
       AgentMessageContent::ToolCall(invocation) => Some(invocation),
     })
   }
