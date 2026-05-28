@@ -40,7 +40,7 @@ impl Session {
       return Ok(());
     }
 
-    self.file.entries = transcript.entries.to_vec();
+    self.file.entries.clone_from(&transcript.entries);
     self.file.title = Self::title(&transcript.entries);
     self.file.updated_at = SessionStore::now()?;
 
