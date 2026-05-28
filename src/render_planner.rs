@@ -45,11 +45,11 @@ impl<'a> RenderPlanner<'a> {
     let Some(diff) = Diff::between(&presented.frame, next) else {
       return RenderPlan::NoOperation {
         previous: presented,
-        previous_viewport: Self::previous_viewport(presented, next),
+        previous_viewport: presented.previous_viewport(next),
       };
     };
 
-    let previous_viewport = Self::previous_viewport(presented, next);
+    let previous_viewport = presented.previous_viewport(next);
 
     if diff.changed.first < previous_viewport.top() {
       return RenderPlan::Full { clear: true };
@@ -80,22 +80,6 @@ impl<'a> RenderPlanner<'a> {
       previous: presented,
       previous_viewport,
       patch,
-    }
-  }
-
-  fn previous_viewport(presented: &PresentedFrame, next: &Frame) -> Viewport {
-    let height = next.dimensions.height();
-
-    if presented.frame.dimensions.height == next.dimensions.height {
-      Viewport::new(presented.viewport.top(), height)
-    } else {
-      Viewport::anchored_to_bottom(
-        presented
-          .viewport
-          .top()
-          .saturating_add(presented.frame.dimensions.height()),
-        height,
-      )
     }
   }
 }
