@@ -34,7 +34,7 @@ mod tests {
   #[test]
   fn composer_renders_while_agent_is_active() {
     let mut state = State::new(&Options {
-      model: "fake:local".parse().unwrap(),
+      model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
     })
@@ -48,7 +48,7 @@ mod tests {
       View::new(&state)
         .render(80)
         .iter()
-        .any(|line| line.to_string().contains("fake · local ·"))
+        .any(|line| line.to_string().contains("mock · local ·"))
     );
   }
 }

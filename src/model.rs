@@ -55,7 +55,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
       "anthropic" => Ok(Arc::new(Rig::anthropic(&model)?)),
       "cohere" => Ok(Arc::new(Rig::cohere(&model)?)),
       "deepseek" => Ok(Arc::new(Rig::deepseek(&model)?)),
-      "fake" => Ok(Arc::new(Fake)),
+      "mock" => Ok(Arc::new(Mock)),
       "gemini" => Ok(Arc::new(Rig::gemini(&model)?)),
       "groq" => Ok(Arc::new(Rig::groq(&model)?)),
       "mistral" => Ok(Arc::new(Rig::mistral(&model)?)),

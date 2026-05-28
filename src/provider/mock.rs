@@ -1,10 +1,10 @@
 use super::*;
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Fake;
+pub(crate) struct Mock;
 
 #[async_trait]
-impl Provider for Fake {
+impl Provider for Mock {
   async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result {
     match request.model_name() {
       "command" => {
@@ -28,7 +28,7 @@ impl Provider for Fake {
           .and_then(Message::content)
           .unwrap_or_default();
 
-        let response = format!("queued for fake:{model}: {input}");
+        let response = format!("queued for mock:{model}: {input}");
 
         for c in response.chars() {
           sink.delta(c.to_string())?;

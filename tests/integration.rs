@@ -367,7 +367,7 @@ impl Drop for Running {
 fn approval_prompt_approves_command() -> Result {
   Test::new()
     .argument("--model")
-    .argument("fake:command")
+    .argument("mock:command")
     .type_text("foo")
     .enter()
     .expect_screen_contains("Approve echo bar?")
@@ -383,7 +383,7 @@ fn approval_prompt_approves_command() -> Result {
 fn approval_prompt_denies_command() -> Result {
   Test::new()
     .argument("--model")
-    .argument("fake:command")
+    .argument("mock:command")
     .type_text("foo")
     .enter()
     .expect_screen_contains("Approve echo bar?")
@@ -399,15 +399,15 @@ fn approval_prompt_denies_command() -> Result {
 fn command_completion_clears() -> Result {
   Test::new()
     .argument("--model")
-    .argument("fake:local")
+    .argument("mock:local")
     .type_text("foo")
     .enter()
-    .expect_screen_contains("queued for fake:local: foo")
+    .expect_screen_contains("queued for mock:local: foo")
     .type_text("/")
     .expect_screen_contains("/clear")
     .tab()
     .enter()
-    .expect_screen_excludes("queued for fake:local: foo")
+    .expect_screen_excludes("queued for mock:local: foo")
     .quit()
     .run()
 }
@@ -416,7 +416,7 @@ fn command_completion_clears() -> Result {
 fn command_completion_quits() -> Result {
   Test::new()
     .argument("--model")
-    .argument("fake:local")
+    .argument("mock:local")
     .type_text("/")
     .expect_screen_contains("/clear")
     .down()
@@ -431,7 +431,7 @@ fn command_completion_quits() -> Result {
 fn interrupt_active_agent() -> Result {
   Test::new()
     .argument("--model")
-    .argument("fake:local")
+    .argument("mock:local")
     .type_text("foo")
     .enter()
     .ctrl_c()
@@ -444,11 +444,11 @@ fn interrupt_active_agent() -> Result {
 fn prompt_round_trip() -> Result {
   Test::new()
     .argument("--model")
-    .argument("fake:local")
+    .argument("mock:local")
     .type_text("foo")
     .enter()
     .expect_screen_contains("foo")
-    .expect_screen_contains("queued for fake:local: foo")
+    .expect_screen_contains("queued for mock:local: foo")
     .quit()
     .run()
 }
@@ -457,7 +457,7 @@ fn prompt_round_trip() -> Result {
 fn unknown_command() -> Result {
   Test::new()
     .argument("--model")
-    .argument("fake:local")
+    .argument("mock:local")
     .type_text("/foobar")
     .enter()
     .expect_screen_contains("Unrecognized command '/foobar'")
