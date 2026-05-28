@@ -96,7 +96,7 @@ impl<'a> TranscriptComponent<'a> {
           }
 
           lines.extend(
-            TranscriptToolInvocation::new(invocation, result.as_ref())
+            TranscriptToolInvocationComponent::new(invocation, result.as_ref())
               .render(width),
           );
         }
