@@ -128,11 +128,6 @@ impl State {
     Vec::new()
   }
 
-  #[cfg(test)]
-  pub(crate) fn input_text(&self) -> String {
-    self.composer.input_text()
-  }
-
   fn interrupt_agent(&mut self) -> Vec<Effect> {
     if !self.transcript.is_agent_active() {
       return Vec::new();
@@ -745,7 +740,7 @@ mod tests {
 
     assert!(state.transcript.messages().is_empty());
 
-    assert_eq!(state.input_text(), "  ");
+    assert_eq!(state.composer.input_text(), "  ");
   }
 
   #[test]
@@ -769,7 +764,7 @@ mod tests {
     state.handle_event(Event::Action(Action::SelectNextCommand));
     state.handle_event(Event::Action(Action::CompleteCommand));
 
-    assert_eq!(state.input_text(), "/quit");
+    assert_eq!(state.composer.input_text(), "/quit");
   }
 
   #[test]
@@ -793,7 +788,7 @@ mod tests {
     state.handle_event(Event::Action(Action::SelectPreviousCommand));
     state.handle_event(Event::Action(Action::CompleteCommand));
 
-    assert_eq!(state.input_text(), "/quit");
+    assert_eq!(state.composer.input_text(), "/quit");
   }
 
   #[test]
@@ -829,7 +824,7 @@ mod tests {
 
     assert!(state.transcript.messages().is_empty());
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -867,7 +862,7 @@ mod tests {
 
     assert!(state.transcript.messages().is_empty());
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -905,7 +900,7 @@ mod tests {
 
     assert!(state.transcript.messages().is_empty());
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -924,7 +919,7 @@ mod tests {
 
     assert!(state.should_quit);
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -943,7 +938,7 @@ mod tests {
 
     assert!(state.should_quit);
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -1068,7 +1063,7 @@ mod tests {
     })
     .unwrap();
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -1168,7 +1163,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.input_text(), "bar");
+    assert_eq!(state.composer.input_text(), "bar");
 
     assert_eq!(
       state.transcript.messages(),
@@ -1194,7 +1189,7 @@ mod tests {
       }]
     );
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -1215,6 +1210,6 @@ mod tests {
       )])]
     );
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 }

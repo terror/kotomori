@@ -7,10 +7,6 @@ pub(crate) struct ToolInvocation {
 }
 
 impl ToolInvocation {
-  pub(crate) fn arguments(&self) -> Value {
-    self.kind.arguments()
-  }
-
   pub(crate) fn completed_tense(&self) -> String {
     self.title(ToolActionTense::Completed)
   }
@@ -171,7 +167,7 @@ mod tests {
     };
 
     assert_eq!(
-      invocation.arguments(),
+      invocation.kind.arguments(),
       json!({"arguments": ["bar"], "program": "baz"}),
     );
   }
