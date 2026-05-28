@@ -3,8 +3,9 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct State {
   pub(crate) composer: Composer,
-  pub(crate) footer: FooterComponent,
+  pub(crate) directory: PathBuf,
   pub(crate) input_mode: InputMode,
+  pub(crate) model: Model,
   session: Session,
   pub(crate) should_quit: bool,
   pub(crate) transcript: Transcript,
@@ -234,8 +235,9 @@ impl State {
 
     Ok(Self {
       composer: Composer::new(settings.prompt.as_deref().unwrap_or_default()),
-      footer: FooterComponent::try_from(&settings.model)?,
+      directory: env::current_dir()?,
       input_mode: InputMode::Compose,
+      model: settings.model.clone(),
       session,
       should_quit: false,
       transcript,
