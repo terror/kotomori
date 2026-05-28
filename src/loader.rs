@@ -41,6 +41,10 @@ impl Loader {
       .map(|agents| agents.join("\n\n"))
   }
 
+  pub(crate) fn cwd(&self) -> &Path {
+    &self.cwd
+  }
+
   pub(crate) fn new() -> Result<Self> {
     Ok(Self {
       cwd: env::current_dir().context("failed to get current directory")?,
