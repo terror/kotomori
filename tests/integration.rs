@@ -4,6 +4,7 @@ use {
   anyhow::{Context, Error, bail},
   portable_pty::{CommandBuilder, PtySize, native_pty_system},
   std::{
+    fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
     sync::{
@@ -57,6 +58,14 @@ impl Test {
   fn argument(mut self, argument: &str) -> Self {
     self.arguments.push(argument.into());
     self
+  }
+
+  fn config(self, config: &str) -> Self {
+    let path = self.tempdir.path().join("config.toml");
+
+    fs::write(&path, config).unwrap();
+
+    self.env("KOTOMORI_CONFIG", path.to_str().unwrap())
   }
 
   fn ctrl_c(self) -> Self {
@@ -316,6 +325,7 @@ impl Running {
     command.env("KOTOMORI_HOME", test.tempdir.path().join("kotomori-home"));
     command.env("RUST_BACKTRACE", "0");
     command.env("TERM", "xterm-256color");
+    command.env("XDG_CONFIG_HOME", test.tempdir.path().join("xdg-config"));
 
     for (key, value) in &test.env {
       command.env(key, value);
@@ -484,6 +494,22 @@ fn command_completion_quits() -> Result {
     .expect_screen_contains("/quit")
     .enter()
     .expect_exit(0)
+    .run()
+}
+
+#[test]
+fn config_sets_default_model() -> Result {
+  Test::new()
+    .config(
+      r#"
+      default_provider = "mock"
+      default_model = "bar"
+      "#,
+    )
+    .type_text("foo")
+    .enter()
+    .expect_screen_contains("queued for mock:bar: foo")
+    .quit()
     .run()
 }
 

@@ -9,9 +9,9 @@ pub(crate) enum Subcommand {
 }
 
 impl Subcommand {
-  pub(crate) async fn run(self, options: Options) -> Result {
+  pub(crate) async fn run(self, settings: Settings) -> Result {
     match self {
-      Self::Resume => resume::run(options).await,
+      Self::Resume => resume::run(settings).await,
     }
   }
 }

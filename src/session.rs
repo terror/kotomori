@@ -9,7 +9,7 @@ pub(crate) struct Session {
 impl Session {
   const VERSION: u32 = 1;
 
-  fn file(options: &Options) -> Result<(PathBuf, SessionFile)> {
+  fn file(settings: &Settings) -> Result<(PathBuf, SessionFile)> {
     let now = SessionStore::now()?;
 
     let id = SessionStore::id()?;
@@ -21,7 +21,7 @@ impl Session {
         cwd: env::current_dir().context("failed to read current directory")?,
         entries: Vec::new(),
         id,
-        model: options.model.to_string(),
+        model: settings.model.to_string(),
         title: None,
         updated_at: now,
         version: Self::VERSION,
@@ -29,8 +29,8 @@ impl Session {
     ))
   }
 
-  pub(crate) fn new(options: &Options) -> Result<Self> {
-    let (path, file) = Self::file(options)?;
+  pub(crate) fn new(settings: &Settings) -> Result<Self> {
+    let (path, file) = Self::file(settings)?;
 
     Ok(Self { file, path })
   }

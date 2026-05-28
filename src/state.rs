@@ -141,8 +141,8 @@ impl State {
     vec![Effect::InterruptAgent]
   }
 
-  pub(crate) fn new(options: &Options) -> Result<Self> {
-    Self::with_session(options, Session::new(options)?)
+  pub(crate) fn new(settings: &Settings) -> Result<Self> {
+    Self::with_session(settings, Session::new(settings)?)
   }
 
   fn quit(&mut self) {
@@ -224,16 +224,16 @@ impl State {
   }
 
   pub(crate) fn with_session(
-    options: &Options,
+    settings: &Settings,
     mut session: Session,
   ) -> Result<Self> {
     let transcript = Transcript::with_entries(session.file.entries.clone());
 
-    session.set_model(&options.model);
+    session.set_model(&settings.model);
 
     Ok(Self {
-      composer: Composer::new(options.prompt.as_deref().unwrap_or_default())
-        .footer(Footer::try_from(&options.model)?),
+      composer: Composer::new(settings.prompt.as_deref().unwrap_or_default())
+        .footer(Footer::try_from(&settings.model)?),
       input_mode: InputMode::Compose,
       session,
       should_quit: false,
@@ -248,7 +248,7 @@ mod tests {
 
   #[test]
   fn agent_events_update_transcript() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
@@ -303,7 +303,7 @@ mod tests {
 
   #[tokio::test]
   async fn approval_approves_with_lowercase_y() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -338,7 +338,7 @@ mod tests {
 
   #[tokio::test]
   async fn approval_approves_with_uppercase_y() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -373,7 +373,7 @@ mod tests {
 
   #[test]
   fn approval_complete_command_leaves_request_pending() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -401,7 +401,7 @@ mod tests {
 
   #[tokio::test]
   async fn approval_denies_with_escape() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -433,7 +433,7 @@ mod tests {
 
   #[tokio::test]
   async fn approval_denies_with_lowercase_n() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -468,7 +468,7 @@ mod tests {
 
   #[tokio::test]
   async fn approval_denies_with_quit() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -497,7 +497,7 @@ mod tests {
 
   #[tokio::test]
   async fn approval_denies_with_uppercase_n() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -532,7 +532,7 @@ mod tests {
 
   #[test]
   fn approval_edit_other_key_leaves_request_pending() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -563,7 +563,7 @@ mod tests {
 
   #[test]
   fn approval_select_next_command_leaves_request_pending() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -591,7 +591,7 @@ mod tests {
 
   #[test]
   fn approval_select_previous_command_leaves_request_pending() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -619,7 +619,7 @@ mod tests {
 
   #[test]
   fn approval_submit_leaves_request_pending() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -647,7 +647,7 @@ mod tests {
 
   #[tokio::test]
   async fn approval_terminal_agent_done_drops_pending_request() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -672,7 +672,7 @@ mod tests {
 
   #[tokio::test]
   async fn approval_terminal_agent_tool_result_drops_pending_request() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -701,7 +701,7 @@ mod tests {
 
   #[tokio::test]
   async fn approval_terminal_error_drops_pending_request() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -726,7 +726,7 @@ mod tests {
 
   #[test]
   fn blank_submit_does_nothing() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("  ".into()),
       yolo: false,
@@ -745,7 +745,7 @@ mod tests {
 
   #[test]
   fn command_autocomplete_select_next() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("/".into()),
       yolo: false,
@@ -769,7 +769,7 @@ mod tests {
 
   #[test]
   fn command_autocomplete_select_previous() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("/".into()),
       yolo: false,
@@ -793,7 +793,7 @@ mod tests {
 
   #[test]
   fn command_clear_from_empty_slash() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
@@ -829,7 +829,7 @@ mod tests {
 
   #[test]
   fn command_clear_from_name() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
@@ -867,7 +867,7 @@ mod tests {
 
   #[test]
   fn command_clear_from_prefix() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
@@ -905,7 +905,7 @@ mod tests {
 
   #[test]
   fn command_quit_from_name() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("/quit".into()),
       yolo: false,
@@ -924,7 +924,7 @@ mod tests {
 
   #[test]
   fn command_quit_from_prefix() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("/q".into()),
       yolo: false,
@@ -943,7 +943,7 @@ mod tests {
 
   #[test]
   fn error_clears_active_message() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
@@ -987,7 +987,7 @@ mod tests {
 
   #[test]
   fn interrupt_stops_active_agent() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
@@ -1018,7 +1018,7 @@ mod tests {
 
   #[test]
   fn multiline_input() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some(String::new()),
       yolo: false,
@@ -1056,7 +1056,7 @@ mod tests {
 
   #[test]
   fn new_uses_empty_prompt_by_default() {
-    let state = State::new(&Options {
+    let state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: None,
       yolo: false,
@@ -1068,7 +1068,7 @@ mod tests {
 
   #[test]
   fn quit_interrupts_active_agent() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
@@ -1099,7 +1099,7 @@ mod tests {
 
   #[tokio::test]
   async fn quit_interrupts_active_approval() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
@@ -1135,7 +1135,7 @@ mod tests {
 
   #[test]
   fn submit_is_ignored_while_agent_active() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
@@ -1173,7 +1173,7 @@ mod tests {
 
   #[test]
   fn submit_trims_input() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("  foo  ".into()),
       yolo: false,
@@ -1194,7 +1194,7 @@ mod tests {
 
   #[test]
   fn unknown_command() {
-    let mut state = State::new(&Options {
+    let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("/foobar".into()),
       yolo: false,
