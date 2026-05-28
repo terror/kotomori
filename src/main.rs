@@ -12,7 +12,7 @@ use {
   changed_range::ChangedRange,
   clap::{Args, Parser},
   command::Command,
-  component::Component,
+  component::{Component, TranscriptComponent},
   composer::Composer,
   config::Config,
   crossterm::{
