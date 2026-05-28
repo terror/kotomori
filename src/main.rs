@@ -42,6 +42,7 @@ use {
   futures_util::StreamExt,
   header::Header,
   hint::Hint,
+  indoc::indoc,
   input_mode::InputMode,
   line::Line,
   loader::Loader,
@@ -279,6 +280,23 @@ mod xai {
   pub(crate) type Client = super::XaiClient;
   pub(crate) type CompletionModel = super::XaiCompletionModel;
 }
+
+pub(crate) static SYSTEM_PROMPT: LazyLock<String> = LazyLock::new(|| {
+  indoc! {
+    "
+    You are kotomori, a coding agent running on the user's machine.
+
+    Work directly in the local repository. Inspect the code before changing it.
+    Prefer small focused edits. Match the project's existing style.
+
+    Use available tools to read, search, edit, and run automated checks.
+    Preserve user changes. Avoid destructive commands unless explicitly requested.
+    Report clearly what changed and what was verified.
+    "
+  }
+  .trim_end()
+  .to_string()
+});
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 

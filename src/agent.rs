@@ -70,7 +70,7 @@ impl Agent {
   }
 
   async fn stream(&self, mut messages: Vec<Message>) -> Result {
-    let system = self.loader.load()?;
+    let system = self.system_prompt()?;
 
     loop {
       let mut sink = ProviderSink::new(
@@ -78,20 +78,12 @@ impl Agent {
         self.tool_registry.clone(),
       );
 
-      let request = if system.is_empty() {
-        Request::new(
-          self.model.clone(),
-          messages.clone(),
-          self.tool_registry.clone(),
-        )
-      } else {
-        Request::with_system(
-          self.model.clone(),
-          messages.clone(),
-          system.clone(),
-          self.tool_registry.clone(),
-        )
-      };
+      let request = Request::with_system(
+        self.model.clone(),
+        messages.clone(),
+        system.clone(),
+        self.tool_registry.clone(),
+      );
 
       self.provider.stream(request, &mut sink).await?;
 
@@ -127,6 +119,16 @@ impl Agent {
     self.event_sender.send(Event::AgentDone)?;
 
     Ok(())
+  }
+
+  fn system_prompt(&self) -> Result<String> {
+    let agents = self.loader.load()?;
+
+    Ok(if agents.is_empty() {
+      SYSTEM_PROMPT.to_string()
+    } else {
+      format!("{}\n\n{agents}", SYSTEM_PROMPT.as_str())
+    })
   }
 }
 
@@ -190,6 +192,47 @@ mod tests {
 
       Ok(())
     }
+  }
+
+  #[test]
+  fn system_prompt() {
+    #[track_caller]
+    fn case<F>(agents: Option<&str>, expected: F)
+    where
+      F: FnOnce(&Path) -> String,
+    {
+      let (event_sender, _event_receiver) = mpsc::unbounded_channel();
+
+      let directory = tempfile::tempdir().unwrap();
+
+      let agents_path = directory.path().join("AGENTS.md");
+
+      if let Some(agents) = agents {
+        fs::write(&agents_path, agents).unwrap();
+      }
+
+      let agent = Agent {
+        event_sender,
+        loader: Loader::with_cwd(directory.path()),
+        model: "mock:local".parse().unwrap(),
+        provider: Arc::new(ReasoningProvider),
+        task: None,
+        tool_registry: ToolRegistry::default(),
+        yolo: true,
+      };
+
+      assert_eq!(agent.system_prompt().unwrap(), expected(&agents_path));
+    }
+
+    case(None, |_| SYSTEM_PROMPT.to_string());
+
+    case(Some("foo\n"), |agents_path| {
+      format!(
+        "{}\n\n{}:\nfoo",
+        SYSTEM_PROMPT.as_str(),
+        agents_path.display()
+      )
+    });
   }
 
   #[derive(Debug)]
