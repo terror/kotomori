@@ -2,18 +2,8 @@ use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Model {
-  name: String,
-  provider: String,
-}
-
-impl Model {
-  pub(crate) fn name(&self) -> &str {
-    &self.name
-  }
-
-  pub(crate) fn provider(&self) -> &str {
-    &self.provider
-  }
+  pub(crate) name: String,
+  pub(crate) provider: String,
 }
 
 impl Display for Model {

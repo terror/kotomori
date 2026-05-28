@@ -80,7 +80,7 @@ impl From<&Message> for RigMessage {
                 AssistantContent::tool_call(
                   invocation.id.clone(),
                   invocation.kind.name(),
-                  invocation.arguments(),
+                  invocation.kind.arguments(),
                 )
               }
             })

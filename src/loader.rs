@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Loader {
-  cwd: PathBuf,
+  pub(crate) cwd: PathBuf,
 }
 
 impl Loader {
@@ -24,10 +24,6 @@ impl Loader {
       .into_iter()
       .map(|directory| directory.join(Self::AGENTS))
       .filter(|path| path.is_file())
-  }
-
-  pub(crate) fn cwd(&self) -> &Path {
-    &self.cwd
   }
 
   pub(crate) fn load(&self) -> Result<String> {

@@ -2,18 +2,14 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct State {
-  composer: Composer,
-  input_mode: InputMode,
+  pub(crate) composer: Composer,
+  pub(crate) input_mode: InputMode,
   session: Session,
-  should_quit: bool,
-  transcript: Transcript,
+  pub(crate) should_quit: bool,
+  pub(crate) transcript: Transcript,
 }
 
 impl State {
-  pub(crate) fn composer(&self) -> &Composer {
-    &self.composer
-  }
-
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
     if action == Action::Quit && self.transcript.is_agent_active() {
       return self.interrupt_agent();
@@ -132,11 +128,6 @@ impl State {
     Vec::new()
   }
 
-  #[cfg(test)]
-  pub(crate) fn input_text(&self) -> String {
-    self.composer.input_text()
-  }
-
   fn interrupt_agent(&mut self) -> Vec<Effect> {
     if !self.transcript.is_agent_active() {
       return Vec::new();
@@ -152,10 +143,6 @@ impl State {
 
   pub(crate) fn new(options: &Options) -> Result<Self> {
     Self::with_session(options, Session::new(options)?)
-  }
-
-  pub(crate) fn pending_approval(&self) -> Option<&ApprovalRequest> {
-    self.input_mode.approval()
   }
 
   fn quit(&mut self) {
@@ -190,10 +177,6 @@ impl State {
         .transcript
         .error(format!("failed to save session: {error}"));
     }
-  }
-
-  pub(crate) fn should_quit(&self) -> bool {
-    self.should_quit
   }
 
   fn submit(&mut self) -> Vec<Effect> {
@@ -240,15 +223,11 @@ impl State {
     vec![Effect::RunAgent { messages }]
   }
 
-  pub(crate) fn transcript(&self) -> &Transcript {
-    &self.transcript
-  }
-
   pub(crate) fn with_session(
     options: &Options,
     mut session: Session,
   ) -> Result<Self> {
-    let transcript = Transcript::with_entries(session.entries());
+    let transcript = Transcript::with_entries(session.file.entries.clone());
 
     session.set_model(&options.model);
 
@@ -309,7 +288,7 @@ mod tests {
     state.handle_event(Event::AgentDone);
 
     assert_eq!(
-      state.transcript().messages(),
+      state.transcript.messages(),
       vec![
         Message::User(vec![UserMessageContent::Text("foo".into())]),
         Message::Agent(vec![
@@ -342,7 +321,7 @@ mod tests {
 
     state.handle_event(Event::ToolApprovalRequest(request));
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -354,7 +333,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
 
-    assert!(state.pending_approval().is_none());
+    assert!(matches!(state.input_mode, InputMode::Compose));
   }
 
   #[tokio::test]
@@ -377,7 +356,7 @@ mod tests {
 
     state.handle_event(Event::ToolApprovalRequest(request));
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -389,7 +368,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
 
-    assert!(state.pending_approval().is_none());
+    assert!(matches!(state.input_mode, InputMode::Compose));
   }
 
   #[test]
@@ -417,7 +396,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
   }
 
   #[tokio::test]
@@ -440,7 +419,7 @@ mod tests {
 
     state.handle_event(Event::ToolApprovalRequest(request));
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Interrupt)),
@@ -449,7 +428,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert!(state.pending_approval().is_none());
+    assert!(matches!(state.input_mode, InputMode::Compose));
   }
 
   #[tokio::test]
@@ -472,7 +451,7 @@ mod tests {
 
     state.handle_event(Event::ToolApprovalRequest(request));
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -484,7 +463,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert!(state.pending_approval().is_none());
+    assert!(matches!(state.input_mode, InputMode::Compose));
   }
 
   #[tokio::test]
@@ -507,13 +486,13 @@ mod tests {
 
     state.handle_event(Event::ToolApprovalRequest(request));
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
     assert_eq!(state.handle_event(Event::Action(Action::Quit)), Vec::new());
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert!(state.pending_approval().is_none());
-    assert!(state.should_quit());
+    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert!(state.should_quit);
   }
 
   #[tokio::test]
@@ -536,7 +515,7 @@ mod tests {
 
     state.handle_event(Event::ToolApprovalRequest(request));
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -548,7 +527,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert!(state.pending_approval().is_none());
+    assert!(matches!(state.input_mode, InputMode::Compose));
   }
 
   #[test]
@@ -579,7 +558,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
   }
 
   #[test]
@@ -607,7 +586,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
   }
 
   #[test]
@@ -635,7 +614,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
   }
 
   #[test]
@@ -663,7 +642,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
   }
 
   #[tokio::test]
@@ -687,7 +666,7 @@ mod tests {
     state.handle_event(Event::ToolApprovalRequest(request));
     state.handle_event(Event::AgentDone);
 
-    assert!(state.pending_approval().is_none());
+    assert!(matches!(state.input_mode, InputMode::Compose));
     assert!(response_receiver.await.is_err());
   }
 
@@ -716,7 +695,7 @@ mod tests {
       result: ToolResult::content("bar"),
     });
 
-    assert!(state.pending_approval().is_none());
+    assert!(matches!(state.input_mode, InputMode::Compose));
     assert!(response_receiver.await.is_err());
   }
 
@@ -741,7 +720,7 @@ mod tests {
     state.handle_event(Event::ToolApprovalRequest(request));
     state.handle_event(Event::Error("bar".into()));
 
-    assert!(state.pending_approval().is_none());
+    assert!(matches!(state.input_mode, InputMode::Compose));
     assert!(response_receiver.await.is_err());
   }
 
@@ -759,9 +738,9 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.transcript().messages().is_empty());
+    assert!(state.transcript.messages().is_empty());
 
-    assert_eq!(state.input_text(), "  ");
+    assert_eq!(state.composer.input_text(), "  ");
   }
 
   #[test]
@@ -775,7 +754,7 @@ mod tests {
 
     assert_eq!(
       state
-        .composer()
+        .composer
         .commands()
         .map(Command::name)
         .collect::<Vec<_>>(),
@@ -785,7 +764,7 @@ mod tests {
     state.handle_event(Event::Action(Action::SelectNextCommand));
     state.handle_event(Event::Action(Action::CompleteCommand));
 
-    assert_eq!(state.input_text(), "/quit");
+    assert_eq!(state.composer.input_text(), "/quit");
   }
 
   #[test]
@@ -799,7 +778,7 @@ mod tests {
 
     assert_eq!(
       state
-        .composer()
+        .composer
         .commands()
         .map(Command::name)
         .collect::<Vec<_>>(),
@@ -809,7 +788,7 @@ mod tests {
     state.handle_event(Event::Action(Action::SelectPreviousCommand));
     state.handle_event(Event::Action(Action::CompleteCommand));
 
-    assert_eq!(state.input_text(), "/quit");
+    assert_eq!(state.composer.input_text(), "/quit");
   }
 
   #[test]
@@ -843,9 +822,9 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.transcript().messages().is_empty());
+    assert!(state.transcript.messages().is_empty());
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -881,9 +860,9 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.transcript().messages().is_empty());
+    assert!(state.transcript.messages().is_empty());
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -919,9 +898,9 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.transcript().messages().is_empty());
+    assert!(state.transcript.messages().is_empty());
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -938,9 +917,9 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.should_quit());
+    assert!(state.should_quit);
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -957,9 +936,9 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.should_quit());
+    assert!(state.should_quit);
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -983,7 +962,7 @@ mod tests {
     state.handle_event(Event::Error("bar".into()));
 
     assert_eq!(
-      state.transcript().messages()[1],
+      state.transcript.messages()[1],
       Message::Agent(vec![AgentMessageContent::Text("bar".into())])
     );
 
@@ -1029,7 +1008,7 @@ mod tests {
       vec![Effect::InterruptAgent]
     );
 
-    assert!(!state.transcript().is_agent_active());
+    assert!(!state.transcript.is_agent_active());
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Interrupt)),
@@ -1084,7 +1063,7 @@ mod tests {
     })
     .unwrap();
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -1110,12 +1089,12 @@ mod tests {
       vec![Effect::InterruptAgent]
     );
 
-    assert!(!state.should_quit());
-    assert!(!state.transcript().is_agent_active());
+    assert!(!state.should_quit);
+    assert!(!state.transcript.is_agent_active());
 
     assert_eq!(state.handle_event(Event::Action(Action::Quit)), Vec::new());
 
-    assert!(state.should_quit());
+    assert!(state.should_quit);
   }
 
   #[tokio::test]
@@ -1140,17 +1119,17 @@ mod tests {
 
     state.handle_event(Event::ToolApprovalRequest(request));
 
-    assert!(state.pending_approval().is_some());
+    assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Quit)),
       vec![Effect::InterruptAgent]
     );
 
-    assert!(!state.should_quit());
-    assert!(!state.transcript().is_agent_active());
+    assert!(!state.should_quit);
+    assert!(!state.transcript.is_agent_active());
 
-    assert!(state.pending_approval().is_none());
+    assert!(matches!(state.input_mode, InputMode::Compose));
     assert!(response_receiver.await.is_err());
   }
 
@@ -1184,10 +1163,10 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.input_text(), "bar");
+    assert_eq!(state.composer.input_text(), "bar");
 
     assert_eq!(
-      state.transcript().messages(),
+      state.transcript.messages(),
       vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
     );
   }
@@ -1210,7 +1189,7 @@ mod tests {
       }]
     );
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -1225,12 +1204,12 @@ mod tests {
     state.handle_event(Event::Action(Action::Submit));
 
     assert_eq!(
-      state.transcript().messages(),
+      state.transcript.messages(),
       vec![Message::Agent(vec![AgentMessageContent::Text(
         "Unrecognized command '/foobar'. Type \"/\" for a list of supported commands.".into()
       )])]
     );
 
-    assert_eq!(state.input_text(), "");
+    assert_eq!(state.composer.input_text(), "");
   }
 }

@@ -51,15 +51,15 @@ impl<'a> RenderPlanner<'a> {
 
     let previous_viewport = presented.previous_viewport(next);
 
-    if diff.changed.first < previous_viewport.top() {
+    if diff.changed.first < previous_viewport.top {
       return RenderPlan::Full { clear: true };
     }
 
-    if diff.is_pure_tail_delete() && next.last_row() < previous_viewport.top() {
+    if diff.is_pure_tail_delete() && next.last_row() < previous_viewport.top {
       return RenderPlan::Full { clear: true };
     }
 
-    if diff.deleted_tail_len() > next.dimensions.height() {
+    if diff.deleted_tail_len() > next.dimensions.height {
       return RenderPlan::Full { clear: true };
     }
 

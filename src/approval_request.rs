@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) struct ApprovalRequest {
-  invocation: ToolInvocation,
+  pub(crate) invocation: ToolInvocation,
   response_sender: Arc<Mutex<Option<oneshot::Sender<ToolApproval>>>>,
 }
 
@@ -13,10 +13,6 @@ impl ApprovalRequest {
 
   pub(crate) fn deny(&self) {
     self.respond(ToolApproval::Denied);
-  }
-
-  pub(crate) fn invocation(&self) -> &ToolInvocation {
-    &self.invocation
   }
 
   pub(crate) fn new(

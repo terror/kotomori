@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct Terminal {
-  stdout: Stdout,
+  pub(crate) stdout: Stdout,
 }
 
 impl Terminal {
@@ -14,10 +14,6 @@ impl Terminal {
     execute!(stdout, Hide).context("failed to hide cursor")?;
 
     Ok(Self { stdout })
-  }
-
-  pub(crate) fn stdout_mut(&mut self) -> &mut Stdout {
-    &mut self.stdout
   }
 }
 

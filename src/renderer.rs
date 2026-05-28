@@ -90,6 +90,7 @@ impl Renderer {
     width: u16,
     height: u16,
   ) -> Result {
+    let height = usize::from(height);
     let next = Frame::new(rendered, Dimensions { height, width });
 
     let plan =
@@ -156,7 +157,7 @@ impl Renderer {
     }
 
     let lines = if clear {
-      &next.lines[next.len().saturating_sub(next.dimensions.height())..]
+      &next.lines[next.len().saturating_sub(next.dimensions.height)..]
     } else {
       &next.lines
     };
@@ -175,7 +176,7 @@ impl Renderer {
   ) -> Result {
     write!(stdout, "\r\n")?;
 
-    if viewport.screen_row(row) >= viewport.height().saturating_sub(1) {
+    if viewport.screen_row(row) >= viewport.height.saturating_sub(1) {
       *viewport = viewport.scrolled_down(1);
     }
 
@@ -230,9 +231,9 @@ impl Renderer {
 
     if move_target_row > viewport.bottom() {
       let move_to_bottom = viewport
-        .height()
+        .height
         .saturating_sub(1)
-        .saturating_sub(viewport.screen_row(cursor.row()));
+        .saturating_sub(viewport.screen_row(cursor.row));
 
       stdout.move_down(move_to_bottom)?;
 
@@ -270,15 +271,15 @@ impl Renderer {
     let mut cursor = Cursor::new(*writable_range.end());
 
     if diff.deleted_tail_len() > 0 {
-      if cursor.row() < next.last_row() {
-        let move_down = next.last_row() - cursor.row();
+      if cursor.row < next.last_row() {
+        let move_down = next.last_row() - cursor.row;
         stdout.move_down(move_down)?;
         cursor = Cursor::new(next.last_row());
       }
 
       for _ in next.len()..presented.frame.len() {
-        Self::line_feed(stdout, &mut viewport, cursor.row())?;
-        cursor = Cursor::new(cursor.row().saturating_add(1));
+        Self::line_feed(stdout, &mut viewport, cursor.row)?;
+        cursor = Cursor::new(cursor.row.saturating_add(1));
         stdout.clear_line()?;
       }
 

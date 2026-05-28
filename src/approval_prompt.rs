@@ -17,7 +17,7 @@ impl Component for ApprovalPrompt<'_> {
       Line::from([
         Span::styled("?", Style::CyanBold),
         Span::raw(" Approve "),
-        Span::raw(self.request.invocation().to_string()),
+        Span::raw(self.request.invocation.to_string()),
         Span::raw("?"),
       ]),
       Line::from([

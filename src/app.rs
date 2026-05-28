@@ -75,8 +75,8 @@ impl App {
 
     self.start_background_tasks();
 
-    while !self.state.should_quit() {
-      renderer.draw(terminal.stdout_mut(), &View::new(&self.state))?;
+    while !self.state.should_quit {
+      renderer.draw(&mut terminal.stdout, &View::new(&self.state))?;
 
       let Some(event) = self.event_receiver.recv().await else {
         break;
@@ -87,7 +87,7 @@ impl App {
       self.drain_pending_events();
     }
 
-    renderer.finish(terminal.stdout_mut())?;
+    renderer.finish(&mut terminal.stdout)?;
 
     Ok(())
   }

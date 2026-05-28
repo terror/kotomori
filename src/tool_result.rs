@@ -4,7 +4,7 @@ use super::*;
 pub(crate) struct ToolResult {
   content: Option<String>,
   error: Option<String>,
-  exit_status: Option<i32>,
+  pub(crate) exit_status: Option<i32>,
   stdout: Option<String>,
 }
 
@@ -40,10 +40,6 @@ impl ToolResult {
       exit_status: None,
       stdout: None,
     }
-  }
-
-  pub(crate) fn exit_status(&self) -> Option<i32> {
-    self.exit_status
   }
 
   pub(crate) fn is_error(&self) -> bool {

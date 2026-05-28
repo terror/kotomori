@@ -6,14 +6,15 @@ pub(crate) struct Mock;
 #[async_trait]
 impl Provider for Mock {
   async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result {
-    match request.model_name() {
+    match request.model.name.as_str() {
       "approval-required-command" => {
-        let has_tool_result = request.messages().any(|message| match message {
-          Message::Agent(_) => false,
-          Message::User(content) => content.iter().any(|content| {
-            matches!(content, UserMessageContent::ToolResult { .. })
-          }),
-        });
+        let has_tool_result =
+          request.messages.iter().any(|message| match message {
+            Message::Agent(_) => false,
+            Message::User(content) => content.iter().any(|content| {
+              matches!(content, UserMessageContent::ToolResult { .. })
+            }),
+          });
 
         if has_tool_result {
           sink.delta("done")?;

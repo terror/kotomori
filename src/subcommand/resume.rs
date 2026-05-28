@@ -14,8 +14,8 @@ pub(crate) async fn run(mut options: Options) -> Result {
 
   let session = SessionStore::load(&path)?;
 
-  options.model = session.model().parse().with_context(|| {
-    format!("failed to parse session model {}", session.model())
+  options.model = session.file.model.parse().with_context(|| {
+    format!("failed to parse session model {}", session.file.model)
   })?;
 
   App::with_state(&options, State::with_session(&options, session)?)?

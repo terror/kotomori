@@ -9,10 +9,6 @@ pub(crate) struct Session {
 impl Session {
   const VERSION: u32 = 1;
 
-  pub(crate) fn entries(&self) -> Vec<TranscriptEntry> {
-    self.file.entries.clone()
-  }
-
   fn file(options: &Options) -> Result<(PathBuf, SessionFile)> {
     let now = SessionStore::now()?;
 
@@ -33,10 +29,6 @@ impl Session {
     ))
   }
 
-  pub(crate) fn model(&self) -> &str {
-    &self.file.model
-  }
-
   pub(crate) fn new(options: &Options) -> Result<Self> {
     let (path, file) = Self::file(options)?;
 
@@ -48,8 +40,8 @@ impl Session {
       return Ok(());
     }
 
-    self.file.entries = transcript.entries().to_vec();
-    self.file.title = Self::title(transcript.entries());
+    self.file.entries.clone_from(&transcript.entries);
+    self.file.title = Self::title(&transcript.entries);
     self.file.updated_at = SessionStore::now()?;
 
     SessionStore::write(&self.path, &self.file)
