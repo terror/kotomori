@@ -10,9 +10,8 @@ pub(crate) enum AgentMessageContent {
 impl AgentMessageContent {
   pub(crate) fn text(&self) -> Option<&str> {
     match self {
-      Self::Reasoning(_) => None,
       Self::Text(text) => Some(text),
-      Self::ToolCall(_) => None,
+      Self::Reasoning(_) | Self::ToolCall(_) => None,
     }
   }
 }

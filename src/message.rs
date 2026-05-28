@@ -166,7 +166,10 @@ mod tests {
       }),
     };
 
-    let tool_use = RigMessage::from(&invocation.message());
+    let tool_use =
+      RigMessage::from(&Message::Agent(vec![AgentMessageContent::ToolCall(
+        invocation,
+      )]));
 
     assert_eq!(
       tool_use,

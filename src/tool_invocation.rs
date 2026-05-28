@@ -30,10 +30,6 @@ impl ToolInvocation {
     )
   }
 
-  pub(crate) fn message(&self) -> Message {
-    Message::Agent(vec![AgentMessageContent::ToolCall(self.clone())])
-  }
-
   pub(crate) fn progressive_tense(&self) -> String {
     self.title(ToolActionTense::Progressive)
   }

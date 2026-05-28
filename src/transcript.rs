@@ -81,12 +81,7 @@ impl Transcript {
             Some(TranscriptEntry::Tool { .. })
           );
 
-          if agent_content.is_empty() && !next_is_tool {
-            messages.push(invocation.message());
-          } else {
-            agent_content
-              .push(AgentMessageContent::ToolCall(invocation.clone()));
-          }
+          agent_content.push(AgentMessageContent::ToolCall(invocation.clone()));
 
           if let Some(result) = result {
             tool_results.push(result.message(invocation.id.clone()));
@@ -455,7 +450,12 @@ mod tests {
 
     transcript.push_tool_call(invocation.clone());
 
-    assert_eq!(transcript.messages(), vec![invocation.message()]);
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![AgentMessageContent::ToolCall(
+        invocation.clone(),
+      )])]
+    );
 
     let result = ToolResult::command(Some(0), "bar\n", "");
 
@@ -463,7 +463,10 @@ mod tests {
 
     assert_eq!(
       transcript.messages(),
-      vec![invocation.message(), result.message("foo")]
+      vec![
+        Message::Agent(vec![AgentMessageContent::ToolCall(invocation)]),
+        result.message("foo")
+      ]
     );
   }
 

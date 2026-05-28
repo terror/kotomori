@@ -275,17 +275,6 @@ mod tests {
     }
   }
 
-  fn command_invocation() -> ToolInvocation {
-    ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
-        cwd: None,
-        program: "echo".into(),
-      }),
-    }
-  }
-
   #[tokio::test]
   async fn preserves_reasoning_with_tool_calls() {
     let (event_sender, _event_receiver) = mpsc::unbounded_channel();
@@ -325,7 +314,14 @@ mod tests {
           Message::User(vec![UserMessageContent::Text("foo".into())]),
           Message::Agent(vec![
             AgentMessageContent::Reasoning("baz".into()),
-            AgentMessageContent::ToolCall(command_invocation()),
+            AgentMessageContent::ToolCall(ToolInvocation {
+              id: "foo".into(),
+              kind: ToolInvocationKind::Command(CommandTool {
+                arguments: vec!["bar".into()],
+                cwd: None,
+                program: "echo".into(),
+              }),
+            }),
           ]),
           tool_result.message("foo"),
         ],
@@ -372,7 +368,14 @@ mod tests {
           Message::User(vec![UserMessageContent::Text("foo".into())]),
           Message::Agent(vec![
             AgentMessageContent::Text("foo".into()),
-            AgentMessageContent::ToolCall(command_invocation()),
+            AgentMessageContent::ToolCall(ToolInvocation {
+              id: "foo".into(),
+              kind: ToolInvocationKind::Command(CommandTool {
+                arguments: vec!["bar".into()],
+                cwd: None,
+                program: "echo".into(),
+              }),
+            }),
             AgentMessageContent::Text("baz".into()),
           ]),
           tool_result.message("foo"),
@@ -412,7 +415,14 @@ mod tests {
 
     assert_eq!(
       event_receiver.recv().await.unwrap(),
-      Event::AgentToolCall(command_invocation())
+      Event::AgentToolCall(ToolInvocation {
+        id: "foo".into(),
+        kind: ToolInvocationKind::Command(CommandTool {
+          arguments: vec!["bar".into()],
+          cwd: None,
+          program: "echo".into(),
+        }),
+      })
     );
 
     let request = match event_receiver.recv().await.unwrap() {
@@ -442,7 +452,14 @@ mod tests {
         vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
         vec![
           Message::User(vec![UserMessageContent::Text("foo".into())]),
-          command_invocation().message(),
+          Message::Agent(vec![AgentMessageContent::ToolCall(ToolInvocation {
+            id: "foo".into(),
+            kind: ToolInvocationKind::Command(CommandTool {
+              arguments: vec!["bar".into()],
+              cwd: None,
+              program: "echo".into(),
+            }),
+          })]),
           tool_result.message("foo"),
         ],
       ],
@@ -486,7 +503,14 @@ mod tests {
         vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
         vec![
           Message::User(vec![UserMessageContent::Text("foo".into())]),
-          command_invocation().message(),
+          Message::Agent(vec![AgentMessageContent::ToolCall(ToolInvocation {
+            id: "foo".into(),
+            kind: ToolInvocationKind::Command(CommandTool {
+              arguments: vec!["bar".into()],
+              cwd: None,
+              program: "echo".into(),
+            }),
+          })]),
           tool_result.message("foo"),
         ],
       ],
