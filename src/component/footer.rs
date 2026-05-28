@@ -1,24 +1,24 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct Footer {
+pub(crate) struct FooterComponent {
   text: String,
 }
 
-impl Footer {
+impl FooterComponent {
   #[cfg(test)]
   pub(crate) fn raw(text: impl Into<String>) -> Self {
     Self { text: text.into() }
   }
 }
 
-impl Component for Footer {
+impl Component for FooterComponent {
   fn render(&self, _width: u16) -> Vec<Line> {
     vec![Line::from([Span::styled(&self.text, Style::DarkGray)])]
   }
 }
 
-impl TryFrom<&Model> for Footer {
+impl TryFrom<&Model> for FooterComponent {
   type Error = Error;
 
   fn try_from(model: &Model) -> Result<Self> {
@@ -37,5 +37,18 @@ impl TryFrom<&Model> for Footer {
     Ok(Self {
       text: format!("{} · {} · {directory}", model.provider, model.name),
     })
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn rendering() {
+    assert_eq!(
+      FooterComponent::raw("foo").render(80),
+      [Line::from([Span::styled("foo", Style::DarkGray)])]
+    );
   }
 }

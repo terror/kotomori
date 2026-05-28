@@ -3,7 +3,6 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Composer {
   command_index: usize,
-  footer: Option<Footer>,
   textarea: TextArea<'static>,
 }
 
@@ -39,13 +38,6 @@ impl Composer {
     }
   }
 
-  pub(crate) fn footer(self, footer: Footer) -> Self {
-    Self {
-      footer: Some(footer),
-      ..self
-    }
-  }
-
   pub(crate) fn input(&mut self, input: Input) {
     if self.textarea.input(input) {
       self.command_index = 0;
@@ -59,7 +51,6 @@ impl Composer {
   pub(crate) fn new(input: &str) -> Self {
     Self {
       command_index: 0,
-      footer: None,
       textarea: Self::textarea(input),
     }
   }
@@ -145,10 +136,6 @@ impl Component for Composer {
     )
     .render(width);
 
-    if selected.is_none() {
-      lines.extend(self.footer.iter().flat_map(|footer| footer.render(width)));
-    }
-
     lines.extend(self.commands().enumerate().map(|(index, command)| {
       let input_style = match selected {
         Some(selected) if selected == index => Style::CyanBold,
@@ -190,27 +177,6 @@ mod tests {
         Span::styled("  ", Style::DarkGray),
         Span::styled("Quit kotomori", Style::DarkGray),
       ])
-    );
-  }
-
-  #[test]
-  fn footer_is_hidden_when_command_menu_is_open() {
-    let composer = Composer::new("/").footer(Footer::raw("foo"));
-
-    assert!(
-      !composer
-        .render(80)
-        .contains(&Line::from([Span::styled("foo", Style::DarkGray)]))
-    );
-  }
-
-  #[test]
-  fn footer_rendering() {
-    let composer = Composer::new("foo").footer(Footer::raw("bar"));
-
-    assert_eq!(
-      composer.render(80)[3],
-      Line::from([Span::styled("bar", Style::DarkGray)])
     );
   }
 }
