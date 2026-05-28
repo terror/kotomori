@@ -347,7 +347,694 @@ mod tests {
   use super::*;
 
   #[test]
-  fn active_rendering() {
+  fn clear_removes_entries_and_stops_agent() {
+    let mut transcript = Transcript::default();
+
+    transcript.send("foo".into());
+    transcript.tick(Duration::from_secs(1));
+    transcript.clear();
+
+    assert!(transcript.entries.is_empty());
+
+    assert_eq!(transcript.active_elapsed, Duration::ZERO);
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Idle
+    ));
+  }
+
+  #[test]
+  fn error_clears_active_activity() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_delta("foo");
+    transcript.error("bar".into());
+
+    assert!(!transcript.is_agent_active());
+
+    assert_eq!(transcript.active_elapsed, Duration::ZERO);
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![AgentMessageContent::Text(
+        "bar".into()
+      )])]
+    );
+  }
+
+  #[test]
+  fn finish_agent_activity_ignores_empty_reasoning() {
+    let mut transcript = Transcript {
+      active_agent_activity: AgentActivity::Reasoning(String::new()),
+      ..Default::default()
+    };
+
+    transcript.finish_agent_activity();
+
+    assert!(transcript.entries.is_empty());
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Idle
+    ));
+  }
+
+  #[test]
+  fn finish_agent_activity_ignores_empty_streaming() {
+    let mut transcript = Transcript {
+      active_agent_activity: AgentActivity::Streaming(String::new()),
+      ..Default::default()
+    };
+
+    transcript.finish_agent_activity();
+
+    assert!(transcript.entries.is_empty());
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Idle
+    ));
+  }
+
+  #[test]
+  fn finish_agent_activity_ignores_idle() {
+    let mut transcript = Transcript::default();
+
+    transcript.finish_agent_activity();
+
+    assert!(transcript.entries.is_empty());
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Idle
+    ));
+  }
+
+  #[test]
+  fn finish_agent_activity_ignores_waiting() {
+    let mut transcript = Transcript {
+      active_agent_activity: AgentActivity::Waiting,
+      ..Default::default()
+    };
+
+    transcript.finish_agent_activity();
+
+    assert!(transcript.entries.is_empty());
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Idle
+    ));
+  }
+
+  #[test]
+  fn finish_agent_activity_preserves_reasoning() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_reasoning_delta("foo");
+    transcript.finish_agent_activity();
+
+    assert!(matches!(
+      &transcript.entries[..],
+      [TranscriptEntry::Reasoning(reasoning)] if reasoning == "foo"
+    ));
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Idle
+    ));
+  }
+
+  #[test]
+  fn finish_agent_activity_preserves_streaming() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_delta("foo");
+    transcript.finish_agent_activity();
+
+    assert!(matches!(
+      &transcript.entries[..],
+      [TranscriptEntry::Agent(message)] if message == "foo"
+    ));
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Idle
+    ));
+  }
+
+  #[test]
+  fn interrupt_ignores_interrupted_entries_in_messages() {
+    let mut transcript = Transcript::default();
+
+    transcript.send("foo".into());
+    transcript.interrupt();
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
+    );
+  }
+
+  #[test]
+  fn interrupt_preserves_active_message() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_delta("foo");
+    transcript.tick(Duration::from_secs(1));
+    transcript.interrupt();
+
+    assert_eq!(transcript.active_elapsed, Duration::ZERO);
+
+    assert!(!transcript.is_agent_active());
+
+    assert!(matches!(
+      &transcript.entries[..],
+      [TranscriptEntry::Agent(message), TranscriptEntry::Interrupted]
+        if message == "foo"
+    ));
+  }
+
+  #[test]
+  fn is_agent_active_tracks_activity() {
+    let mut transcript = Transcript::default();
+
+    assert!(!transcript.is_agent_active());
+
+    transcript.send("foo".into());
+
+    assert!(transcript.is_agent_active());
+
+    transcript.finish_agent_activity();
+
+    assert!(!transcript.is_agent_active());
+  }
+
+  #[test]
+  fn is_empty_tracks_entries_and_activity() {
+    let mut transcript = Transcript::default();
+
+    assert!(transcript.is_empty());
+
+    transcript.send("foo".into());
+
+    assert!(!transcript.is_empty());
+
+    transcript.clear();
+
+    assert!(transcript.is_empty());
+  }
+
+  #[test]
+  fn messages_flushes_agent_content_before_user() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent("foo");
+    transcript.send("bar".into());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![
+        Message::Agent(vec![AgentMessageContent::Text("foo".into())]),
+        Message::User(vec![UserMessageContent::Text("bar".into())]),
+      ]
+    );
+  }
+
+  #[test]
+  fn messages_flushes_tool_results_before_user() {
+    let mut transcript = Transcript::default();
+
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "baz".into(),
+      }),
+    };
+
+    transcript.push_tool_call(invocation.clone());
+
+    let result = ToolResult::content("bar");
+
+    transcript.push_tool_result("foo", result.clone());
+    transcript.send("baz".into());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![
+        Message::Agent(vec![AgentMessageContent::ToolCall(invocation)]),
+        result.message("foo"),
+        Message::User(vec![UserMessageContent::Text("baz".into())]),
+      ]
+    );
+  }
+
+  #[test]
+  fn messages_ignores_active_agent_activity() {
+    let mut transcript = Transcript::default();
+
+    transcript.send("foo".into());
+    transcript.push_agent_delta("bar");
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
+    );
+  }
+
+  #[test]
+  fn messages_ignores_interrupted_entries() {
+    let transcript =
+      Transcript::with_entries(vec![TranscriptEntry::Interrupted]);
+
+    assert!(transcript.messages().is_empty());
+  }
+
+  #[test]
+  fn messages_includes_agent_entries() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent("foo");
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![AgentMessageContent::Text(
+        "foo".into()
+      )])]
+    );
+  }
+
+  #[test]
+  fn messages_includes_pending_tool_call() {
+    let mut transcript = Transcript::default();
+
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "baz".into(),
+      }),
+    };
+
+    transcript.push_tool_call(invocation.clone());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![AgentMessageContent::ToolCall(
+        invocation
+      )])]
+    );
+  }
+
+  #[test]
+  fn messages_includes_reasoning_entries() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_reasoning_delta("foo");
+    transcript.finish_agent_activity();
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![AgentMessageContent::Reasoning(
+        "foo".into()
+      )])]
+    );
+  }
+
+  #[test]
+  fn messages_includes_tool_results() {
+    let mut transcript = Transcript::default();
+
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "baz".into(),
+      }),
+    };
+
+    transcript.push_tool_call(invocation.clone());
+
+    let result = ToolResult::command(Some(0), "bar\n", "");
+
+    transcript.push_tool_result("foo", result.clone());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![
+        Message::Agent(vec![AgentMessageContent::ToolCall(invocation)]),
+        result.message("foo"),
+      ]
+    );
+  }
+
+  #[test]
+  fn messages_includes_user_entries() {
+    let mut transcript = Transcript::default();
+
+    transcript.send("foo".into());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
+    );
+  }
+
+  #[test]
+  fn messages_keeps_adjacent_tool_calls_in_one_agent_message() {
+    let mut transcript = Transcript::default();
+
+    let foo = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "baz".into(),
+      }),
+    };
+
+    let bar = ToolInvocation {
+      id: "bar".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["baz".into()],
+        cwd: None,
+        program: "qux".into(),
+      }),
+    };
+
+    transcript.push_agent_reasoning_delta("foo");
+    transcript.push_tool_call(foo.clone());
+    transcript.push_tool_call(bar.clone());
+
+    let foo_result = ToolResult::content("bar");
+    let bar_result = ToolResult::content("baz");
+
+    transcript.push_tool_result("foo", foo_result.clone());
+    transcript.push_tool_result("bar", bar_result.clone());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![
+        Message::Agent(vec![
+          AgentMessageContent::Reasoning("foo".into()),
+          AgentMessageContent::ToolCall(foo),
+          AgentMessageContent::ToolCall(bar),
+        ]),
+        foo_result.message("foo"),
+        bar_result.message("bar"),
+      ]
+    );
+  }
+
+  #[test]
+  fn messages_preserves_reasoning_with_tool_calls() {
+    let mut transcript = Transcript::default();
+
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: None,
+        program: "baz".into(),
+      }),
+    };
+
+    transcript.push_agent_reasoning_delta("foo");
+    transcript.push_tool_call(invocation.clone());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![
+        AgentMessageContent::Reasoning("foo".into()),
+        AgentMessageContent::ToolCall(invocation),
+      ])]
+    );
+  }
+
+  #[test]
+  fn push_agent_delta_appends_to_streaming() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_delta("foo");
+    transcript.push_agent_delta("bar");
+    transcript.finish_agent_activity();
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![AgentMessageContent::Text(
+        "foobar".into()
+      )])]
+    );
+  }
+
+  #[test]
+  fn push_agent_delta_empty_sets_waiting() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_delta("");
+
+    assert!(transcript.is_agent_active());
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Waiting
+    ));
+  }
+
+  #[test]
+  fn push_agent_delta_preserves_reasoning_before_streaming() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_reasoning_delta("foo");
+    transcript.push_agent_delta("bar");
+    transcript.finish_agent_activity();
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![
+        AgentMessageContent::Reasoning("foo".into()),
+        AgentMessageContent::Text("bar".into()),
+      ])]
+    );
+  }
+
+  #[test]
+  fn push_agent_delta_preserves_reasoning_before_waiting() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_reasoning_delta("foo");
+    transcript.push_agent_delta("");
+
+    assert!(matches!(
+      &transcript.entries[..],
+      [TranscriptEntry::Reasoning(reasoning)] if reasoning == "foo"
+    ));
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Waiting
+    ));
+  }
+
+  #[test]
+  fn push_agent_reasoning_delta_appends_to_reasoning() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_reasoning_delta("foo");
+    transcript.push_agent_reasoning_delta("bar");
+    transcript.finish_agent_activity();
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![AgentMessageContent::Reasoning(
+        "foobar".into()
+      )])]
+    );
+  }
+
+  #[test]
+  fn push_agent_reasoning_delta_empty_sets_waiting() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_reasoning_delta("");
+
+    assert!(transcript.is_agent_active());
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Waiting
+    ));
+  }
+
+  #[test]
+  fn push_agent_reasoning_delta_preserves_streaming_before_reasoning() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_delta("foo");
+    transcript.push_agent_reasoning_delta("bar");
+    transcript.finish_agent_activity();
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![
+        AgentMessageContent::Text("foo".into()),
+        AgentMessageContent::Reasoning("bar".into()),
+      ])]
+    );
+  }
+
+  #[test]
+  fn push_agent_reasoning_delta_preserves_streaming_before_waiting() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_delta("foo");
+    transcript.push_agent_reasoning_delta("");
+
+    assert!(matches!(
+      &transcript.entries[..],
+      [TranscriptEntry::Agent(message)] if message == "foo"
+    ));
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Waiting
+    ));
+  }
+
+  #[test]
+  fn push_tool_call_preserves_active_message() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_delta("foo");
+
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    };
+
+    transcript.push_tool_call(invocation.clone());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![
+        AgentMessageContent::Text("foo".into()),
+        AgentMessageContent::ToolCall(invocation),
+      ])]
+    );
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Waiting
+    ));
+  }
+
+  #[test]
+  fn push_tool_result_ignores_unknown_id() {
+    let mut transcript = Transcript::default();
+
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    };
+
+    transcript.push_tool_call(invocation);
+    transcript.push_tool_result("bar", ToolResult::content("baz"));
+
+    assert!(matches!(
+      &transcript.entries[..],
+      [TranscriptEntry::Tool { result: None, .. }]
+    ));
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Waiting
+    ));
+  }
+
+  #[test]
+  fn push_tool_result_updates_latest_matching_tool_call() {
+    let mut transcript = Transcript::default();
+
+    let foo = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    };
+
+    let bar = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "baz".into(),
+      }),
+    };
+
+    transcript.push_tool_call(foo);
+    transcript.push_tool_call(bar);
+
+    let result = ToolResult::content("qux");
+
+    transcript.push_tool_result("foo", result.clone());
+
+    assert!(matches!(
+      &transcript.entries[..],
+      [
+        TranscriptEntry::Tool { result: None, .. },
+        TranscriptEntry::Tool {
+          result: Some(entry_result),
+          ..
+        },
+      ] if entry_result == &result
+    ));
+  }
+
+  #[test]
+  fn push_tool_result_updates_matching_tool_call() {
+    let mut transcript = Transcript::default();
+
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    };
+
+    transcript.push_tool_call(invocation.clone());
+
+    let result = ToolResult::content("bar");
+
+    transcript.push_tool_result("foo", result.clone());
+
+    assert_eq!(
+      transcript.messages(),
+      vec![
+        Message::Agent(vec![AgentMessageContent::ToolCall(invocation)]),
+        result.message("foo"),
+      ]
+    );
+  }
+
+  #[test]
+  fn render_active_waiting_spinner() {
     let mut transcript = Transcript::default();
 
     transcript.send("foo".into());
@@ -381,7 +1068,7 @@ mod tests {
   }
 
   #[test]
-  fn interrupted_rendering() {
+  fn render_interrupted_entry() {
     let mut transcript = Transcript::default();
 
     transcript.send("foo".into());
@@ -395,15 +1082,10 @@ mod tests {
       )]),
       Line::blank(),
     ]));
-
-    assert_eq!(
-      transcript.messages(),
-      vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
-    );
   }
 
   #[test]
-  fn reasoning_rendering() {
+  fn render_reasoning_activity() {
     let mut transcript = Transcript::default();
 
     transcript.send("foo".into());
@@ -432,127 +1114,10 @@ mod tests {
       Line::raw(" baz"),
       Line::blank(),
     ]));
-
-    assert_eq!(
-      transcript.messages(),
-      vec![
-        Message::User(vec![UserMessageContent::Text("foo".into())]),
-        Message::Agent(vec![
-          AgentMessageContent::Reasoning("bar".into()),
-          AgentMessageContent::Text("baz".into()),
-        ])
-      ]
-    );
   }
 
   #[test]
-  fn tool_messages() {
-    let mut transcript = Transcript::default();
-
-    let invocation = ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
-        cwd: None,
-        program: "echo".into(),
-      }),
-    };
-
-    transcript.push_tool_call(invocation.clone());
-
-    assert_eq!(
-      transcript.messages(),
-      vec![Message::Agent(vec![AgentMessageContent::ToolCall(
-        invocation.clone(),
-      )])]
-    );
-
-    let result = ToolResult::command(Some(0), "bar\n", "");
-
-    transcript.push_tool_result("foo", result.clone());
-
-    assert_eq!(
-      transcript.messages(),
-      vec![
-        Message::Agent(vec![AgentMessageContent::ToolCall(invocation)]),
-        result.message("foo")
-      ]
-    );
-  }
-
-  #[test]
-  fn reasoning_is_preserved_with_tool_messages() {
-    let mut transcript = Transcript::default();
-
-    let invocation = ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
-        cwd: None,
-        program: "echo".into(),
-      }),
-    };
-
-    transcript.push_agent_reasoning_delta("baz");
-    transcript.push_tool_call(invocation.clone());
-
-    assert_eq!(
-      transcript.messages(),
-      vec![Message::Agent(vec![
-        AgentMessageContent::Reasoning("baz".into()),
-        AgentMessageContent::ToolCall(invocation),
-      ])]
-    );
-  }
-
-  #[test]
-  fn adjacent_tool_messages_share_an_agent_message() {
-    let mut transcript = Transcript::default();
-
-    let foo = ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
-        cwd: None,
-        program: "echo".into(),
-      }),
-    };
-
-    let baz = ToolInvocation {
-      id: "baz".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
-        cwd: None,
-        program: "echo".into(),
-      }),
-    };
-
-    transcript.push_agent_reasoning_delta("foo");
-    transcript.push_tool_call(foo.clone());
-    transcript.push_tool_call(baz.clone());
-
-    let foo_result = ToolResult::content("bar");
-    let baz_result = ToolResult::content("bar");
-
-    transcript.push_tool_result("foo", foo_result.clone());
-    transcript.push_tool_result("baz", baz_result.clone());
-
-    assert_eq!(
-      transcript.messages(),
-      vec![
-        Message::Agent(vec![
-          AgentMessageContent::Reasoning("foo".into()),
-          AgentMessageContent::ToolCall(foo),
-          AgentMessageContent::ToolCall(baz),
-        ]),
-        foo_result.message("foo"),
-        baz_result.message("baz"),
-      ]
-    );
-  }
-
-  #[test]
-  fn tool_rendering_spacing() {
+  fn render_tool_spacing() {
     let mut transcript = Transcript::default();
 
     let invocation = ToolInvocation {
@@ -589,5 +1154,75 @@ mod tests {
         Line::blank(),
       ]
     );
+  }
+
+  #[test]
+  fn send_resets_active_activity() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_delta("foo");
+    transcript.tick(Duration::from_secs(1));
+    transcript.send("bar".into());
+
+    assert_eq!(transcript.active_elapsed, Duration::ZERO);
+
+    assert_eq!(transcript.active_frame, 0);
+
+    assert!(matches!(
+      &transcript.active_agent_activity,
+      AgentActivity::Waiting
+    ));
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::User(vec![UserMessageContent::Text("bar".into())])]
+    );
+  }
+
+  #[test]
+  fn tick_advances_active_activity() {
+    let mut transcript = Transcript::default();
+
+    transcript.send("foo".into());
+    transcript.tick(Duration::from_secs(1));
+
+    assert_eq!(transcript.active_elapsed, Duration::from_secs(1));
+    assert_eq!(transcript.active_frame, 1);
+  }
+
+  #[test]
+  fn tick_ignores_idle_activity() {
+    let mut transcript = Transcript::default();
+
+    transcript.tick(Duration::from_secs(1));
+
+    assert_eq!(transcript.active_elapsed, Duration::ZERO);
+    assert_eq!(transcript.active_frame, 0);
+  }
+
+  #[test]
+  fn tick_saturates_active_elapsed() {
+    let mut transcript = Transcript::default();
+
+    transcript.send("foo".into());
+    transcript.active_elapsed = Duration::MAX;
+    transcript.active_frame = usize::MAX;
+    transcript.tick(Duration::from_secs(1));
+
+    assert_eq!(transcript.active_elapsed, Duration::MAX);
+    assert_eq!(transcript.active_frame, 0);
+  }
+
+  #[test]
+  fn with_entries_uses_entries() {
+    let transcript =
+      Transcript::with_entries(vec![TranscriptEntry::User("foo".into())]);
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
+    );
+
+    assert!(!transcript.is_agent_active());
   }
 }
