@@ -126,39 +126,64 @@ mod tests {
   use super::*;
 
   #[test]
-  fn render_active_waiting_spinner() {
-    let mut transcript = Transcript::default();
+  fn render_active_reasoning() {
+    let transcript = Transcript {
+      active_agent_activity: AgentActivity::Reasoning("foo\nbar".into()),
+      active_elapsed: Duration::from_secs(61),
+      active_frame: 1,
+      entries: Vec::new(),
+    };
 
-    transcript.send("foo".into());
-
-    for elapsed in [
-      Duration::from_secs(30),
-      Duration::from_secs(30),
-      Duration::from_secs(30),
-      Duration::from_secs(21),
-    ] {
-      transcript.tick(elapsed);
-    }
-
-    assert!(
-      TranscriptComponent::new(&transcript)
-        .render(80)
-        .ends_with(&[
-          Line::from([
-            Span::styled("✶", Style::CyanBold),
-            Span::styled(" Working...", Style::Gray),
-            Span::styled(" (1m 51s • esc to interrupt)", Style::DarkGray),
-          ]),
-          Line::blank(),
-        ])
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        Line::from([Span::styled(" foo", Style::DarkGray)]),
+        Line::from([Span::styled(" bar", Style::DarkGray)]),
+        Line::blank(),
+        Line::from([
+          Span::styled("✧", Style::CyanBold),
+          Span::styled(" Working...", Style::Gray),
+          Span::styled(" (1m 1s • esc to interrupt)", Style::DarkGray),
+        ]),
+        Line::blank(),
+      ]
     );
+  }
 
-    transcript.push_agent_delta("bar");
+  #[test]
+  fn render_active_streaming() {
+    let transcript = Transcript {
+      active_agent_activity: AgentActivity::Streaming("foo\nbar".into()),
+      active_elapsed: Duration::ZERO,
+      active_frame: 0,
+      entries: Vec::new(),
+    };
 
-    assert!(
-      TranscriptComponent::new(&transcript)
-        .render(80)
-        .ends_with(&[Line::raw(" bar"), Line::blank(),])
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [Line::raw(" foo"), Line::raw(" bar"), Line::blank()]
+    );
+  }
+
+  #[test]
+  fn render_active_waiting() {
+    let transcript = Transcript {
+      active_agent_activity: AgentActivity::Waiting,
+      active_elapsed: Duration::from_secs(111),
+      active_frame: 2,
+      entries: Vec::new(),
+    };
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        Line::from([
+          Span::styled("✶", Style::CyanBold),
+          Span::styled(" Working...", Style::Gray),
+          Span::styled(" (1m 51s • esc to interrupt)", Style::DarkGray),
+        ]),
+        Line::blank(),
+      ]
     );
   }
 
@@ -179,65 +204,72 @@ mod tests {
   }
 
   #[test]
+  fn render_empty_transcript() {
+    let transcript = Transcript::default();
+
+    assert_eq!(TranscriptComponent::new(&transcript).render(80), []);
+  }
+
+  #[test]
+  fn render_entry_spacing() {
+    let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::Agent("foo".into()),
+      TranscriptEntry::Reasoning("bar".into()),
+      TranscriptEntry::Agent("baz".into()),
+    ]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        Line::blank(),
+        Line::raw(" foo"),
+        Line::blank(),
+        Line::from([Span::styled(" bar", Style::DarkGray)]),
+        Line::blank(),
+        Line::raw(" baz"),
+        Line::blank(),
+      ]
+    );
+  }
+
+  #[test]
   fn render_interrupted_entry() {
-    let mut transcript = Transcript::default();
+    let transcript =
+      Transcript::with_entries(vec![TranscriptEntry::Interrupted]);
 
-    transcript.send("foo".into());
-    transcript.interrupt();
-
-    assert!(TranscriptComponent::new(&transcript).render(80).ends_with(&[
-      Line::blank(),
-      Line::from([Span::styled(
-        "■ Conversation interrupted, tell the model what to do differently.",
-        Style::RedBold,
-      )]),
-      Line::blank(),
-    ]));
-  }
-
-  #[test]
-  fn render_reasoning_activity() {
-    let mut transcript = Transcript::default();
-
-    transcript.send("foo".into());
-    transcript.tick(Duration::from_millis(120));
-    transcript.push_agent_reasoning_delta("bar");
-
-    assert!(
-      TranscriptComponent::new(&transcript)
-        .render(80)
-        .ends_with(&[
-          Line::from([Span::styled(" bar", Style::DarkGray)]),
-          Line::blank(),
-          Line::from([
-            Span::styled("✧", Style::CyanBold),
-            Span::styled(" Working...", Style::Gray),
-            Span::styled(" (0s • esc to interrupt)", Style::DarkGray),
-          ]),
-          Line::blank(),
-        ])
-    );
-
-    transcript.push_agent_delta("baz");
-    transcript.finish_agent_activity();
-
-    assert!(
-      TranscriptComponent::new(&transcript)
-        .render(80)
-        .ends_with(&[
-          Line::blank(),
-          Line::from([Span::styled(" bar", Style::DarkGray)]),
-          Line::blank(),
-          Line::raw(" baz"),
-          Line::blank(),
-        ])
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        Line::blank(),
+        Line::from([Span::styled(
+          "■ Conversation interrupted, tell the model what to do differently.",
+          Style::RedBold,
+        )]),
+        Line::blank(),
+      ]
     );
   }
 
   #[test]
-  fn render_tool_spacing() {
-    let mut transcript = Transcript::default();
+  fn render_reasoning_entry_handles_multiline_content() {
+    let transcript =
+      Transcript::with_entries(vec![TranscriptEntry::Reasoning(
+        "foo\nbar".into(),
+      )]);
 
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        Line::blank(),
+        Line::from([Span::styled(" foo", Style::DarkGray)]),
+        Line::from([Span::styled(" bar", Style::DarkGray)]),
+        Line::blank(),
+      ]
+    );
+  }
+
+  #[test]
+  fn render_tool_entry_after_agent() {
     let invocation = ToolInvocation {
       id: "bar".into(),
       kind: ToolInvocationKind::ListFiles(ListFilesTool {
@@ -245,13 +277,13 @@ mod tests {
       }),
     };
 
-    transcript.push_agent("foo");
-    transcript.push_tool_call(invocation);
-
-    transcript
-      .push_tool_result("bar", ToolResult::command(Some(0), "baz\n", ""));
-
-    transcript.finish_agent_activity();
+    let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::Agent("foo".into()),
+      TranscriptEntry::Tool {
+        invocation,
+        result: Some(ToolResult::command(Some(0), "baz\n", "")),
+      },
+    ]);
 
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
@@ -275,9 +307,168 @@ mod tests {
   }
 
   #[test]
+  fn render_tool_entry_after_user() {
+    let invocation = ToolInvocation {
+      id: "bar".into(),
+      kind: ToolInvocationKind::ListFiles(ListFilesTool { cwd: None }),
+    };
+
+    let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::User("foo".into()),
+      TranscriptEntry::Tool {
+        invocation,
+        result: None,
+      },
+    ]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        Line::from([Span::styled("─".repeat(80), Style::DarkGray)]),
+        Line::raw("foo"),
+        Line::from([Span::styled("─".repeat(80), Style::DarkGray)]),
+        Line::blank(),
+        Line::from([
+          Span::raw(" "),
+          Span::styled("●", Style::CyanBold),
+          Span::raw(" "),
+          Span::raw("Listing files"),
+        ]),
+        Line::blank(),
+      ]
+    );
+  }
+
+  #[test]
+  fn render_tool_entry_failed() {
+    let invocation = ToolInvocation {
+      id: "bar".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
+        cwd: Some("baz".into()),
+        program: "foo".into(),
+      }),
+    };
+
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::Tool {
+      invocation,
+      result: Some(ToolResult::command(Some(1), "qux\n", "quux")),
+    }]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        Line::blank(),
+        Line::from([
+          Span::raw(" "),
+          Span::styled("●", Style::RedBold),
+          Span::raw(" "),
+          Span::raw("Failed running foo bar"),
+        ]),
+        Line::from([
+          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("cwd ", Style::DarkGray),
+          Span::raw("baz"),
+        ]),
+        Line::from([
+          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("exit ", Style::DarkGray),
+          Span::raw("1"),
+        ]),
+        Line::from([
+          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("qux", Style::DarkGray),
+        ]),
+        Line::from([
+          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("quux", Style::DarkGray),
+        ]),
+        Line::blank(),
+      ]
+    );
+  }
+
+  #[test]
+  fn render_tool_entry_limits_output() {
+    let invocation = ToolInvocation {
+      id: "bar".into(),
+      kind: ToolInvocationKind::ListFiles(ListFilesTool { cwd: None }),
+    };
+
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::Tool {
+      invocation,
+      result: Some(ToolResult::command(
+        Some(0),
+        "foobarbaz\n\nbar\nbaz\nqux\n",
+        "",
+      )),
+    }]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(10),
+      [
+        Line::blank(),
+        Line::from([
+          Span::raw(" "),
+          Span::styled("●", Style::GreenBold),
+          Span::raw(" "),
+          Span::raw("Listed files"),
+        ]),
+        Line::from([
+          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("fooba...", Style::DarkGray),
+        ]),
+        Line::from([
+          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("bar", Style::DarkGray),
+        ]),
+        Line::from([
+          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("baz", Style::DarkGray),
+        ]),
+        Line::from([
+          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("... 1 more line", Style::DarkGray),
+        ]),
+        Line::blank(),
+      ]
+    );
+  }
+
+  #[test]
+  fn render_tool_entry_pending() {
+    let invocation = ToolInvocation {
+      id: "bar".into(),
+      kind: ToolInvocationKind::ListFiles(ListFilesTool {
+        cwd: Some("baz".into()),
+      }),
+    };
+
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::Tool {
+      invocation,
+      result: None,
+    }]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        Line::blank(),
+        Line::from([
+          Span::raw(" "),
+          Span::styled("●", Style::CyanBold),
+          Span::raw(" "),
+          Span::raw("Listing files in baz"),
+        ]),
+        Line::blank(),
+      ]
+    );
+  }
+
+  #[test]
   fn render_user_entry_uses_width() {
-    let transcript =
-      Transcript::with_entries(vec![TranscriptEntry::User("foobar".into())]);
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::User(
+      "foobar\nbaz".into(),
+    )]);
 
     assert_eq!(
       TranscriptComponent::new(&transcript).render(3),
@@ -285,6 +476,7 @@ mod tests {
         Line::from([Span::styled("───", Style::DarkGray)]),
         Line::raw("foo"),
         Line::raw("bar"),
+        Line::raw("baz"),
         Line::from([Span::styled("───", Style::DarkGray)]),
       ]
     );
