@@ -43,6 +43,7 @@ impl SessionStore {
 
   pub(crate) fn list() -> Result<Vec<SessionSummary>> {
     let cwd = env::current_dir().context("failed to read current directory")?;
+
     let directory = Self::sessions_dir()?;
 
     let entries = match fs::read_dir(&directory) {
