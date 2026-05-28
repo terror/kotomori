@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct State {
   pub(crate) composer: Composer,
+  pub(crate) footer: FooterComponent,
   pub(crate) input_mode: InputMode,
   session: Session,
   pub(crate) should_quit: bool,
@@ -232,8 +233,8 @@ impl State {
     session.set_model(&settings.model);
 
     Ok(Self {
-      composer: Composer::new(settings.prompt.as_deref().unwrap_or_default())
-        .footer(Footer::try_from(&settings.model)?),
+      composer: Composer::new(settings.prompt.as_deref().unwrap_or_default()),
+      footer: FooterComponent::try_from(&settings.model)?,
       input_mode: InputMode::Compose,
       session,
       should_quit: false,

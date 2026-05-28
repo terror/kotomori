@@ -25,6 +25,7 @@ impl Component for View<'_> {
         }
         InputMode::Compose => self.state.composer.render(width),
       })
+      .chain(self.state.footer.render(width))
       .collect()
   }
 }
@@ -52,5 +53,64 @@ mod tests {
         .iter()
         .any(|line| line.to_string().contains("mock · local ·"))
     );
+  }
+
+  #[test]
+  fn footer_renders_below_approval_prompt() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    })
+    .unwrap();
+
+    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "bar".into(),
+      }),
+    });
+
+    state.input_mode = InputMode::Approval(request);
+
+    let lines = View::new(&state).render(80);
+
+    let approval = lines
+      .iter()
+      .position(|line| line.to_string().contains("deny"))
+      .unwrap();
+
+    let footer = lines
+      .iter()
+      .position(|line| line.to_string().contains("mock · local ·"))
+      .unwrap();
+
+    assert!(footer > approval);
+  }
+
+  #[test]
+  fn footer_renders_below_command_menu() {
+    let state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("/".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    let lines = View::new(&state).render(80);
+
+    let command = lines
+      .iter()
+      .position(|line| line.to_string().contains("/quit"))
+      .unwrap();
+
+    let footer = lines
+      .iter()
+      .position(|line| line.to_string().contains("mock · local ·"))
+      .unwrap();
+
+    assert!(footer > command);
   }
 }

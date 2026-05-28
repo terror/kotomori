@@ -1,10 +1,12 @@
 use super::*;
 
+mod footer;
 mod framed_lines;
 mod header;
 mod hint;
 mod transcript;
 
+pub(crate) use footer::FooterComponent;
 pub(crate) use framed_lines::FramedLinesComponent;
 pub(crate) use header::HeaderComponent;
 pub(crate) use hint::HintComponent;

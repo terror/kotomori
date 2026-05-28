@@ -13,8 +13,8 @@ use {
   clap::{Args, Parser},
   command::Command,
   component::{
-    Component, FramedLinesComponent, HeaderComponent, HintComponent,
-    TranscriptComponent,
+    Component, FooterComponent, FramedLinesComponent, HeaderComponent,
+    HintComponent, TranscriptComponent,
   },
   composer::Composer,
   config::Config,
@@ -40,7 +40,6 @@ use {
   event::Event,
   execution_limit::ExecutionLimit,
   executor::Executor,
-  footer::Footer,
   frame::Frame,
   futures_util::StreamExt,
   indoc::indoc,
@@ -212,7 +211,6 @@ mod effect;
 mod event;
 mod execution_limit;
 mod executor;
-mod footer;
 mod frame;
 mod gemini {
   pub(crate) type Client = super::GeminiClient;
