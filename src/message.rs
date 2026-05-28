@@ -48,7 +48,7 @@ impl Component for Message {
         .iter()
         .flat_map(|content| match content {
           UserMessageContent::Text(text) => {
-            FramedLines::raw(text.split('\n')).render(width)
+            FramedLinesComponent::raw(text.split('\n')).render(width)
           }
           UserMessageContent::ToolResult { result, .. } => result
             .output()
