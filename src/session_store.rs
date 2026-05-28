@@ -4,20 +4,6 @@ use super::*;
 pub(crate) struct SessionStore;
 
 impl SessionStore {
-  pub(crate) fn compact(text: &str) -> String {
-    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-
-    let mut chars = text.chars();
-
-    let title = chars.by_ref().take(80).collect::<String>();
-
-    if chars.next().is_some() {
-      format!("{title}...")
-    } else {
-      title
-    }
-  }
-
   pub(crate) fn display_directory(path: &Path) -> String {
     match env::var_os("HOME").map(PathBuf::from) {
       Some(home) => match path.strip_prefix(home) {

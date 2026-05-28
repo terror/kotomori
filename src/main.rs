@@ -142,6 +142,7 @@ use {
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
   },
+  str_ext::StrExt,
   strum::{EnumIter, IntoEnumIterator},
   style::Style,
   subcommand::Subcommand,
@@ -267,6 +268,7 @@ mod session_summary;
 mod settings;
 mod span;
 mod state;
+mod str_ext;
 mod style;
 mod subcommand;
 mod terminal;
