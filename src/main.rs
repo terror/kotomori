@@ -14,7 +14,7 @@ use {
   command::Command,
   component::{
     Component, FooterComponent, FramedLinesComponent, HeaderComponent,
-    HintComponent, TranscriptComponent,
+    ViewComponent,
   },
   composer::Composer,
   config::Config,
@@ -173,7 +173,6 @@ use {
   transcript_tool_invocation::TranscriptToolInvocation,
   unicode_width::UnicodeWidthChar,
   user_message_content::UserMessageContent,
-  view::View,
   viewport::Viewport,
   write_ext::WriteExt,
 };
@@ -291,7 +290,6 @@ mod transcript;
 mod transcript_entry;
 mod transcript_tool_invocation;
 mod user_message_content;
-mod view;
 mod viewport;
 mod write_ext;
 mod xai {
