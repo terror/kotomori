@@ -167,7 +167,6 @@ use {
   },
   transcript::Transcript,
   transcript_entry::TranscriptEntry,
-  transcript_tool_invocation::TranscriptToolInvocation,
   unicode_width::UnicodeWidthChar,
   user_message_content::UserMessageContent,
   viewport::Viewport,
@@ -285,7 +284,6 @@ mod tool_result;
 mod tool_spec;
 mod transcript;
 mod transcript_entry;
-mod transcript_tool_invocation;
 mod user_message_content;
 mod viewport;
 mod write_ext;

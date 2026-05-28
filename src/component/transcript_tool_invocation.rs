@@ -1,24 +1,22 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct TranscriptToolInvocation<'a> {
+pub(crate) struct TranscriptToolInvocationComponent<'a> {
   invocation: &'a ToolInvocation,
   result: Option<&'a ToolResult>,
 }
 
-impl<'a> TranscriptToolInvocation<'a> {
+impl<'a> TranscriptToolInvocationComponent<'a> {
   const GUTTER: &'static str = "   │ ";
   const OUTPUT_LIMIT: usize = 3;
 
   fn details(&self) -> Vec<(&'static str, String)> {
     let mut details = self.invocation.kind.details();
 
-    if let Some(exit_status) = self
-      .result
-      .and_then(|result| result.exit_status)
-      .filter(|exit_status| *exit_status != 0)
-    {
-      details.push(("exit", exit_status.to_string()));
+    let exit_status = self.result.and_then(|result| result.exit_status);
+
+    if matches!(exit_status, Some(status) if status != 0) {
+      details.push(("exit", exit_status.unwrap().to_string()));
     }
 
     details
@@ -29,13 +27,6 @@ impl<'a> TranscriptToolInvocation<'a> {
     result: Option<&'a ToolResult>,
   ) -> Self {
     Self { invocation, result }
-  }
-
-  fn output_line(value: impl Into<String>) -> Line {
-    Line::from([
-      Span::styled(Self::GUTTER, Style::DarkGray),
-      Span::styled(value.into(), Style::DarkGray),
-    ])
   }
 
   fn preview(line: &str, width: usize) -> String {
@@ -65,23 +56,19 @@ impl<'a> TranscriptToolInvocation<'a> {
 
     preview
   }
+}
 
-  fn status(&self) -> (&'static str, Style, String) {
-    match self.result {
+impl Component for TranscriptToolInvocationComponent<'_> {
+  fn render(&self, width: u16) -> Vec<Line> {
+    let mut lines = Vec::new();
+
+    let (symbol, symbol_style, title) = match self.result {
       Some(result) if result.is_error() => {
         ("●", Style::RedBold, self.invocation.failed_tense())
       }
       Some(_) => ("●", Style::GreenBold, self.invocation.completed_tense()),
       None => ("●", Style::CyanBold, self.invocation.progressive_tense()),
-    }
-  }
-}
-
-impl Component for TranscriptToolInvocation<'_> {
-  fn render(&self, width: u16) -> Vec<Line> {
-    let mut lines = Vec::new();
-
-    let (symbol, symbol_style, title) = self.status();
+    };
 
     lines.push(Line::from([
       Span::raw(" "),
@@ -106,20 +93,26 @@ impl Component for TranscriptToolInvocation<'_> {
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>();
 
-      lines.extend(
-        output_lines
-          .iter()
-          .take(Self::OUTPUT_LIMIT)
-          .map(|line| Self::output_line(Self::preview(line, output_width))),
-      );
+      lines.extend(output_lines.iter().take(Self::OUTPUT_LIMIT).map(|line| {
+        Line::from([
+          Span::styled(Self::GUTTER, Style::DarkGray),
+          Span::styled(Self::preview(line, output_width), Style::DarkGray),
+        ])
+      }));
 
       let omitted = output_lines.len().saturating_sub(Self::OUTPUT_LIMIT);
 
       if omitted > 0 {
-        lines.push(Self::output_line(format!(
-          "... {omitted} more {}",
-          if omitted == 1 { "line" } else { "lines" }
-        )));
+        lines.push(Line::from([
+          Span::styled(Self::GUTTER, Style::DarkGray),
+          Span::styled(
+            format!(
+              "... {omitted} more {}",
+              if omitted == 1 { "line" } else { "lines" }
+            ),
+            Style::DarkGray,
+          ),
+        ]));
       }
     }
 
