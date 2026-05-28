@@ -94,51 +94,55 @@ mod tests {
 
   #[test]
   fn chat_messages() {
+    let messages = vec![
+      Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
+      Message::User(vec![UserMessageContent::Text("foo".into())]),
+    ];
+
     let request = Request::new(
-      "mock:foo".parse().unwrap(),
-      vec![
-        Message::User(vec![UserMessageContent::Text("foo".into())]),
-        Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
-      ],
-      ToolRegistry::default(),
+      Model {
+        name: "foo".into(),
+        provider: "mock".into(),
+      },
+      messages.clone(),
+      ToolRegistry::new(Vec::new()),
     );
 
+    assert_eq!(request.messages, messages);
     assert_eq!(request.model.name, "foo");
-
-    assert_eq!(
-      request.messages,
-      vec![
-        Message::User(vec![UserMessageContent::Text("foo".into())]),
-        Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
-      ],
-    );
   }
 
   #[test]
   fn last_user_message() {
+    let last_user_message =
+      Message::User(vec![UserMessageContent::Text("baz".into())]);
+
     let request = Request::new(
-      "mock:foo".parse().unwrap(),
+      Model {
+        name: "foo".into(),
+        provider: "mock".into(),
+      },
       vec![
-        Message::User(vec![UserMessageContent::Text("foo".into())]),
         Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
-        Message::User(vec![UserMessageContent::Text("baz".into())]),
+        Message::User(vec![UserMessageContent::Text("foo".into())]),
+        last_user_message.clone(),
       ],
-      ToolRegistry::default(),
+      ToolRegistry::new(Vec::new()),
     );
 
-    assert_eq!(
-      request.last_user_message().unwrap().content().unwrap(),
-      "baz"
-    );
+    assert_eq!(request.last_user_message().unwrap(), &last_user_message);
   }
 
   #[test]
   fn rig_system_context() {
     let request = CompletionRequest::from(&Request::with_system(
-      "mock:foo".parse().unwrap(),
+      Model {
+        name: "foo".into(),
+        provider: "mock".into(),
+      },
       vec![Message::User(vec![UserMessageContent::Text("bar".into())])],
       "baz",
-      ToolRegistry::default(),
+      ToolRegistry::new(Vec::new()),
     ));
 
     assert_eq!(
@@ -149,54 +153,29 @@ mod tests {
 
   #[test]
   fn rig_tools() {
+    let parameters = json!({"type": "object"});
+
     let request = CompletionRequest::from(&Request::new(
-      "mock:foo".parse().unwrap(),
+      Model {
+        name: "foo".into(),
+        provider: "mock".into(),
+      },
       vec![Message::User(vec![UserMessageContent::Text("bar".into())])],
-      ToolRegistry::new(vec![Tool::new::<ReadFileTool>()]),
+      ToolRegistry::new(vec![Tool {
+        description: "bar",
+        invocation: |_| unreachable!(),
+        name: "foo",
+        parameters: parameters.clone(),
+      }]),
     ));
 
     assert_eq!(
-      serde_json::to_value(request.tools).unwrap(),
-      json!([
-        {
-          "name": "read_file",
-          "description": "Read a UTF-8 text file. start_line and end_line are optional 1-based inclusive line numbers.",
-          "parameters": {
-            "additionalProperties": false,
-            "properties": {
-              "cwd": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "end_line": {
-                "format": "uint",
-                "minimum": 0,
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "path": {
-                "type": "string"
-              },
-              "start_line": {
-                "format": "uint",
-                "minimum": 0,
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "path"
-            ],
-            "type": "object"
-          },
-        },
-      ]),
+      request.tools,
+      vec![ToolDefinition {
+        description: "bar".into(),
+        name: "foo".into(),
+        parameters,
+      }],
     );
   }
 }
