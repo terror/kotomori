@@ -124,7 +124,7 @@ impl Component for Composer {
 
     let selected = self.selected_command_index();
 
-    let mut lines = FramedLines::new(
+    let mut lines = FramedLinesComponent::new(
       self.textarea.lines().iter().enumerate().map(|(row, line)| {
         if cursor.0 != row {
           return Line::raw(line);

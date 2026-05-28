@@ -12,7 +12,10 @@ use {
   changed_range::ChangedRange,
   clap::{Args, Parser},
   command::Command,
-  component::{Component, HeaderComponent, HintComponent, TranscriptComponent},
+  component::{
+    Component, FramedLinesComponent, HeaderComponent, HintComponent,
+    TranscriptComponent,
+  },
   composer::Composer,
   config::Config,
   crossterm::{
@@ -39,7 +42,6 @@ use {
   executor::Executor,
   footer::Footer,
   frame::Frame,
-  framed_lines::FramedLines,
   futures_util::StreamExt,
   indoc::indoc,
   input_mode::InputMode,
@@ -212,7 +214,6 @@ mod execution_limit;
 mod executor;
 mod footer;
 mod frame;
-mod framed_lines;
 mod gemini {
   pub(crate) type Client = super::GeminiClient;
   pub(crate) type CompletionModel = super::GeminiCompletionModel;

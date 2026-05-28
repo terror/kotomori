@@ -1,11 +1,11 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-pub(crate) struct FramedLines {
+pub(crate) struct FramedLinesComponent {
   lines: Vec<Line>,
 }
 
-impl FramedLines {
+impl FramedLinesComponent {
   pub(crate) fn new(lines: impl IntoIterator<Item = Line>) -> Self {
     Self {
       lines: lines.into_iter().collect(),
@@ -17,7 +17,7 @@ impl FramedLines {
   }
 }
 
-impl Component for FramedLines {
+impl Component for FramedLinesComponent {
   fn render(&self, width: u16) -> Vec<Line> {
     let width = width.max(1);
 
@@ -40,7 +40,7 @@ mod tests {
   #[test]
   fn render_wraps_lines_between_borders() {
     assert_eq!(
-      FramedLines::raw(["foobar"]).render(3),
+      FramedLinesComponent::raw(["foobar"]).render(3),
       [
         Line::from([Span::styled("───", Style::DarkGray)]),
         Line::raw("foo"),
