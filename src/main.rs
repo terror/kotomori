@@ -282,6 +282,8 @@ mod together {
   pub(crate) type Client = super::TogetherClient;
   pub(crate) type CompletionModel = super::TogetherCompletionModel;
 }
+#[macro_use]
+mod tools;
 mod tool;
 mod tool_action_tense;
 mod tool_approval;
@@ -290,7 +292,6 @@ mod tool_invocation_kind;
 mod tool_registry;
 mod tool_result;
 mod tool_spec;
-mod tools;
 mod transcript;
 mod transcript_entry;
 mod transcript_tool_invocation;
