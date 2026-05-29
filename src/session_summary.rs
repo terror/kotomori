@@ -30,7 +30,7 @@ impl SessionSummary {
     format!(
       "{} · {} · {}",
       self.model,
-      self.cwd.directory_display(),
+      DirectoryDisplay::new(&self.cwd),
       self.age()
     )
   }
@@ -52,7 +52,7 @@ impl SessionSummary {
       .or_else(|| Session::title(&file.entries))
       .unwrap_or_else(|| "Untitled session".into());
 
-    let directory = file.cwd.directory_display();
+    let directory = DirectoryDisplay::new(&file.cwd);
 
     let search = format!("{} {} {} {}", title, file.model, directory, file.id)
       .chars()

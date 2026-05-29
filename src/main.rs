@@ -48,7 +48,6 @@ use {
   model::Model,
   options::Options,
   patch_plan::PatchPlan,
-  path_ext::PathExt,
   presented_frame::PresentedFrame,
   provider::{Mock, Provider, Rig},
   provider_output::ProviderOutput,
@@ -244,7 +243,6 @@ mod openrouter {
 }
 mod options;
 mod patch_plan;
-mod path_ext;
 mod perplexity {
   pub(crate) type Client = super::PerplexityClient;
   pub(crate) type CompletionModel = super::PerplexityCompletionModel;
