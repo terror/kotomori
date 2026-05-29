@@ -156,13 +156,7 @@ impl Renderer {
       stdout.clear_screen()?;
     }
 
-    let lines = if clear {
-      &next.lines[next.len().saturating_sub(next.dimensions.height)..]
-    } else {
-      &next.lines
-    };
-
-    stdout.write_lines(lines)?;
+    stdout.write_lines(&next.lines)?;
 
     stdout.end_synchronized_update()?;
 
@@ -496,7 +490,7 @@ mod tests {
   }
 
   #[test]
-  fn full_render_clips_to_height_when_clearing() {
+  fn full_render_rebuilds_scrollback_when_clearing() {
     let mut stdout = Vec::new();
 
     Renderer::full_render(
@@ -514,7 +508,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
+      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
     );
   }
 
@@ -656,7 +650,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
+      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kqux\r\n\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
     );
   }
 
@@ -724,7 +718,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(stdout).unwrap(),
-      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\r\n\x1b[1G\x1b[2Kqux\r\n\x1b[1G\x1b[2Kquux\x1b[?2026l",
+      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\r\n\x1b[1G\x1b[2Kqux\r\n\x1b[1G\x1b[2Kquux\x1b[?2026l",
     );
 
     assert_eq!(
