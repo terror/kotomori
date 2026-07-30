@@ -84,6 +84,14 @@ impl<'a> TranscriptComponent<'a> {
 
           lines.push(LineComponent::blank());
         }
+        TranscriptEntry::Error(error) => {
+          if !matches!(lines.last(), Some(line) if line == &LineComponent::blank())
+          {
+            lines.push(LineComponent::blank());
+          }
+
+          lines.extend(TranscriptErrorComponent::new(error).render(width));
+        }
         TranscriptEntry::Interrupted => {
           lines.extend([
             LineComponent::blank(),
@@ -236,6 +244,30 @@ mod tests {
     let transcript = Transcript::default();
 
     assert_eq!(TranscriptComponent::new(&transcript).render(80), []);
+  }
+
+  #[test]
+  fn render_error_entry() {
+    let transcript =
+      Transcript::with_entries(vec![TranscriptEntry::Error("foo".into())]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        LineComponent::blank(),
+        LineComponent::from([
+          Span::raw(" "),
+          Span::styled("●", Style::RedBold),
+          Span::raw(" "),
+          Span::raw("Error"),
+        ]),
+        LineComponent::from([
+          Span::styled("   │ ", Style::DarkGray),
+          Span::raw("foo"),
+        ]),
+        LineComponent::blank(),
+      ]
+    );
   }
 
   #[test]

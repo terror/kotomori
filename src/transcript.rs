@@ -18,7 +18,7 @@ impl Transcript {
   pub(crate) fn error(&mut self, error: String) {
     self.active_agent_activity = AgentActivity::Idle;
     self.active_elapsed = Duration::ZERO;
-    self.entries.push(TranscriptEntry::Agent(error));
+    self.entries.push(TranscriptEntry::Error(error));
   }
 
   fn find_tool_result_mut(
@@ -72,7 +72,7 @@ impl Transcript {
         TranscriptEntry::Agent(content) => {
           agent_content.push(AgentMessageContent::Text(content.clone()));
         }
-        TranscriptEntry::Interrupted => {}
+        TranscriptEntry::Error(_) | TranscriptEntry::Interrupted => {}
         TranscriptEntry::Reasoning(reasoning) => {
           agent_content.push(AgentMessageContent::Reasoning(reasoning.clone()));
         }
@@ -251,12 +251,12 @@ mod tests {
 
     assert_eq!(transcript.active_elapsed, Duration::ZERO);
 
-    assert_eq!(
-      transcript.messages(),
-      vec![Message::Agent(vec![AgentMessageContent::Text(
-        "bar".into()
-      )])]
-    );
+    assert!(transcript.messages().is_empty());
+
+    assert!(matches!(
+      &transcript.entries[..],
+      [TranscriptEntry::Error(error)] if error == "bar"
+    ));
   }
 
   #[test]

@@ -59,6 +59,7 @@ impl Session {
         (!title.is_empty()).then_some(title)
       }
       TranscriptEntry::Agent(_)
+      | TranscriptEntry::Error(_)
       | TranscriptEntry::Interrupted
       | TranscriptEntry::Reasoning(_)
       | TranscriptEntry::Tool { .. } => None,
