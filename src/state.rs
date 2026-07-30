@@ -945,7 +945,7 @@ mod tests {
   }
 
   #[test]
-  fn error_clears_active_message() {
+  fn error_is_not_included_in_next_request() {
     let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
@@ -965,8 +965,8 @@ mod tests {
     state.handle_event(Event::Error("bar".into()));
 
     assert_eq!(
-      state.transcript.messages()[1],
-      Message::Agent(vec![AgentMessageContent::Text("bar".into())])
+      state.transcript.messages(),
+      [Message::User(vec![UserMessageContent::Text("foo".into())])]
     );
 
     for c in "baz".chars() {
@@ -981,7 +981,6 @@ mod tests {
       vec![Effect::RunAgent {
         messages: vec![
           Message::User(vec![UserMessageContent::Text("foo".into())]),
-          Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
           Message::User(vec![UserMessageContent::Text("baz".into())]),
         ]
       }]

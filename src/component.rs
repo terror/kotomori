@@ -9,6 +9,7 @@ mod hint;
 mod line;
 mod message;
 mod transcript;
+mod transcript_error;
 mod transcript_tool_invocation;
 mod view;
 
@@ -17,6 +18,7 @@ pub(crate) use {
   footer::FooterComponent, framed_lines::FramedLinesComponent,
   header::HeaderComponent, hint::HintComponent, line::LineComponent,
   message::MessageComponent, transcript::TranscriptComponent,
+  transcript_error::TranscriptErrorComponent,
   transcript_tool_invocation::TranscriptToolInvocationComponent,
   view::ViewComponent,
 };
