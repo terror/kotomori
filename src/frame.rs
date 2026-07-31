@@ -1,10 +1,5 @@
 use super::*;
 
-/// A fully rendered view of the application at one terminal size.
-///
-/// Rows are logical rows, not necessarily rows currently visible on screen.
-/// The renderer compares successive frames and then decides whether those
-/// logical rows can be patched in place or require a full redraw.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Frame {
   pub(crate) dimensions: Dimensions,

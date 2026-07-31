@@ -1,10 +1,5 @@
 use super::*;
 
-/// Maintains terminal presentation state across draws.
-///
-/// Rendering is incremental when possible. The renderer remembers the last
-/// presented frame, the logical cursor row, and the visible viewport so that
-/// later draws can patch changed rows without clearing the whole terminal.
 #[derive(Debug)]
 pub(crate) struct Renderer {
   max_lines_rendered: usize,

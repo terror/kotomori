@@ -8,12 +8,6 @@ pub(crate) struct ExecutionLimit {
 }
 
 impl ExecutionLimit {
-  /// Decode collected process output after applying the configured byte limit.
-  ///
-  /// Callers read one byte past the limit when possible so that truncation can
-  /// be detected without buffering unbounded output. When output is truncated,
-  /// the retained bytes may be shortened further to keep the marker within the
-  /// configured budget.
   pub(crate) fn decode(&self, mut bytes: Vec<u8>) -> String {
     let truncated = bytes.len() > self.output_limit;
 

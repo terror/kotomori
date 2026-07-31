@@ -1,10 +1,5 @@
 use super::*;
 
-/// The renderer's decision for turning a previous frame into the next one.
-///
-/// Full renders are used when terminal state is too uncertain or when a patch
-/// would need to write outside the visible viewport. Patches are used when the
-/// changed logical rows can be reached from the recorded cursor and viewport.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum RenderPlan<'a> {
   Full {
