@@ -332,7 +332,8 @@ mod tests {
   fn render_tool_entry_after_agent() {
     let invocation = ToolInvocation {
       id: "bar".into(),
-      kind: ToolInvocationKind::ListFiles(ListFilesTool {
+      kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
+        arguments: vec!["--files".into()],
         cwd: Some(".".into()),
       }),
     };
@@ -355,7 +356,7 @@ mod tests {
           Span::raw(" "),
           Span::styled("●", Style::GreenBold),
           Span::raw(" "),
-          Span::raw("Listed files in ."),
+          Span::raw("Searched --files in ."),
         ]),
         LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
@@ -370,7 +371,10 @@ mod tests {
   fn render_tool_entry_after_user() {
     let invocation = ToolInvocation {
       id: "bar".into(),
-      kind: ToolInvocationKind::ListFiles(ListFilesTool { cwd: None }),
+      kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
+        arguments: vec!["--files".into()],
+        cwd: None,
+      }),
     };
 
     let transcript = Transcript::with_entries(vec![
@@ -392,7 +396,7 @@ mod tests {
           Span::raw(" "),
           Span::styled("●", Style::CyanBold),
           Span::raw(" "),
-          Span::raw("Listing files"),
+          Span::raw("Searching --files"),
         ]),
         LineComponent::blank(),
       ]
@@ -452,7 +456,10 @@ mod tests {
   fn render_tool_entry_limits_output() {
     let invocation = ToolInvocation {
       id: "bar".into(),
-      kind: ToolInvocationKind::ListFiles(ListFilesTool { cwd: None }),
+      kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
+        arguments: vec!["--files".into()],
+        cwd: None,
+      }),
     };
 
     let transcript = Transcript::with_entries(vec![TranscriptEntry::Tool {
@@ -472,7 +479,7 @@ mod tests {
           Span::raw(" "),
           Span::styled("●", Style::GreenBold),
           Span::raw(" "),
-          Span::raw("Listed files"),
+          Span::raw("Searched --files"),
         ]),
         LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
@@ -499,7 +506,8 @@ mod tests {
   fn render_tool_entry_pending() {
     let invocation = ToolInvocation {
       id: "bar".into(),
-      kind: ToolInvocationKind::ListFiles(ListFilesTool {
+      kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
+        arguments: vec!["--files".into()],
         cwd: Some("baz".into()),
       }),
     };
@@ -517,7 +525,7 @@ mod tests {
           Span::raw(" "),
           Span::styled("●", Style::CyanBold),
           Span::raw(" "),
-          Span::raw("Listing files in baz"),
+          Span::raw("Searching --files in baz"),
         ]),
         LineComponent::blank(),
       ]
