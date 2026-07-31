@@ -241,8 +241,21 @@ impl Rig {
         {
           sink.reasoning_delta(id, reasoning)?;
         }
-        StreamedAssistantContent::ToolCall { tool_call, .. } => {
-          sink.tool_call(tool_call.into())?;
+        StreamedAssistantContent::ToolCall {
+          tool_call,
+          internal_call_id,
+        } => {
+          let id = if tool_call.id.is_empty() {
+            internal_call_id
+          } else {
+            tool_call.id
+          };
+
+          sink.tool_call(RawToolCall {
+            arguments: tool_call.function.arguments,
+            id,
+            name: tool_call.function.name,
+          })?;
         }
         StreamedAssistantContent::Final(_)
         | StreamedAssistantContent::ReasoningDelta { .. }
