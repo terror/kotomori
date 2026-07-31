@@ -1,8 +1,3 @@
-/// The visible terminal window over a logical frame.
-///
-/// `top` is the logical row shown at screen row zero, while `height` is the
-/// current terminal height. Rows below `bottom` may exist in the frame but are
-/// not currently addressable without scrolling.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Viewport {
   pub(crate) height: usize,

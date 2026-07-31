@@ -1,11 +1,5 @@
 use super::*;
 
-/// A frame difference together with enough length information to render it.
-///
-/// [`ChangedRange`] identifies the dirty logical rows, but it does not say how
-/// much of the previous frame disappeared. The renderer needs both pieces of
-/// information so that ordinary rewrites, appended rows, and deleted tails can
-/// be handled by separate terminal operations.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Diff {
   pub(crate) changed: ChangedRange,
@@ -30,12 +24,6 @@ impl Diff {
     self.changed.first >= self.next_len
   }
 
-  /// Return the changed rows that can be written from the next frame.
-  ///
-  /// This is `None` when the next frame has no row corresponding to the first
-  /// changed row. In practice that means either the next frame is empty, or the
-  /// diff only deletes rows from the old tail and must be cleared instead of
-  /// overwritten.
   pub(crate) fn writable_range(self) -> Option<RangeInclusive<usize>> {
     if self.next_len == 0 || self.changed.first >= self.next_len {
       return None;
