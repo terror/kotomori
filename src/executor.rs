@@ -253,27 +253,6 @@ impl Executor {
     Self { limits }
   }
 
-  pub(crate) async fn write_file(&self, tool: &WriteFileTool) -> ToolResult {
-    let content = tool.content.clone();
-
-    let len = content.len();
-
-    match self
-      .blocking({
-        let path = tool
-          .cwd
-          .as_ref()
-          .map_or_else(|| tool.path.clone(), |cwd| cwd.join(&tool.path));
-
-        move || fs::write(path, content)
-      })
-      .await
-    {
-      Ok(()) => ToolResult::content(format!("wrote {len} bytes")),
-      Err(error) => ToolResult::error(error),
-    }
-  }
-
   async fn write_input<W>(
     mut stdin: W,
     input: impl AsRef<[u8]>,
@@ -384,26 +363,6 @@ mod tests {
       .unwrap();
 
     assert_eq!(output, "foo b...");
-  }
-
-  #[tokio::test]
-  async fn write_file_writes_content() {
-    let executor = Executor::default();
-
-    let file = NamedTempFile::new().unwrap();
-
-    let result = executor
-      .write_file(&WriteFileTool {
-        content: "bar".into(),
-        cwd: None,
-        path: file.path().to_owned(),
-      })
-      .await;
-
-    let content = fs::read_to_string(file.path()).unwrap();
-
-    assert_eq!(result.output().unwrap(), "wrote 3 bytes");
-    assert_eq!(content, "bar");
   }
 
   #[tokio::test]

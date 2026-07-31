@@ -139,10 +139,9 @@ mod tests {
 
   #[test]
   fn mutating_tools_require_approval() {
-    let invocation = ToolInvocationKind::WriteFile(WriteFileTool {
-      content: "bar".into(),
+    let invocation = ToolInvocationKind::ApplyPatch(ApplyPatchTool {
       cwd: None,
-      path: "foo".into(),
+      patch: "bar".into(),
     });
 
     assert!(invocation.requires_approval());

@@ -163,10 +163,7 @@ use {
   tool_registry::ToolRegistry,
   tool_result::ToolResult,
   tool_spec::ToolSpec,
-  tools::{
-    ApplyPatchTool, CommandTool, ListFilesTool, ReadFileTool, SearchFilesTool,
-    WriteFileTool,
-  },
+  tools::{ApplyPatchTool, CommandTool, ReadFileTool, SearchFilesTool},
   transcript::Transcript,
   transcript_entry::TranscriptEntry,
   unicode_width::UnicodeWidthChar,

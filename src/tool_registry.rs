@@ -52,6 +52,18 @@ mod tests {
   use {super::*, serde_json::json};
 
   #[test]
+  fn default_registry_contains_tools() {
+    assert_eq!(
+      ToolRegistry::default()
+        .tools
+        .iter()
+        .map(|tool| tool.name)
+        .collect::<Vec<_>>(),
+      ["apply_patch", "command", "read_file", "search_files"],
+    );
+  }
+
+  #[test]
   fn empty_registry_does_not_decode_default_tools() {
     let result = ToolRegistry::new(Vec::new()).invocation(RawToolCall {
       arguments: json!({"program": "bar", "arguments": []}),

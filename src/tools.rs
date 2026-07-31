@@ -5,10 +5,8 @@ macro_rules! define_tools {
     $macro! {
       ApplyPatch(ApplyPatchTool),
       Command(CommandTool),
-      ListFiles(ListFilesTool),
       ReadFile(ReadFileTool),
       SearchFiles(SearchFilesTool),
-      WriteFile(WriteFileTool),
     }
   };
 }
@@ -101,7 +99,7 @@ impl Display for CommandTool {
 
 #[async_trait]
 impl ToolSpec for CommandTool {
-  const DESCRIPTION: &'static str = "Run a command and capture stdout, stderr, and exit status. Do not use this to list project files; use list_files instead.";
+  const DESCRIPTION: &'static str = "Run a command and capture stdout, stderr, and exit status. Do not use this to list or search project files; use search_files instead.";
   const NAME: &'static str = "command";
 
   fn action(tense: ToolActionTense) -> &'static str {
@@ -143,52 +141,6 @@ impl ToolSpec for CommandTool {
 
   fn subject(&self) -> String {
     self.to_string()
-  }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct ListFilesTool {
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub(crate) cwd: Option<PathBuf>,
-}
-
-#[async_trait]
-impl ToolSpec for ListFilesTool {
-  const DESCRIPTION: &'static str = "List project files while respecting .gitignore and other standard ignore rules.";
-  const NAME: &'static str = "list_files";
-
-  fn action(tense: ToolActionTense) -> &'static str {
-    match tense {
-      ToolActionTense::Completed => "Listed",
-      ToolActionTense::Failed => "Failed listing",
-      ToolActionTense::Progressive => "Listing",
-    }
-  }
-
-  fn display(&self) -> String {
-    self.cwd.as_ref().map_or("list files".into(), |cwd| {
-      format!("list files in {}", cwd.display())
-    })
-  }
-
-  async fn execute(&self, executor: &Executor) -> ToolResult {
-    let mut command = tokio::process::Command::new("rg");
-
-    command.arg("--files");
-
-    if let Some(cwd) = &self.cwd {
-      command.current_dir(cwd);
-    }
-
-    executor.execute(command, None).await
-  }
-
-  fn subject(&self) -> String {
-    self
-      .cwd
-      .as_ref()
-      .map_or("files".into(), |cwd| format!("files in {}", cwd.display()))
   }
 }
 
@@ -259,7 +211,8 @@ pub(crate) struct SearchFilesTool {
 
 #[async_trait]
 impl ToolSpec for SearchFilesTool {
-  const DESCRIPTION: &'static str = "Search files with ripgrep.";
+  const DESCRIPTION: &'static str =
+    "Search or list project files with ripgrep. Use --files to list files.";
   const NAME: &'static str = "search_files";
 
   fn action(tense: ToolActionTense) -> &'static str {
@@ -316,64 +269,6 @@ impl ToolSpec for SearchFilesTool {
       .cwd
       .as_ref()
       .map_or(query.clone(), |cwd| format!("{query} in {}", cwd.display()))
-  }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct WriteFileTool {
-  pub(crate) content: String,
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub(crate) cwd: Option<PathBuf>,
-  pub(crate) path: PathBuf,
-}
-
-#[async_trait]
-impl ToolSpec for WriteFileTool {
-  const DESCRIPTION: &'static str = "Write a UTF-8 text file.";
-  const NAME: &'static str = "write_file";
-
-  fn action(tense: ToolActionTense) -> &'static str {
-    match tense {
-      ToolActionTense::Completed => "Wrote",
-      ToolActionTense::Failed => "Failed writing",
-      ToolActionTense::Progressive => "Writing",
-    }
-  }
-
-  fn details(&self) -> Vec<(&'static str, String)> {
-    self
-      .cwd
-      .as_ref()
-      .map(|cwd| ("cwd", cwd.display().to_string()))
-      .into_iter()
-      .collect()
-  }
-
-  fn display(&self) -> String {
-    self
-      .cwd
-      .as_ref()
-      .map_or(format!("write {}", self.path.display()), |cwd| {
-        format!("write {} in {}", self.path.display(), cwd.display())
-      })
-  }
-
-  async fn execute(&self, executor: &Executor) -> ToolResult {
-    executor.write_file(self).await
-  }
-
-  fn requires_approval(&self) -> bool {
-    true
-  }
-
-  fn subject(&self) -> String {
-    self
-      .cwd
-      .as_ref()
-      .map_or(self.path.display().to_string(), |cwd| {
-        format!("{} in {}", self.path.display(), cwd.display())
-      })
   }
 }
 

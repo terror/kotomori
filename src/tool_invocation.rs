@@ -92,21 +92,6 @@ mod tests {
   }
 
   #[test]
-  fn parses_list_files_tool_call() {
-    let invocation = invocation("list_files", json!({"cwd": "bar"}));
-
-    assert_eq!(
-      invocation,
-      ToolInvocation {
-        id: "foo".into(),
-        kind: ToolInvocationKind::ListFiles(ListFilesTool {
-          cwd: Some("bar".into()),
-        }),
-      },
-    );
-  }
-
-  #[test]
   fn parses_read_file_tool_call() {
     let invocation = invocation("read_file", json!({"path": "bar"}));
 
@@ -136,24 +121,6 @@ mod tests {
         kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
           arguments: vec!["foo".into()],
           cwd: Some("bar".into()),
-        }),
-      },
-    );
-  }
-
-  #[test]
-  fn parses_write_file_tool_call() {
-    let invocation =
-      invocation("write_file", json!({"content": "bar", "path": "baz"}));
-
-    assert_eq!(
-      invocation,
-      ToolInvocation {
-        id: "foo".into(),
-        kind: ToolInvocationKind::WriteFile(WriteFileTool {
-          content: "bar".into(),
-          cwd: None,
-          path: "baz".into(),
         }),
       },
     );
