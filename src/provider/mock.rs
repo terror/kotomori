@@ -19,15 +19,15 @@ impl Provider for Mock {
         if has_tool_result {
           sink.delta("done")?;
         } else {
-          sink.tool_call(RawToolCall::new(
-            "foo",
-            "command",
-            serde_json::json!({
+          sink.tool_call(RawToolCall {
+            arguments: serde_json::json!({
               "arguments": ["bar"],
               "cwd": null,
               "program": "echo",
             }),
-          ))?;
+            id: "foo".into(),
+            name: "command".into(),
+          })?;
         }
       }
       model => {

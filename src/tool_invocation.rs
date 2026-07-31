@@ -47,7 +47,11 @@ mod tests {
 
   fn invocation(name: &str, arguments: Value) -> ToolInvocation {
     ToolRegistry::default()
-      .invocation(RawToolCall::new("foo", name, arguments))
+      .invocation(RawToolCall {
+        arguments,
+        id: "foo".into(),
+        name: name.into(),
+      })
       .unwrap()
   }
 
@@ -174,11 +178,11 @@ mod tests {
 
   #[test]
   fn unknown_tool_errors() {
-    let result = ToolRegistry::default().invocation(RawToolCall::new(
-      "foo",
-      "bar",
-      json!({}),
-    ));
+    let result = ToolRegistry::default().invocation(RawToolCall {
+      arguments: json!({}),
+      id: "foo".into(),
+      name: "bar".into(),
+    });
 
     assert_eq!(result.unwrap_err().to_string(), "unknown tool `bar`",);
   }

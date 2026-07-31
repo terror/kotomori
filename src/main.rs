@@ -68,7 +68,7 @@ use {
       AssistantContent, CompletionModel, CompletionRequest,
       Message as RigMessage, ToolDefinition,
     },
-    message::{Reasoning, ToolCall, ToolResultContent, UserContent},
+    message::{Reasoning, ToolResultContent, UserContent},
     providers::{
       anthropic::{
         Client as AnthropicClient,

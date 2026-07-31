@@ -53,11 +53,11 @@ mod tests {
 
   #[test]
   fn empty_registry_does_not_decode_default_tools() {
-    let result = ToolRegistry::new(Vec::new()).invocation(RawToolCall::new(
-      "foo",
-      "command",
-      json!({"program": "bar", "arguments": []}),
-    ));
+    let result = ToolRegistry::new(Vec::new()).invocation(RawToolCall {
+      arguments: json!({"program": "bar", "arguments": []}),
+      id: "foo".into(),
+      name: "command".into(),
+    });
 
     assert_eq!(result.unwrap_err().to_string(), "unknown tool `command`");
   }

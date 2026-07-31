@@ -164,15 +164,15 @@ mod tests {
       };
 
       if index == 0 {
-        sink.tool_call(RawToolCall::new(
-          "foo",
-          "command",
-          json!({
+        sink.tool_call(RawToolCall {
+          arguments: json!({
             "arguments": ["bar"],
             "cwd": null,
             "program": "echo",
           }),
-        ))?;
+          id: "foo".into(),
+          name: "command".into(),
+        })?;
       } else {
         sink.delta("done")?;
       }
@@ -277,15 +277,15 @@ mod tests {
 
       if index == 0 {
         sink.reasoning_delta(None, "baz")?;
-        sink.tool_call(RawToolCall::new(
-          "foo",
-          "command",
-          json!({
+        sink.tool_call(RawToolCall {
+          arguments: json!({
             "arguments": ["bar"],
             "cwd": null,
             "program": "echo",
           }),
-        ))?;
+          id: "foo".into(),
+          name: "command".into(),
+        })?;
       } else {
         sink.delta("done")?;
       }
@@ -318,15 +318,15 @@ mod tests {
 
       if index == 0 {
         sink.delta("foo")?;
-        sink.tool_call(RawToolCall::new(
-          "foo",
-          "command",
-          json!({
+        sink.tool_call(RawToolCall {
+          arguments: json!({
             "arguments": ["bar"],
             "cwd": null,
             "program": "echo",
           }),
-        ))?;
+          id: "foo".into(),
+          name: "command".into(),
+        })?;
         sink.delta("baz")?;
       } else {
         sink.delta("done")?;
