@@ -199,60 +199,6 @@ mod tests {
     }
   }
 
-  #[test]
-  fn system_prompt() {
-    fn context(directory: &Path) -> String {
-      format!(
-        "Current working directory: {}\n\nWhen using tools, omit `cwd` to use the current working directory. Do not invent absolute paths.",
-        directory.display(),
-      )
-    }
-
-    #[track_caller]
-    fn case<F>(agents: Option<&str>, expected: F)
-    where
-      F: FnOnce(&Path, &Path) -> String,
-    {
-      let (event_sender, _event_receiver) = mpsc::unbounded_channel();
-
-      let directory = tempfile::tempdir().unwrap();
-
-      let agents_path = directory.path().join("AGENTS.md");
-
-      if let Some(agents) = agents {
-        fs::write(&agents_path, agents).unwrap();
-      }
-
-      let agent = Agent {
-        event_sender,
-        loader: Loader::with_cwd(directory.path()),
-        model: "mock:local".parse().unwrap(),
-        provider: Arc::new(ReasoningProvider),
-        task: None,
-        tool_registry: ToolRegistry::default(),
-        yolo: true,
-      };
-
-      assert_eq!(
-        agent.system_prompt().unwrap(),
-        expected(directory.path(), &agents_path)
-      );
-    }
-
-    case(None, |directory, _| {
-      format!("{}\n\n{}", SYSTEM_PROMPT.as_str(), context(directory))
-    });
-
-    case(Some("foo\n"), |directory, agents_path| {
-      format!(
-        "{}\n\n{}\n\n{}:\nfoo",
-        SYSTEM_PROMPT.as_str(),
-        context(directory),
-        agents_path.display()
-      )
-    });
-  }
-
   #[derive(Debug)]
   struct ReasoningLoopProvider {
     requests: Arc<Mutex<Vec<Vec<Message>>>>,
@@ -334,115 +280,6 @@ mod tests {
 
       Ok(())
     }
-  }
-
-  #[tokio::test]
-  async fn preserves_reasoning_with_tool_calls() {
-    let (event_sender, _event_receiver) = mpsc::unbounded_channel();
-
-    let directory = tempfile::tempdir().unwrap();
-
-    let requests = Arc::new(Mutex::new(Vec::new()));
-
-    let agent = Agent {
-      event_sender,
-      loader: Loader::with_cwd(directory.path()),
-      model: "mock:local".parse().unwrap(),
-      provider: Arc::new(ReasoningLoopProvider {
-        requests: requests.clone(),
-      }),
-      task: None,
-      tool_registry: ToolRegistry::default(),
-      yolo: true,
-    };
-
-    agent
-      .stream(vec![Message::User(vec![UserMessageContent::Text(
-        "foo".into(),
-      )])])
-      .await
-      .unwrap();
-
-    let requests = requests.lock().unwrap();
-
-    let tool_result = ToolResult::command(Some(0), "bar\n", "");
-
-    assert_eq!(
-      *requests,
-      [
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-        vec![
-          Message::User(vec![UserMessageContent::Text("foo".into())]),
-          Message::Agent(vec![
-            AgentMessageContent::Reasoning("baz".into()),
-            AgentMessageContent::ToolCall(ToolInvocation {
-              id: "foo".into(),
-              kind: ToolInvocationKind::Command(CommandTool {
-                arguments: vec!["bar".into()],
-                cwd: None,
-                program: "echo".into(),
-              }),
-            }),
-          ]),
-          tool_result.message("foo"),
-        ],
-      ],
-    );
-  }
-
-  #[tokio::test]
-  async fn preserves_ordered_agent_content() {
-    let (event_sender, _event_receiver) = mpsc::unbounded_channel();
-
-    let directory = tempfile::tempdir().unwrap();
-
-    let requests = Arc::new(Mutex::new(Vec::new()));
-
-    let agent = Agent {
-      event_sender,
-      loader: Loader::with_cwd(directory.path()),
-      model: "mock:local".parse().unwrap(),
-      provider: Arc::new(OrderedProvider {
-        requests: requests.clone(),
-      }),
-      task: None,
-      tool_registry: ToolRegistry::default(),
-      yolo: true,
-    };
-
-    agent
-      .stream(vec![Message::User(vec![UserMessageContent::Text(
-        "foo".into(),
-      )])])
-      .await
-      .unwrap();
-
-    let requests = requests.lock().unwrap();
-
-    let tool_result = ToolResult::command(Some(0), "bar\n", "");
-
-    assert_eq!(
-      *requests,
-      [
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-        vec![
-          Message::User(vec![UserMessageContent::Text("foo".into())]),
-          Message::Agent(vec![
-            AgentMessageContent::Text("foo".into()),
-            AgentMessageContent::ToolCall(ToolInvocation {
-              id: "foo".into(),
-              kind: ToolInvocationKind::Command(CommandTool {
-                arguments: vec!["bar".into()],
-                cwd: None,
-                program: "echo".into(),
-              }),
-            }),
-            AgentMessageContent::Text("baz".into()),
-          ]),
-          tool_result.message("foo"),
-        ],
-      ],
-    );
   }
 
   #[tokio::test]
@@ -605,6 +442,115 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn preserves_ordered_agent_content() {
+    let (event_sender, _event_receiver) = mpsc::unbounded_channel();
+
+    let directory = tempfile::tempdir().unwrap();
+
+    let requests = Arc::new(Mutex::new(Vec::new()));
+
+    let agent = Agent {
+      event_sender,
+      loader: Loader::with_cwd(directory.path()),
+      model: "mock:local".parse().unwrap(),
+      provider: Arc::new(OrderedProvider {
+        requests: requests.clone(),
+      }),
+      task: None,
+      tool_registry: ToolRegistry::default(),
+      yolo: true,
+    };
+
+    agent
+      .stream(vec![Message::User(vec![UserMessageContent::Text(
+        "foo".into(),
+      )])])
+      .await
+      .unwrap();
+
+    let requests = requests.lock().unwrap();
+
+    let tool_result = ToolResult::command(Some(0), "bar\n", "");
+
+    assert_eq!(
+      *requests,
+      [
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+        vec![
+          Message::User(vec![UserMessageContent::Text("foo".into())]),
+          Message::Agent(vec![
+            AgentMessageContent::Text("foo".into()),
+            AgentMessageContent::ToolCall(ToolInvocation {
+              id: "foo".into(),
+              kind: ToolInvocationKind::Command(CommandTool {
+                arguments: vec!["bar".into()],
+                cwd: None,
+                program: "echo".into(),
+              }),
+            }),
+            AgentMessageContent::Text("baz".into()),
+          ]),
+          tool_result.message("foo"),
+        ],
+      ],
+    );
+  }
+
+  #[tokio::test]
+  async fn preserves_reasoning_with_tool_calls() {
+    let (event_sender, _event_receiver) = mpsc::unbounded_channel();
+
+    let directory = tempfile::tempdir().unwrap();
+
+    let requests = Arc::new(Mutex::new(Vec::new()));
+
+    let agent = Agent {
+      event_sender,
+      loader: Loader::with_cwd(directory.path()),
+      model: "mock:local".parse().unwrap(),
+      provider: Arc::new(ReasoningLoopProvider {
+        requests: requests.clone(),
+      }),
+      task: None,
+      tool_registry: ToolRegistry::default(),
+      yolo: true,
+    };
+
+    agent
+      .stream(vec![Message::User(vec![UserMessageContent::Text(
+        "foo".into(),
+      )])])
+      .await
+      .unwrap();
+
+    let requests = requests.lock().unwrap();
+
+    let tool_result = ToolResult::command(Some(0), "bar\n", "");
+
+    assert_eq!(
+      *requests,
+      [
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+        vec![
+          Message::User(vec![UserMessageContent::Text("foo".into())]),
+          Message::Agent(vec![
+            AgentMessageContent::Reasoning("baz".into()),
+            AgentMessageContent::ToolCall(ToolInvocation {
+              id: "foo".into(),
+              kind: ToolInvocationKind::Command(CommandTool {
+                arguments: vec!["bar".into()],
+                cwd: None,
+                program: "echo".into(),
+              }),
+            }),
+          ]),
+          tool_result.message("foo"),
+        ],
+      ],
+    );
+  }
+
+  #[tokio::test]
   async fn streams_reasoning() {
     let (event_sender, mut event_receiver) = mpsc::unbounded_channel();
 
@@ -641,5 +587,59 @@ mod tests {
         Event::AgentDone,
       ],
     );
+  }
+
+  #[test]
+  fn system_prompt() {
+    fn context(directory: &Path) -> String {
+      format!(
+        "Current working directory: {}\n\nWhen using tools, omit `cwd` to use the current working directory. Do not invent absolute paths.",
+        directory.display(),
+      )
+    }
+
+    #[track_caller]
+    fn case<F>(agents: Option<&str>, expected: F)
+    where
+      F: FnOnce(&Path, &Path) -> String,
+    {
+      let (event_sender, _event_receiver) = mpsc::unbounded_channel();
+
+      let directory = tempfile::tempdir().unwrap();
+
+      let agents_path = directory.path().join("AGENTS.md");
+
+      if let Some(agents) = agents {
+        fs::write(&agents_path, agents).unwrap();
+      }
+
+      let agent = Agent {
+        event_sender,
+        loader: Loader::with_cwd(directory.path()),
+        model: "mock:local".parse().unwrap(),
+        provider: Arc::new(ReasoningProvider),
+        task: None,
+        tool_registry: ToolRegistry::default(),
+        yolo: true,
+      };
+
+      assert_eq!(
+        agent.system_prompt().unwrap(),
+        expected(directory.path(), &agents_path)
+      );
+    }
+
+    case(None, |directory, _| {
+      format!("{}\n\n{}", SYSTEM_PROMPT.as_str(), context(directory))
+    });
+
+    case(Some("foo\n"), |directory, agents_path| {
+      format!(
+        "{}\n\n{}\n\n{}:\nfoo",
+        SYSTEM_PROMPT.as_str(),
+        context(directory),
+        agents_path.display()
+      )
+    });
   }
 }

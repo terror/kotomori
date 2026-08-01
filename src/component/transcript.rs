@@ -247,6 +247,28 @@ mod tests {
   }
 
   #[test]
+  fn render_entry_spacing() {
+    let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::Agent("foo".into()),
+      TranscriptEntry::Reasoning("bar".into()),
+      TranscriptEntry::Agent("baz".into()),
+    ]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        LineComponent::blank(),
+        LineComponent::raw(" foo"),
+        LineComponent::blank(),
+        LineComponent::from([Span::styled(" bar", Style::DarkGray)]),
+        LineComponent::blank(),
+        LineComponent::raw(" baz"),
+        LineComponent::blank(),
+      ]
+    );
+  }
+
+  #[test]
   fn render_error_entry() {
     let transcript =
       Transcript::with_entries(vec![TranscriptEntry::Error("foo".into())]);
@@ -265,28 +287,6 @@ mod tests {
           Span::styled("   │ ", Style::DarkGray),
           Span::raw("foo"),
         ]),
-        LineComponent::blank(),
-      ]
-    );
-  }
-
-  #[test]
-  fn render_entry_spacing() {
-    let transcript = Transcript::with_entries(vec![
-      TranscriptEntry::Agent("foo".into()),
-      TranscriptEntry::Reasoning("bar".into()),
-      TranscriptEntry::Agent("baz".into()),
-    ]);
-
-    assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
-      [
-        LineComponent::blank(),
-        LineComponent::raw(" foo"),
-        LineComponent::blank(),
-        LineComponent::from([Span::styled(" bar", Style::DarkGray)]),
-        LineComponent::blank(),
-        LineComponent::raw(" baz"),
         LineComponent::blank(),
       ]
     );
