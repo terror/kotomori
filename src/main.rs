@@ -87,7 +87,7 @@ use {
     ffi::OsStr,
     fmt::{self, Debug, Display, Formatter},
     fs,
-    io::{self, Stdout, Write},
+    io::{self, BufWriter, Stdout, Write},
     iter::once,
     mem,
     ops::RangeInclusive,

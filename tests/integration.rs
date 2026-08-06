@@ -323,6 +323,7 @@ impl Running {
     command.args(&test.arguments);
     command.cwd(test.cwd.as_deref().unwrap_or(test.tempdir.path()));
     command.env("KOTOMORI_HOME", test.tempdir.path().join("kotomori-home"));
+    command.env_remove("KOTOMORI_DEV");
     command.env("RUST_BACKTRACE", "0");
     command.env("TERM", "xterm-256color");
     command.env("XDG_CONFIG_HOME", test.tempdir.path().join("xdg-config"));
