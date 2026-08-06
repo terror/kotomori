@@ -519,6 +519,7 @@ fn dev_mode_displays_time_to_first_draw() -> Result {
     .env("KOTOMORI_DEV", "1")
     .argument("--model")
     .argument("mock:local")
+    .wait(SETTLE_INTERVAL)
     .expect_screen_contains("first draw ")
     .quit()
     .run()

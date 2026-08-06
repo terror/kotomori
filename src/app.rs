@@ -131,8 +131,8 @@ impl App {
 
     let mut renderer = Renderer::new();
 
-    let first_draw_duration =
-      FIRST_DRAW_STARTED_AT.as_ref().map(Instant::elapsed);
+    let mut first_draw_started_at = *FIRST_DRAW_STARTED_AT;
+    let mut first_draw_duration = None;
 
     self.listen_for_input();
 
@@ -143,6 +143,11 @@ impl App {
         &mut terminal.stdout,
         &ViewComponent::new(&self.screen, first_draw_duration),
       )?;
+
+      if let Some(started_at) = first_draw_started_at.take() {
+        first_draw_duration = Some(started_at.elapsed());
+        continue;
+      }
 
       tokio::select! {
         event = self.event_receiver.recv() => {
