@@ -90,21 +90,19 @@ impl Executor {
   ) -> ToolResult {
     let kill = child.start_kill();
 
-    let stdout = if let Ok(Ok(Ok(stdout))) =
-      timeout(Duration::from_secs(1), stdout).await
-    {
-      stdout
-    } else {
-      String::new()
-    };
+    let stdout = timeout(Duration::from_secs(1), stdout)
+      .await
+      .ok()
+      .and_then(Result::ok)
+      .and_then(Result::ok)
+      .unwrap_or_default();
 
-    let stderr = if let Ok(Ok(Ok(stderr))) =
-      timeout(Duration::from_secs(1), stderr).await
-    {
-      stderr
-    } else {
-      String::new()
-    };
+    let stderr = timeout(Duration::from_secs(1), stderr)
+      .await
+      .ok()
+      .and_then(Result::ok)
+      .and_then(Result::ok)
+      .unwrap_or_default();
 
     let wait = timeout(Duration::from_secs(1), child.wait()).await;
 
