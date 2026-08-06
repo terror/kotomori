@@ -4,16 +4,15 @@ use super::*;
 pub(crate) struct Agent {
   event_sender: UnboundedSender<Event>,
   loader: Loader,
-  model: Model,
   provider: Arc<dyn Provider>,
+  settings: Settings,
   task: Option<task::JoinHandle<()>>,
   tool_registry: ToolRegistry,
-  yolo: bool,
 }
 
 impl Agent {
   async fn approval(&self, tool_call: &ToolInvocation) -> Result<ToolApproval> {
-    if self.yolo || !tool_call.kind.requires_approval() {
+    if self.settings.yolo || !tool_call.kind.requires_approval() {
       return Ok(ToolApproval::Approved);
     }
 
@@ -41,11 +40,10 @@ impl Agent {
     Ok(Self {
       event_sender,
       loader: Loader::new()?,
-      model: settings.model.clone(),
       provider,
+      settings: settings.clone(),
       task: None,
       tool_registry: ToolRegistry::default(),
-      yolo: settings.yolo,
     })
   }
 
@@ -55,11 +53,10 @@ impl Agent {
     let agent = Self {
       event_sender: self.event_sender.clone(),
       loader: self.loader.clone(),
-      model: self.model.clone(),
       provider: self.provider.clone(),
+      settings: self.settings.clone(),
       task: None,
       tool_registry: self.tool_registry.clone(),
-      yolo: self.yolo,
     };
 
     self.task = Some(tokio::spawn(async move {
@@ -79,7 +76,7 @@ impl Agent {
       );
 
       let request = Request::with_system(
-        self.model.clone(),
+        self.settings.model.clone(),
         messages.clone(),
         system.clone(),
         self.tool_registry.clone(),
@@ -293,13 +290,16 @@ mod tests {
     let agent = Agent {
       event_sender,
       loader: Loader::with_cwd(directory.path()),
-      model: "mock:local".parse().unwrap(),
       provider: Arc::new(LoopProvider {
         requests: requests.clone(),
       }),
+      settings: Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      },
       task: None,
       tool_registry: ToolRegistry::default(),
-      yolo: false,
     };
 
     let task = tokio::spawn(async move {
@@ -375,13 +375,16 @@ mod tests {
     let agent = Agent {
       event_sender,
       loader: Loader::with_cwd(directory.path()),
-      model: "mock:local".parse().unwrap(),
       provider: Arc::new(LoopProvider {
         requests: requests.clone(),
       }),
+      settings: Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: true,
+      },
       task: None,
       tool_registry: ToolRegistry::default(),
-      yolo: true,
     };
 
     agent
@@ -452,13 +455,16 @@ mod tests {
     let agent = Agent {
       event_sender,
       loader: Loader::with_cwd(directory.path()),
-      model: "mock:local".parse().unwrap(),
       provider: Arc::new(OrderedProvider {
         requests: requests.clone(),
       }),
+      settings: Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: true,
+      },
       task: None,
       tool_registry: ToolRegistry::default(),
-      yolo: true,
     };
 
     agent
@@ -507,13 +513,16 @@ mod tests {
     let agent = Agent {
       event_sender,
       loader: Loader::with_cwd(directory.path()),
-      model: "mock:local".parse().unwrap(),
       provider: Arc::new(ReasoningLoopProvider {
         requests: requests.clone(),
       }),
+      settings: Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: true,
+      },
       task: None,
       tool_registry: ToolRegistry::default(),
-      yolo: true,
     };
 
     agent
@@ -559,11 +568,14 @@ mod tests {
     let agent = Agent {
       event_sender,
       loader: Loader::with_cwd(directory.path()),
-      model: "mock:local".parse().unwrap(),
       provider: Arc::new(ReasoningProvider),
+      settings: Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: true,
+      },
       task: None,
       tool_registry: ToolRegistry::default(),
-      yolo: true,
     };
 
     agent
@@ -616,11 +628,14 @@ mod tests {
       let agent = Agent {
         event_sender,
         loader: Loader::with_cwd(directory.path()),
-        model: "mock:local".parse().unwrap(),
         provider: Arc::new(ReasoningProvider),
+        settings: Settings {
+          model: "mock:local".parse().unwrap(),
+          prompt: None,
+          yolo: true,
+        },
         task: None,
         tool_registry: ToolRegistry::default(),
-        yolo: true,
       };
 
       assert_eq!(
