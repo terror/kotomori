@@ -1,10 +1,12 @@
 use super::*;
 
 mod anthropic;
+mod azure;
 mod cohere;
 mod deepseek;
 mod gemini;
 mod groq;
+mod minimax;
 mod mistral;
 mod mock;
 mod moonshot;
@@ -16,6 +18,7 @@ mod rig;
 mod together;
 mod xai;
 mod xiaomimimo;
+mod zai;
 
 #[async_trait]
 pub(crate) trait Provider: fmt::Debug + Send + Sync {
@@ -28,10 +31,12 @@ impl TryFrom<Model> for Arc<dyn Provider> {
   fn try_from(model: Model) -> Result<Self> {
     match model.provider.as_str() {
       "anthropic" => anthropic::build(&model),
+      "azure" => azure::build(&model),
       "cohere" => cohere::build(&model),
       "deepseek" => deepseek::build(&model),
       "gemini" => gemini::build(&model),
       "groq" => groq::build(&model),
+      "minimax" => minimax::build(&model),
       "mistral" => mistral::build(&model),
       "mock" => Ok(Arc::new(mock::Mock)),
       "moonshot" => moonshot::build(&model),
@@ -42,6 +47,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
       "together" => together::build(&model),
       "xai" => xai::build(&model),
       "xiaomimimo" => xiaomimimo::build(&model),
+      "zai" => zai::build(&model),
       provider => bail!("unknown provider `{provider}`"),
     }
   }
