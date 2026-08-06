@@ -308,6 +308,8 @@ pub(crate) static SYSTEM_PROMPT: LazyLock<String> = LazyLock::new(|| {
   .to_string()
 });
 
+type AsyncCommand = tokio::process::Command;
+type OutputTask = task::JoinHandle<io::Result<String>>;
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 
 #[tokio::main]

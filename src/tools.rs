@@ -68,7 +68,7 @@ impl ToolSpec for CommandTool {
   }
 
   async fn execute(&self, executor: &Executor) -> ToolResult {
-    let mut command = tokio::process::Command::new(&self.program);
+    let mut command = AsyncCommand::new(&self.program);
 
     command.args(&self.arguments);
 

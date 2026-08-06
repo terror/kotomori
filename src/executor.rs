@@ -1,17 +1,12 @@
 use super::*;
 
-type OutputTask = task::JoinHandle<io::Result<String>>;
-
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Executor {
   limits: ExecutionLimit,
 }
 
 impl Executor {
-  pub(crate) async fn execute(
-    &self,
-    mut command: tokio::process::Command,
-  ) -> ToolResult {
+  pub(crate) async fn execute(&self, mut command: AsyncCommand) -> ToolResult {
     command.kill_on_drop(true);
 
     command.stderr(Stdio::piped());
