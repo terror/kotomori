@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) async fn run(mut settings: Settings) -> Result {
+pub(crate) async fn run(settings: Settings) -> Result {
   let sessions = SessionStore::list()?;
 
   if sessions.is_empty() {
@@ -8,17 +8,7 @@ pub(crate) async fn run(mut settings: Settings) -> Result {
     return Ok(());
   }
 
-  let Some(path) = ResumePicker::new(sessions).run()? else {
-    return Ok(());
-  };
-
-  let session = SessionStore::load(&path)?;
-
-  settings.model = session.file.model.parse().with_context(|| {
-    format!("failed to parse session model {}", session.file.model)
-  })?;
-
-  App::with_state(&settings, State::with_session(&settings, session)?)?
+  App::with_screen(&settings, Screen::Resume(ResumePicker::new(sessions)))?
     .run()
     .await
 }

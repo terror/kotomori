@@ -6,8 +6,8 @@ pub(crate) enum Action {
   Edit(Input),
   Interrupt,
   Quit,
-  SelectNextCommand,
-  SelectPreviousCommand,
+  SelectNext,
+  SelectPrevious,
   Submit,
 }
 
@@ -26,8 +26,8 @@ impl Action {
       KeyCode::Esc => Self::Interrupt,
       KeyCode::Enter if key.modifiers.is_empty() => Self::Submit,
       KeyCode::Tab => Self::CompleteCommand,
-      KeyCode::Down => Self::SelectNextCommand,
-      KeyCode::Up => Self::SelectPreviousCommand,
+      KeyCode::Down => Self::SelectNext,
+      KeyCode::Up => Self::SelectPrevious,
       _ => Self::Edit((*key).into()),
     }
   }

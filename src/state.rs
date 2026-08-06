@@ -46,8 +46,8 @@ impl State {
       }
       Action::CompleteCommand
       | Action::Edit(_)
-      | Action::SelectNextCommand
-      | Action::SelectPreviousCommand
+      | Action::SelectNext
+      | Action::SelectPrevious
       | Action::Submit => {}
     }
 
@@ -69,7 +69,7 @@ impl State {
         return self.interrupt_agent();
       }
       Action::Quit => self.quit(),
-      Action::SelectNextCommand => {
+      Action::SelectNext => {
         if self.composer.selected_command().is_some() {
           self.composer.select_next_command();
         } else {
@@ -79,7 +79,7 @@ impl State {
           });
         }
       }
-      Action::SelectPreviousCommand => {
+      Action::SelectPrevious => {
         if self.composer.selected_command().is_some() {
           self.composer.select_previous_command();
         } else {
@@ -585,7 +585,7 @@ mod tests {
     state.handle_event(Event::ToolApprovalRequest(request));
 
     assert_eq!(
-      state.handle_event(Event::Action(Action::SelectNextCommand)),
+      state.handle_event(Event::Action(Action::SelectNext)),
       Vec::new()
     );
 
@@ -613,7 +613,7 @@ mod tests {
     state.handle_event(Event::ToolApprovalRequest(request));
 
     assert_eq!(
-      state.handle_event(Event::Action(Action::SelectPreviousCommand)),
+      state.handle_event(Event::Action(Action::SelectPrevious)),
       Vec::new()
     );
 
@@ -764,7 +764,7 @@ mod tests {
       vec!["clear", "quit"],
     );
 
-    state.handle_event(Event::Action(Action::SelectNextCommand));
+    state.handle_event(Event::Action(Action::SelectNext));
     state.handle_event(Event::Action(Action::CompleteCommand));
 
     assert_eq!(state.composer.input_text(), "/quit");
@@ -788,7 +788,7 @@ mod tests {
       vec!["clear", "quit"],
     );
 
-    state.handle_event(Event::Action(Action::SelectPreviousCommand));
+    state.handle_event(Event::Action(Action::SelectPrevious));
     state.handle_event(Event::Action(Action::CompleteCommand));
 
     assert_eq!(state.composer.input_text(), "/quit");

@@ -2,36 +2,88 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ViewComponent<'a> {
-  state: &'a State,
+  screen: &'a Screen,
 }
 
 impl<'a> ViewComponent<'a> {
-  pub(crate) fn new(state: &'a State) -> Self {
-    Self { state }
+  pub(crate) fn new(screen: &'a Screen) -> Self {
+    Self { screen }
   }
 }
 
 impl Component for ViewComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    once(LineComponent::blank())
-      .chain(HeaderComponent.render(width))
-      .chain(once(LineComponent::blank()))
-      .chain(HintComponent.render(width))
-      .chain(once(LineComponent::blank()))
-      .chain(TranscriptComponent::new(&self.state.transcript).render(width))
-      .chain(match &self.state.input_mode {
-        InputMode::Approval(request) => {
-          ApprovalPromptComponent::new(request).render(width)
+    match self.screen {
+      Screen::Quit => Vec::new(),
+      Screen::Resume(picker) => {
+        let mut lines = once(LineComponent::blank())
+          .chain(HeaderComponent.render(width))
+          .chain(once(LineComponent::blank()))
+          .chain(once(LineComponent::from([
+            Span::styled("Search previous sessions. Press ", Style::DarkGray),
+            Span::styled("Enter", Style::Gray),
+            Span::styled(" to resume, ", Style::DarkGray),
+            Span::styled("Esc", Style::Gray),
+            Span::styled(" to cancel.", Style::DarkGray),
+          ])))
+          .chain(once(LineComponent::blank()))
+          .chain(once(LineComponent::from([
+            Span::styled("Search: ", Style::DarkGray),
+            Span::raw(&picker.query),
+            Span::styled(" ", Style::Reverse),
+          ])))
+          .chain(once(LineComponent::blank()))
+          .collect::<Vec<_>>();
+
+        let filtered = picker.filtered();
+
+        if filtered.is_empty() {
+          lines.push(LineComponent::from([Span::styled(
+            "No matching sessions.",
+            Style::DarkGray,
+          )]));
+
+          return lines;
         }
-        InputMode::Compose => {
-          ComposerComponent::new(&self.state.composer).render(width)
+
+        for (index, session) in filtered.into_iter().enumerate() {
+          let style = if index == picker.selected {
+            Style::CyanBold
+          } else {
+            Style::Gray
+          };
+
+          let marker = if index == picker.selected { "> " } else { "  " };
+
+          lines.push(LineComponent::from([
+            Span::styled(marker, style),
+            Span::styled(session.title.as_str(), style),
+            Span::styled("  ", Style::DarkGray),
+            Span::styled(session.detail(), Style::DarkGray),
+          ]));
         }
-      })
-      .chain(
-        FooterComponent::new(&self.state.model, &self.state.directory)
-          .render(width),
-      )
-      .collect()
+
+        lines
+      }
+      Screen::Session(state) => once(LineComponent::blank())
+        .chain(HeaderComponent.render(width))
+        .chain(once(LineComponent::blank()))
+        .chain(HintComponent.render(width))
+        .chain(once(LineComponent::blank()))
+        .chain(TranscriptComponent::new(&state.transcript).render(width))
+        .chain(match &state.input_mode {
+          InputMode::Approval(request) => {
+            ApprovalPromptComponent::new(request).render(width)
+          }
+          InputMode::Compose => {
+            ComposerComponent::new(&state.composer).render(width)
+          }
+        })
+        .chain(
+          FooterComponent::new(&state.model, &state.directory).render(width),
+        )
+        .collect(),
+    }
   }
 }
 
@@ -52,8 +104,10 @@ mod tests {
 
     assert!(state.transcript.is_agent_active());
 
+    let screen = Screen::Session(Box::new(state));
+
     assert!(
-      ViewComponent::new(&state)
+      ViewComponent::new(&screen)
         .render(80)
         .iter()
         .any(|line| line.to_string().contains("mock · local ·"))
@@ -80,7 +134,8 @@ mod tests {
 
     state.input_mode = InputMode::Approval(request);
 
-    let lines = ViewComponent::new(&state).render(80);
+    let lines =
+      ViewComponent::new(&Screen::Session(Box::new(state))).render(80);
 
     let approval = lines
       .iter()
@@ -104,7 +159,8 @@ mod tests {
     })
     .unwrap();
 
-    let lines = ViewComponent::new(&state).render(80);
+    let lines =
+      ViewComponent::new(&Screen::Session(Box::new(state))).render(80);
 
     let command = lines
       .iter()

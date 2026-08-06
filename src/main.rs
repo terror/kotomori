@@ -11,7 +11,7 @@ use {
   changed_range::ChangedRange,
   clap::{Args, Parser},
   command::Command,
-  component::{Component, HeaderComponent, LineComponent, ViewComponent},
+  component::{Component, ViewComponent},
   composer::Composer,
   config::Config,
   crossterm::{
@@ -70,6 +70,7 @@ use {
     message::{Reasoning, ToolResultContent, UserContent},
   },
   schemars::JsonSchema,
+  screen::Screen,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
   serde_json::Value,
   session::Session,
@@ -172,6 +173,7 @@ mod renderer;
 mod request;
 mod resume_picker;
 mod resume_picker_action;
+mod screen;
 mod session;
 mod session_file;
 mod session_store;
