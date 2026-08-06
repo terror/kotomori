@@ -5,6 +5,7 @@ mod cohere;
 mod deepseek;
 mod gemini;
 mod groq;
+mod llamafile;
 mod mistral;
 mod mock;
 mod moonshot;
@@ -31,6 +32,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
       "deepseek" => deepseek::build(&model),
       "gemini" => gemini::build(&model),
       "groq" => groq::build(&model),
+      "llamafile" => llamafile::build(&model),
       "mistral" => mistral::build(&model),
       "mock" => Ok(Arc::new(mock::Mock)),
       "moonshot" => moonshot::build(&model),
