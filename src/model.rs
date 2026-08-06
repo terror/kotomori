@@ -54,30 +54,6 @@ impl FromStr for Model {
   }
 }
 
-impl TryFrom<Model> for Arc<dyn Provider> {
-  type Error = Error;
-
-  fn try_from(model: Model) -> Result<Self> {
-    match model.provider.as_str() {
-      "anthropic" => Ok(Arc::new(Rig::anthropic(&model)?)),
-      "cohere" => Ok(Arc::new(Rig::cohere(&model)?)),
-      "deepseek" => Ok(Arc::new(Rig::deepseek(&model)?)),
-      "mock" => Ok(Arc::new(Mock)),
-      "gemini" => Ok(Arc::new(Rig::gemini(&model)?)),
-      "groq" => Ok(Arc::new(Rig::groq(&model)?)),
-      "mistral" => Ok(Arc::new(Rig::mistral(&model)?)),
-      "moonshot" => Ok(Arc::new(Rig::moonshot(&model)?)),
-      "ollama" => Ok(Arc::new(Rig::ollama(&model)?)),
-      "openai" => Ok(Arc::new(Rig::openai(&model)?)),
-      "openrouter" => Ok(Arc::new(Rig::openrouter(&model)?)),
-      "perplexity" => Ok(Arc::new(Rig::perplexity(&model)?)),
-      "together" => Ok(Arc::new(Rig::together(&model)?)),
-      "xai" => Ok(Arc::new(Rig::xai(&model)?)),
-      provider => bail!("unknown provider `{provider}`"),
-    }
-  }
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;

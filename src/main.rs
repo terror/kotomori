@@ -49,7 +49,7 @@ use {
   options::Options,
   patch_plan::PatchPlan,
   presented_frame::PresentedFrame,
-  provider::{Mock, Provider, Rig},
+  provider::Provider,
   provider_output::ProviderOutput,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
@@ -63,51 +63,11 @@ use {
   resume_picker_action::ResumePickerAction,
   rig::{
     OneOrMany,
-    client::CompletionClient,
     completion::{
-      AssistantContent, CompletionModel, CompletionRequest,
-      Message as RigMessage, ToolDefinition,
+      AssistantContent, CompletionRequest, Message as RigMessage,
+      ToolDefinition,
     },
     message::{Reasoning, ToolResultContent, UserContent},
-    providers::{
-      anthropic::{
-        Client as AnthropicClient,
-        completion::CompletionModel as AnthropicCompletionModel,
-      },
-      cohere::{
-        Client as CohereClient, CompletionModel as CohereCompletionModel,
-      },
-      deepseek::{
-        Client as DeepSeekClient, CompletionModel as DeepSeekCompletionModel,
-      },
-      gemini::{
-        Client as GeminiClient, CompletionModel as GeminiCompletionModel,
-      },
-      groq::{Client as GroqClient, CompletionModel as GroqCompletionModel},
-      mistral::{
-        Client as MistralClient, CompletionModel as MistralCompletionModel,
-      },
-      moonshot::{
-        Client as MoonshotClient, CompletionModel as MoonshotCompletionModel,
-      },
-      ollama::{
-        Client as OllamaClient, CompletionModel as OllamaCompletionModel,
-      },
-      openai::{CompletionModel as OpenAiCompletionModel, CompletionsClient},
-      openrouter::{
-        Client as OpenRouterClient,
-        CompletionModel as OpenRouterCompletionModel,
-      },
-      perplexity::{
-        Client as PerplexityClient,
-        CompletionModel as PerplexityCompletionModel,
-      },
-      together::{
-        Client as TogetherClient, CompletionModel as TogetherCompletionModel,
-      },
-      xai::{Client as XaiClient, CompletionModel as XaiCompletionModel},
-    },
-    streaming::StreamedAssistantContent,
   },
   schemars::JsonSchema,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
@@ -176,27 +136,15 @@ mod action;
 mod agent;
 mod agent_activity;
 mod agent_message_content;
-mod anthropic {
-  pub(crate) type Client = super::AnthropicClient;
-  pub(crate) type CompletionModel = super::AnthropicCompletionModel;
-}
 mod app;
 mod approval_request;
 mod arguments;
 mod changed_range;
 mod command;
-mod config;
-mod cohere {
-  pub(crate) type Client = super::CohereClient;
-  pub(crate) type CompletionModel = super::CohereCompletionModel;
-}
 mod component;
 mod composer;
+mod config;
 mod cursor;
-mod deepseek {
-  pub(crate) type Client = super::DeepSeekClient;
-  pub(crate) type CompletionModel = super::DeepSeekCompletionModel;
-}
 mod diff;
 mod dimensions;
 mod directory_display;
@@ -206,44 +154,12 @@ mod event;
 mod execution_limit;
 mod executor;
 mod frame;
-mod gemini {
-  pub(crate) type Client = super::GeminiClient;
-  pub(crate) type CompletionModel = super::GeminiCompletionModel;
-}
-mod groq {
-  pub(crate) type Client = super::GroqClient;
-  pub(crate) type CompletionModel = super::GroqCompletionModel;
-}
 mod input_mode;
 mod loader;
 mod message;
-mod mistral {
-  pub(crate) type Client = super::MistralClient;
-  pub(crate) type CompletionModel = super::MistralCompletionModel;
-}
 mod model;
-mod moonshot {
-  pub(crate) type Client = super::MoonshotClient;
-  pub(crate) type CompletionModel = super::MoonshotCompletionModel;
-}
-mod ollama {
-  pub(crate) type Client = super::OllamaClient;
-  pub(crate) type CompletionModel = super::OllamaCompletionModel;
-}
-mod openai {
-  pub(crate) type CompletionModel = super::OpenAiCompletionModel;
-  pub(crate) type CompletionsClient = super::CompletionsClient;
-}
-mod openrouter {
-  pub(crate) type Client = super::OpenRouterClient;
-  pub(crate) type CompletionModel = super::OpenRouterCompletionModel;
-}
 mod options;
 mod patch_plan;
-mod perplexity {
-  pub(crate) type Client = super::PerplexityClient;
-  pub(crate) type CompletionModel = super::PerplexityCompletionModel;
-}
 mod presented_frame;
 mod provider;
 mod provider_output;
@@ -267,10 +183,6 @@ mod str_ext;
 mod style;
 mod subcommand;
 mod terminal;
-mod together {
-  pub(crate) type Client = super::TogetherClient;
-  pub(crate) type CompletionModel = super::TogetherCompletionModel;
-}
 #[macro_use]
 mod tools;
 mod tool;
@@ -286,10 +198,6 @@ mod transcript_entry;
 mod user_message_content;
 mod viewport;
 mod write_ext;
-mod xai {
-  pub(crate) type Client = super::XaiClient;
-  pub(crate) type CompletionModel = super::XaiCompletionModel;
-}
 
 pub(crate) static SYSTEM_PROMPT: LazyLock<String> = LazyLock::new(|| {
   indoc! {
