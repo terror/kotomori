@@ -84,15 +84,23 @@ impl Agent {
 
       self.provider.stream(request, &mut sink).await?;
 
-      let output = sink.finish();
+      let content = sink.finish();
 
-      if output.content.is_empty() {
+      if content.is_empty() {
         break;
       }
 
-      let tool_calls = output.tool_calls().cloned().collect::<Vec<_>>();
+      let tool_calls = content
+        .iter()
+        .filter_map(|content| match content {
+          AgentMessageContent::Reasoning(_) | AgentMessageContent::Text(_) => {
+            None
+          }
+          AgentMessageContent::ToolCall(invocation) => Some(invocation.clone()),
+        })
+        .collect::<Vec<_>>();
 
-      messages.push(Message::Agent(output.content));
+      messages.push(Message::Agent(content));
 
       if tool_calls.is_empty() {
         break;

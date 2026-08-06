@@ -27,10 +27,8 @@ impl ProviderSink {
     Ok(self.event_sender.send(Event::AgentDelta(delta))?)
   }
 
-  pub(crate) fn finish(self) -> ProviderOutput {
-    ProviderOutput {
-      content: self.content,
-    }
+  pub(crate) fn finish(self) -> Vec<AgentMessageContent> {
+    self.content
   }
 
   pub(crate) fn new(

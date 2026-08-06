@@ -50,7 +50,6 @@ use {
   patch_plan::PatchPlan,
   presented_frame::PresentedFrame,
   provider::Provider,
-  provider_output::ProviderOutput,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
@@ -163,7 +162,6 @@ mod options;
 mod patch_plan;
 mod presented_frame;
 mod provider;
-mod provider_output;
 mod provider_sink;
 mod raw_tool_call;
 mod reasoning_buffer;
