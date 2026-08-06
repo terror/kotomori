@@ -3,6 +3,7 @@ use super::*;
 mod anthropic;
 mod azure;
 mod cohere;
+mod copilot;
 mod deepseek;
 mod gemini;
 mod groq;
@@ -35,6 +36,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
       "anthropic" => anthropic::build(&model),
       "azure" => azure::build(&model),
       "cohere" => cohere::build(&model),
+      "copilot" => copilot::build(&model),
       "deepseek" => deepseek::build(&model),
       "gemini" => gemini::build(&model),
       "groq" => groq::build(&model),
