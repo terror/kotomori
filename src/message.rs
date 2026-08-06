@@ -82,11 +82,10 @@ mod tests {
   fn rig_ordered_agent_content() {
     let invocation = ToolInvocation {
       id: "foo".into(),
-      kind: ToolInvocationKind::ReadFile(ReadFileTool {
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
         cwd: None,
-        end_line: None,
-        path: "bar".into(),
-        start_line: None,
+        program: "echo".into(),
       }),
     };
 
@@ -105,8 +104,8 @@ mod tests {
           AssistantContent::text("foo"),
           AssistantContent::tool_call(
             "foo",
-            "read_file",
-            json!({"path": "bar"})
+            "command",
+            json!({"arguments": ["bar"], "program": "echo"})
           ),
           AssistantContent::text("baz"),
         ])
@@ -120,11 +119,10 @@ mod tests {
   fn rig_tool_messages() {
     let invocation = ToolInvocation {
       id: "foo".into(),
-      kind: ToolInvocationKind::ReadFile(ReadFileTool {
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: vec!["bar".into()],
         cwd: None,
-        end_line: None,
-        path: "bar".into(),
-        start_line: None,
+        program: "echo".into(),
       }),
     };
 
@@ -138,8 +136,8 @@ mod tests {
       RigMessage::Assistant {
         content: OneOrMany::one(AssistantContent::tool_call(
           "foo",
-          "read_file",
-          json!({"path": "bar"}),
+          "command",
+          json!({"arguments": ["bar"], "program": "echo"}),
         ),),
         id: None,
       },

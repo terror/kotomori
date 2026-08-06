@@ -6,22 +6,6 @@ pub(crate) struct Executor {
 }
 
 impl Executor {
-  async fn blocking<T>(
-    &self,
-    f: impl FnOnce() -> io::Result<T> + Send + 'static,
-  ) -> Result<T, Error>
-  where
-    T: Send + 'static,
-  {
-    match timeout(self.limits.timeout, task::spawn_blocking(f)).await {
-      Ok(result) => Ok(result??),
-      Err(_) => Err(Error::msg(format!(
-        "tool timed out after {} seconds",
-        self.limits.timeout.as_secs()
-      ))),
-    }
-  }
-
   async fn collect_output(
     output: Option<task::JoinHandle<io::Result<String>>>,
   ) -> Result<String, Error> {
@@ -102,75 +86,6 @@ impl Executor {
     ToolResult::command(status.code(), stdout, stderr)
   }
 
-  pub(crate) async fn read_file(&self, tool: &ReadFileTool) -> ToolResult {
-    let limits = self.limits;
-
-    let path = tool
-      .cwd
-      .as_ref()
-      .map_or_else(|| tool.path.clone(), |cwd| cwd.join(&tool.path));
-
-    let (start_line, end_line) = (tool.start_line, tool.end_line);
-
-    let result = self
-      .blocking(move || {
-        let file = File::open(path)?;
-
-        let bytes = match (start_line, end_line) {
-          (None, None) => {
-            let mut reader = file.take(limits.output_limit as u64 + 1);
-            let mut bytes = Vec::new();
-
-            reader.read_to_end(&mut bytes)?;
-
-            bytes
-          }
-          (start_line, end_line) => {
-            let (start_line, end_line) = (
-              start_line.unwrap_or(1).max(1),
-              end_line.unwrap_or(usize::MAX),
-            );
-
-            let maximum = limits.output_limit.saturating_add(1);
-
-            let mut bytes = Vec::new();
-            let mut line = Vec::new();
-            let mut reader = io::BufReader::new(file);
-
-            for number in 1.. {
-              line.clear();
-
-              if reader.read_until(b'\n', &mut line)? == 0 {
-                break;
-              }
-
-              if number < start_line {
-                continue;
-              }
-
-              if number > end_line || bytes.len() >= maximum {
-                break;
-              }
-
-              bytes.extend_from_slice(
-                &line[..line.len().min(maximum.saturating_sub(bytes.len()))],
-              );
-            }
-
-            bytes
-          }
-        };
-
-        Ok(limits.decode(bytes))
-      })
-      .await;
-
-    match result {
-      Ok(content) => ToolResult::content(content),
-      Err(error) => ToolResult::error(error),
-    }
-  }
-
   async fn read_pipe<R>(
     mut reader: R,
     limits: ExecutionLimit,
@@ -248,11 +163,6 @@ impl Executor {
     ToolResult::command(None, stdout, stderr)
   }
 
-  #[cfg(test)]
-  pub(crate) fn with_limits(limits: ExecutionLimit) -> Self {
-    Self { limits }
-  }
-
   async fn write_input<W>(
     mut stdin: W,
     input: impl AsRef<[u8]>,
@@ -271,7 +181,7 @@ impl Executor {
 
 #[cfg(test)]
 mod tests {
-  use {super::*, tempfile::NamedTempFile};
+  use super::*;
 
   #[tokio::test]
   async fn collect_output_lossy_returns_output() {
@@ -280,74 +190,6 @@ mod tests {
     let output = Executor::collect_output_lossy(Some(output)).await;
 
     assert_eq!(output, "foo");
-  }
-
-  #[tokio::test]
-  async fn read_file_output_is_capped() {
-    let executor = Executor::with_limits(ExecutionLimit {
-      output_limit: 8,
-      timeout: Duration::from_secs(30),
-      truncated_marker: "...",
-    });
-
-    let file = NamedTempFile::new().unwrap();
-
-    fs::write(file.path(), "foo bar baz").unwrap();
-
-    let result = executor
-      .read_file(&ReadFileTool {
-        cwd: None,
-        end_line: None,
-        path: file.path().to_owned(),
-        start_line: None,
-      })
-      .await;
-
-    assert_eq!(result.output().unwrap(), "foo b...");
-  }
-
-  #[tokio::test]
-  async fn read_file_range_can_start_after_output_limit() {
-    let executor = Executor::with_limits(ExecutionLimit {
-      output_limit: 8,
-      timeout: Duration::from_secs(30),
-      truncated_marker: "...",
-    });
-
-    let file = NamedTempFile::new().unwrap();
-
-    fs::write(file.path(), "foo foo foo\nbar\n").unwrap();
-
-    let result = executor
-      .read_file(&ReadFileTool {
-        cwd: None,
-        end_line: Some(2),
-        path: file.path().to_owned(),
-        start_line: Some(2),
-      })
-      .await;
-
-    assert_eq!(result.output().unwrap(), "bar\n");
-  }
-
-  #[tokio::test]
-  async fn read_file_reads_line_range() {
-    let executor = Executor::default();
-
-    let file = NamedTempFile::new().unwrap();
-
-    fs::write(file.path(), "foo\nbar\nbaz\nqux\n").unwrap();
-
-    let result = executor
-      .read_file(&ReadFileTool {
-        cwd: None,
-        end_line: Some(3),
-        path: file.path().to_owned(),
-        start_line: Some(2),
-      })
-      .await;
-
-    assert_eq!(result.output().unwrap(), "bar\nbaz\n");
   }
 
   #[tokio::test]
