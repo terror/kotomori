@@ -10,6 +10,7 @@ mod galadriel;
 mod gemini;
 mod groq;
 mod huggingface;
+mod llamacpp;
 mod llamafile;
 mod minimax;
 mod mistral;
@@ -45,6 +46,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
       "gemini" => gemini::build(&model),
       "groq" => groq::build(&model),
       "huggingface" => huggingface::build(&model),
+      "llamacpp" => llamacpp::build(&model),
       "llamafile" => llamafile::build(&model),
       "minimax" => minimax::build(&model),
       "mistral" => mistral::build(&model),
