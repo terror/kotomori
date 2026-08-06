@@ -2,6 +2,7 @@ use super::*;
 
 mod anthropic;
 mod azure;
+mod chatgpt;
 mod cohere;
 mod copilot;
 mod deepseek;
@@ -35,6 +36,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
     match model.provider.as_str() {
       "anthropic" => anthropic::build(&model),
       "azure" => azure::build(&model),
+      "chatgpt" => chatgpt::build(&model),
       "cohere" => cohere::build(&model),
       "copilot" => copilot::build(&model),
       "deepseek" => deepseek::build(&model),
