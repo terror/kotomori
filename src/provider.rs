@@ -6,6 +6,7 @@ mod chatgpt;
 mod cohere;
 mod copilot;
 mod deepseek;
+mod galadriel;
 mod gemini;
 mod groq;
 mod huggingface;
@@ -40,6 +41,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
       "cohere" => cohere::build(&model),
       "copilot" => copilot::build(&model),
       "deepseek" => deepseek::build(&model),
+      "galadriel" => galadriel::build(&model),
       "gemini" => gemini::build(&model),
       "groq" => groq::build(&model),
       "huggingface" => huggingface::build(&model),
