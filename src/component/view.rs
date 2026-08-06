@@ -2,12 +2,19 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ViewComponent<'a> {
+  first_draw_duration: Option<Duration>,
   screen: &'a Screen,
 }
 
 impl<'a> ViewComponent<'a> {
-  pub(crate) fn new(screen: &'a Screen) -> Self {
-    Self { screen }
+  pub(crate) fn new(
+    screen: &'a Screen,
+    first_draw_duration: Option<Duration>,
+  ) -> Self {
+    Self {
+      first_draw_duration,
+      screen,
+    }
   }
 }
 
@@ -17,7 +24,7 @@ impl Component for ViewComponent<'_> {
       Screen::Quit => Vec::new(),
       Screen::Resume(picker) => {
         let mut lines = once(LineComponent::blank())
-          .chain(HeaderComponent.render(width))
+          .chain(HeaderComponent::new(self.first_draw_duration).render(width))
           .chain(once(LineComponent::blank()))
           .chain(once(LineComponent::from([
             Span::styled("Search previous sessions. Press ", Style::DarkGray),
@@ -66,7 +73,7 @@ impl Component for ViewComponent<'_> {
         lines
       }
       Screen::Session(state) => once(LineComponent::blank())
-        .chain(HeaderComponent.render(width))
+        .chain(HeaderComponent::new(self.first_draw_duration).render(width))
         .chain(once(LineComponent::blank()))
         .chain(HintComponent.render(width))
         .chain(once(LineComponent::blank()))
@@ -107,7 +114,7 @@ mod tests {
     let screen = Screen::Session(Box::new(state));
 
     assert!(
-      ViewComponent::new(&screen)
+      ViewComponent::new(&screen, None)
         .render(80)
         .iter()
         .any(|line| line.to_string().contains("mock · local ·"))
@@ -135,7 +142,7 @@ mod tests {
     state.input_mode = InputMode::Approval(request);
 
     let lines =
-      ViewComponent::new(&Screen::Session(Box::new(state))).render(80);
+      ViewComponent::new(&Screen::Session(Box::new(state)), None).render(80);
 
     let approval = lines
       .iter()
@@ -160,7 +167,7 @@ mod tests {
     .unwrap();
 
     let lines =
-      ViewComponent::new(&Screen::Session(Box::new(state))).render(80);
+      ViewComponent::new(&Screen::Session(Box::new(state)), None).render(80);
 
     let command = lines
       .iter()

@@ -99,7 +99,7 @@ use {
       atomic::{self, AtomicU64},
     },
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
   },
   str_ext::StrExt,
   strum::{EnumIter, IntoEnumIterator},
@@ -199,6 +199,9 @@ mod user_message_content;
 mod viewport;
 mod write_ext;
 
+pub(crate) static FIRST_DRAW_STARTED_AT: LazyLock<Option<Instant>> =
+  LazyLock::new(|| env::var_os("KOTOMORI_DEV").is_some().then(Instant::now));
+
 pub(crate) static SYSTEM_PROMPT: LazyLock<String> = LazyLock::new(|| {
   indoc! {
     "
@@ -222,6 +225,8 @@ type Result<T = (), E = Error> = std::result::Result<T, E>;
 
 #[tokio::main]
 async fn main() {
+  LazyLock::force(&FIRST_DRAW_STARTED_AT);
+
   if let Err(error) = Arguments::parse().run().await {
     eprintln!("error: {error}");
 
