@@ -321,12 +321,15 @@ impl Running {
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_kotomori"));
 
     command.args(&test.arguments);
+
     command.cwd(test.cwd.as_deref().unwrap_or(test.tempdir.path()));
+
     command.env("KOTOMORI_HOME", test.tempdir.path().join("kotomori-home"));
-    command.env_remove("KOTOMORI_DEV");
     command.env("RUST_BACKTRACE", "0");
     command.env("TERM", "xterm-256color");
     command.env("XDG_CONFIG_HOME", test.tempdir.path().join("xdg-config"));
+
+    command.env_remove("KOTOMORI_DEV");
 
     for (key, value) in &test.env {
       command.env(key, value);
