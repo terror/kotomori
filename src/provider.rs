@@ -17,6 +17,7 @@ mod perplexity;
 mod rig;
 mod together;
 mod xai;
+mod xiaomimimo;
 mod zai;
 
 #[async_trait]
@@ -45,6 +46,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
       "perplexity" => perplexity::build(&model),
       "together" => together::build(&model),
       "xai" => xai::build(&model),
+      "xiaomimimo" => xiaomimimo::build(&model),
       "zai" => zai::build(&model),
       provider => bail!("unknown provider `{provider}`"),
     }
