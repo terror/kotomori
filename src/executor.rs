@@ -172,11 +172,13 @@ mod tests {
 
   #[tokio::test]
   async fn collect_output_lossy_returns_output() {
-    let output = task::spawn(async { Ok::<_, io::Error>("foo".to_string()) });
-
-    let output = Executor::collect_output_lossy(Some(output)).await;
-
-    assert_eq!(output, "foo");
+    assert_eq!(
+      Executor::collect_output_lossy(Some(task::spawn(async {
+        Ok::<_, io::Error>("foo".to_string())
+      })))
+      .await,
+      "foo"
+    );
   }
 
   #[tokio::test]
@@ -189,8 +191,9 @@ mod tests {
       },
     };
 
-    let output = executor.read_pipe(&b"foo bar baz"[..]).await.unwrap();
-
-    assert_eq!(output, "foo b...");
+    assert_eq!(
+      executor.read_pipe(&b"foo bar baz"[..]).await.unwrap(),
+      "foo b..."
+    );
   }
 }
