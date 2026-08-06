@@ -15,6 +15,7 @@ mod perplexity;
 mod rig;
 mod together;
 mod xai;
+mod xiaomimimo;
 
 #[async_trait]
 pub(crate) trait Provider: fmt::Debug + Send + Sync {
@@ -40,6 +41,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
       "perplexity" => perplexity::build(&model),
       "together" => together::build(&model),
       "xai" => xai::build(&model),
+      "xiaomimimo" => xiaomimimo::build(&model),
       provider => bail!("unknown provider `{provider}`"),
     }
   }
