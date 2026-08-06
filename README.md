@@ -5,3 +5,9 @@
 
 **kotomori** (言の森) is a coding agent in implemented in Rust, with a focus on
 performance and simplicity.
+
+<img width="1667" alt="val" src="screenshot.png" />
+
+## Prior Art
+
+This project was inspired by tools like [pi](https://github.com/earendil-works/pi) and [opencode](https://github.com/anomalyco/opencode).
