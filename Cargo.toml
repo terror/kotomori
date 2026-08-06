@@ -1,7 +1,15 @@
 [package]
 name = "kotomori"
 version = "0.1.0"
+description = "A coding agent"
+authors = ["Liam <liam@scalzulli.com>"]
+license = "CC0-1.0"
+homepage = "https://github.com/terror/kotomori"
+repository = "https://github.com/terror/kotomori"
 edition = "2024"
+categories = ["command-line-utilities", "development-tools"]
+keywords = ["ai", "agent", "coding", "terminal", "cli"]
+include = ["/LICENSE", "/README.md", "/screenshot.png", "/src/", "/tests/"]
 
 [workspace]
 members = [".", "crates/*"]
