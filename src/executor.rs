@@ -1,76 +1,34 @@
 use super::*;
 
+type OutputTask = task::JoinHandle<io::Result<String>>;
+
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Executor {
   limits: ExecutionLimit,
 }
 
 impl Executor {
-  async fn collect_output(
-    output: Option<task::JoinHandle<io::Result<String>>>,
-  ) -> Result<String, Error> {
-    match output {
-      Some(output) => Ok(output.await??),
-      None => Ok(String::new()),
-    }
-  }
-
-  async fn collect_output_lossy(
-    output: Option<task::JoinHandle<io::Result<String>>>,
-  ) -> String {
-    let Some(output) = output else {
-      return String::new();
-    };
-
-    match timeout(Duration::from_secs(1), output).await {
-      Ok(Ok(Ok(output))) => output,
-      Ok(Ok(Err(_)) | Err(_)) | Err(_) => String::new(),
-    }
-  }
-
   pub(crate) async fn execute(
     &self,
     mut command: tokio::process::Command,
-    input: Option<String>,
   ) -> ToolResult {
     command.kill_on_drop(true);
 
     command.stderr(Stdio::piped());
     command.stdout(Stdio::piped());
 
-    if input.is_some() {
-      command.stdin(Stdio::piped());
-    }
-
     let mut child = match command.spawn() {
       Ok(child) => child,
       Err(error) => return ToolResult::error(error),
     };
 
-    let stdout = child
-      .stdout
-      .take()
-      .map(|stdout| task::spawn(self.read_pipe(stdout)));
+    let stdout = child.stdout.take().expect("stdout is piped");
+    let stdout = task::spawn(self.read_pipe(stdout));
 
-    let stderr = child
-      .stderr
-      .take()
-      .map(|stderr| task::spawn(self.read_pipe(stderr)));
+    let stderr = child.stderr.take().expect("stderr is piped");
+    let stderr = task::spawn(self.read_pipe(stderr));
 
-    let status = timeout(self.limits.timeout, async {
-      if let Some(input) = input {
-        let mut stdin =
-          child.stdin.take().context("failed to open tool stdin")?;
-
-        stdin.write_all(input.as_bytes()).await?;
-        stdin.shutdown().await?;
-
-        drop(stdin);
-      }
-
-      Ok::<_, Error>(child.wait().await?)
-    })
-    .await;
+    let status = timeout(self.limits.timeout, child.wait()).await;
 
     let status = match status {
       Ok(Ok(status)) => status,
@@ -78,13 +36,15 @@ impl Executor {
       Err(_) => return self.timeout_result(child, stdout, stderr).await,
     };
 
-    let stdout = match Self::collect_output(stdout).await {
-      Ok(stdout) => stdout,
+    let stdout = match stdout.await {
+      Ok(Ok(stdout)) => stdout,
+      Ok(Err(error)) => return ToolResult::error(error),
       Err(error) => return ToolResult::error(error),
     };
 
-    let stderr = match Self::collect_output(stderr).await {
-      Ok(stderr) => stderr,
+    let stderr = match stderr.await {
+      Ok(Ok(stderr)) => stderr,
+      Ok(Err(error)) => return ToolResult::error(error),
       Err(error) => return ToolResult::error(error),
     };
 
@@ -125,13 +85,26 @@ impl Executor {
   async fn timeout_result(
     &self,
     mut child: tokio::process::Child,
-    stdout: Option<task::JoinHandle<io::Result<String>>>,
-    stderr: Option<task::JoinHandle<io::Result<String>>>,
+    stdout: OutputTask,
+    stderr: OutputTask,
   ) -> ToolResult {
     let kill = child.start_kill();
 
-    let stdout = Self::collect_output_lossy(stdout).await;
-    let stderr = Self::collect_output_lossy(stderr).await;
+    let stdout = if let Ok(Ok(Ok(stdout))) =
+      timeout(Duration::from_secs(1), stdout).await
+    {
+      stdout
+    } else {
+      String::new()
+    };
+
+    let stderr = if let Ok(Ok(Ok(stderr))) =
+      timeout(Duration::from_secs(1), stderr).await
+    {
+      stderr
+    } else {
+      String::new()
+    };
 
     let wait = timeout(Duration::from_secs(1), child.wait()).await;
 
@@ -169,17 +142,6 @@ impl Executor {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[tokio::test]
-  async fn collect_output_lossy_returns_output() {
-    assert_eq!(
-      Executor::collect_output_lossy(Some(task::spawn(async {
-        Ok::<_, io::Error>("foo".to_string())
-      })))
-      .await,
-      "foo"
-    );
-  }
 
   #[tokio::test]
   async fn read_pipe_output_is_capped() {

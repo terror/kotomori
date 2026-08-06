@@ -147,7 +147,7 @@ use {
   subcommand::Subcommand,
   terminal::Terminal,
   tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt},
     sync::{
       mpsc::{self, UnboundedReceiver, UnboundedSender},
       oneshot,

@@ -43,6 +43,7 @@ impl Display for CommandTool {
 impl ToolSpec for CommandTool {
   const DESCRIPTION: &'static str =
     "Run a command and capture stdout, stderr, and exit status.";
+
   const NAME: &'static str = "command";
 
   fn action(tense: ToolActionTense) -> &'static str {
@@ -75,7 +76,7 @@ impl ToolSpec for CommandTool {
       command.current_dir(cwd);
     }
 
-    executor.execute(command, None).await
+    executor.execute(command).await
   }
 
   fn requires_approval(&self) -> bool {
