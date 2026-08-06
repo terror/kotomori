@@ -2,8 +2,8 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ResumePicker {
-  query: String,
-  selected: usize,
+  pub(crate) query: String,
+  pub(crate) selected: usize,
   sessions: Vec<SessionSummary>,
 }
 
@@ -18,7 +18,7 @@ impl ResumePicker {
     };
   }
 
-  fn filtered(&self) -> Vec<&SessionSummary> {
+  pub(crate) fn filtered(&self) -> Vec<&SessionSummary> {
     self
       .sessions
       .iter()
@@ -34,41 +34,44 @@ impl ResumePicker {
       .count()
   }
 
-  fn handle_key(&mut self, key: KeyEvent) -> Option<ResumePickerAction> {
-    match key.code {
-      KeyCode::Backspace => {
+  pub(crate) fn handle_action(
+    &mut self,
+    action: Action,
+  ) -> Option<ResumePickerAction> {
+    match action {
+      Action::Edit(input) if input.key == Key::Backspace => {
         self.query.pop();
         self.clamp_selection();
       }
-      KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-        return Some(ResumePickerAction::Cancel);
-      }
-      KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+      Action::Edit(input) if input.key == Key::Char('u') && input.ctrl => {
         self.query.clear();
         self.clamp_selection();
       }
-      KeyCode::Char(c)
-        if !key
-          .modifiers
-          .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-      {
+      Action::Edit(Input {
+        key: Key::Char(c),
+        ctrl: false,
+        alt: false,
+        ..
+      }) => {
         self.query.push(c);
         self.clamp_selection();
       }
-      KeyCode::Down => {
+      Action::SelectNext => {
         let len = self.filtered_len();
 
         if len > 0 {
           self.selected = self.selected.saturating_add(1) % len;
         }
       }
-      KeyCode::Enter => {
+      Action::Submit => {
         if let Some(path) = self.selected_path() {
           return Some(ResumePickerAction::Resume(path));
         }
       }
-      KeyCode::Esc => return Some(ResumePickerAction::Cancel),
-      KeyCode::Up => {
+      Action::Interrupt | Action::Quit => {
+        return Some(ResumePickerAction::Cancel);
+      }
+      Action::SelectPrevious => {
         let len = self.filtered_len();
 
         if len > 0 {
@@ -79,7 +82,7 @@ impl ResumePicker {
           };
         }
       }
-      _ => {}
+      Action::CompleteCommand | Action::Edit(_) => {}
     }
 
     None
@@ -93,94 +96,11 @@ impl ResumePicker {
     }
   }
 
-  pub(crate) fn run(mut self) -> Result<Option<PathBuf>> {
-    let mut terminal = Terminal::new()?;
-
-    let mut renderer = Renderer::new();
-
-    loop {
-      renderer.draw(&mut terminal.stdout, &self)?;
-
-      let event =
-        crossterm_event::read().context("failed to read terminal input")?;
-
-      let CrosstermEvent::Key(key) = event else {
-        continue;
-      };
-
-      if key.kind != KeyEventKind::Press {
-        continue;
-      }
-
-      if let Some(action) = self.handle_key(key) {
-        renderer.finish(&mut terminal.stdout)?;
-
-        return Ok(match action {
-          ResumePickerAction::Cancel => None,
-          ResumePickerAction::Resume(path) => Some(path),
-        });
-      }
-    }
-  }
-
   fn selected_path(&self) -> Option<PathBuf> {
     self
       .filtered()
       .get(self.selected)
       .map(|session| session.path.clone())
-  }
-}
-
-impl Component for ResumePicker {
-  fn render(&self, width: u16) -> Vec<LineComponent> {
-    let mut lines = once(LineComponent::blank())
-      .chain(HeaderComponent.render(width))
-      .chain(once(LineComponent::blank()))
-      .chain(once(LineComponent::from([
-        Span::styled("Search previous sessions. Press ", Style::DarkGray),
-        Span::styled("Enter", Style::Gray),
-        Span::styled(" to resume, ", Style::DarkGray),
-        Span::styled("Esc", Style::Gray),
-        Span::styled(" to cancel.", Style::DarkGray),
-      ])))
-      .chain(once(LineComponent::blank()))
-      .chain(once(LineComponent::from([
-        Span::styled("Search: ", Style::DarkGray),
-        Span::raw(&self.query),
-        Span::styled(" ", Style::Reverse),
-      ])))
-      .chain(once(LineComponent::blank()))
-      .collect::<Vec<_>>();
-
-    let filtered = self.filtered();
-
-    if filtered.is_empty() {
-      lines.push(LineComponent::from([Span::styled(
-        "No matching sessions.",
-        Style::DarkGray,
-      )]));
-
-      return lines;
-    }
-
-    for (index, session) in filtered.into_iter().enumerate() {
-      let style = if index == self.selected {
-        Style::CyanBold
-      } else {
-        Style::Gray
-      };
-
-      let marker = if index == self.selected { "> " } else { "  " };
-
-      lines.push(LineComponent::from([
-        Span::styled(marker, style),
-        Span::styled(session.title.as_str(), style),
-        Span::styled("  ", Style::DarkGray),
-        Span::styled(session.detail(), Style::DarkGray),
-      ]));
-    }
-
-    lines
   }
 }
 
@@ -209,20 +129,18 @@ mod tests {
       },
     ]);
 
-    picker.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+    picker.handle_action(Action::Edit(Input {
+      key: Key::Char('b'),
+      ..Default::default()
+    }));
 
-    assert!(
+    assert_eq!(
       picker
-        .render(80)
-        .iter()
-        .any(|line| { line.to_string().contains("bar") })
-    );
-
-    assert!(
-      !picker
-        .render(80)
-        .iter()
-        .any(|line| { line.to_string().contains("foo  mock") })
+        .filtered()
+        .into_iter()
+        .map(|session| session.path.as_path())
+        .collect::<Vec<_>>(),
+      [Path::new("bar")],
     );
   }
 }
