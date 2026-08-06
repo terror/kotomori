@@ -6,6 +6,7 @@ mod cohere;
 mod deepseek;
 mod gemini;
 mod groq;
+mod huggingface;
 mod minimax;
 mod mistral;
 mod mock;
@@ -36,6 +37,7 @@ impl TryFrom<Model> for Arc<dyn Provider> {
       "deepseek" => deepseek::build(&model),
       "gemini" => gemini::build(&model),
       "groq" => groq::build(&model),
+      "huggingface" => huggingface::build(&model),
       "minimax" => minimax::build(&model),
       "mistral" => mistral::build(&model),
       "mock" => Ok(Arc::new(mock::Mock)),
