@@ -16,7 +16,7 @@ trap cleanup EXIT
 rm -rf "$TMP_DIR"
 mkdir -p "$ROOT_DIR/tmp"
 
-gh repo clone https://github.com/terror/null "$TMP_DIR"
+gh repo clone https://github.com/terror/kotomori "$TMP_DIR"
 
 cd "$TMP_DIR"
 
