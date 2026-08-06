@@ -50,17 +50,22 @@ impl Executor {
     let stdout = child
       .stdout
       .take()
-      .map(|stdout| task::spawn(Self::read_pipe(stdout, self.limits)));
+      .map(|stdout| task::spawn(self.read_pipe(stdout)));
 
     let stderr = child
       .stderr
       .take()
-      .map(|stderr| task::spawn(Self::read_pipe(stderr, self.limits)));
+      .map(|stderr| task::spawn(self.read_pipe(stderr)));
 
     let status = timeout(self.limits.timeout, async {
       if let Some(input) = input {
-        let stdin = child.stdin.take().context("failed to open tool stdin")?;
-        Self::write_input(stdin, input).await?;
+        let mut stdin =
+          child.stdin.take().context("failed to open tool stdin")?;
+
+        stdin.write_all(input.as_bytes()).await?;
+        stdin.shutdown().await?;
+
+        drop(stdin);
       }
 
       Ok::<_, Error>(child.wait().await?)
@@ -86,16 +91,13 @@ impl Executor {
     ToolResult::command(status.code(), stdout, stderr)
   }
 
-  async fn read_pipe<R>(
-    mut reader: R,
-    limits: ExecutionLimit,
-  ) -> io::Result<String>
+  async fn read_pipe<R>(self, mut reader: R) -> io::Result<String>
   where
     R: AsyncRead + Send + Unpin + 'static,
   {
     let (mut bytes, mut buffer) = (Vec::new(), [0; 8192]);
 
-    let maximum = limits.output_limit.saturating_add(1);
+    let maximum = self.limits.output_limit.saturating_add(1);
 
     loop {
       let count = reader.read(&mut buffer).await?;
@@ -117,7 +119,7 @@ impl Executor {
       }
     }
 
-    Ok(limits.decode(bytes))
+    Ok(self.limits.decode(bytes))
   }
 
   async fn timeout_result(
@@ -162,21 +164,6 @@ impl Executor {
 
     ToolResult::command(None, stdout, stderr)
   }
-
-  async fn write_input<W>(
-    mut stdin: W,
-    input: impl AsRef<[u8]>,
-  ) -> Result<(), Error>
-  where
-    W: AsyncWrite + Unpin,
-  {
-    stdin.write_all(input.as_ref()).await?;
-    stdin.shutdown().await?;
-
-    drop(stdin);
-
-    Ok(())
-  }
 }
 
 #[cfg(test)]
@@ -194,29 +181,16 @@ mod tests {
 
   #[tokio::test]
   async fn read_pipe_output_is_capped() {
-    let limits = ExecutionLimit {
-      output_limit: 8,
-      timeout: Duration::from_secs(30),
-      truncated_marker: "...",
+    let executor = Executor {
+      limits: ExecutionLimit {
+        output_limit: 8,
+        timeout: Duration::from_secs(30),
+        truncated_marker: "...",
+      },
     };
 
-    let output = Executor::read_pipe(&b"foo bar baz"[..], limits)
-      .await
-      .unwrap();
+    let output = executor.read_pipe(&b"foo bar baz"[..]).await.unwrap();
 
     assert_eq!(output, "foo b...");
-  }
-
-  #[tokio::test]
-  async fn write_input_closes_stdin() {
-    let (stdin, mut stdout) = tokio::io::duplex(1024);
-
-    Executor::write_input(stdin, "foo").await.unwrap();
-
-    let mut output = String::new();
-
-    stdout.read_to_string(&mut output).await.unwrap();
-
-    assert_eq!(output, "foo");
   }
 }
