@@ -59,7 +59,7 @@ mod tests {
         .iter()
         .map(|tool| tool.name)
         .collect::<Vec<_>>(),
-      ["apply_patch", "command", "read_file", "search_files"],
+      ["command"],
     );
   }
 

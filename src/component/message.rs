@@ -60,9 +60,10 @@ mod tests {
   fn render_agent_content() {
     let invocation = ToolInvocation {
       id: "foo".into(),
-      kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
+      kind: ToolInvocationKind::Command(CommandTool {
         arguments: vec!["--files".into()],
         cwd: Some("bar".into()),
+        program: "rg".into(),
       }),
     };
 
@@ -79,7 +80,7 @@ mod tests {
         LineComponent::from([Span::styled(" bar", Style::DarkGray)]),
         LineComponent::raw("baz"),
         LineComponent::raw("qux"),
-        LineComponent::raw("search files --files in bar"),
+        LineComponent::raw("rg --files"),
       ]
     );
   }

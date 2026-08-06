@@ -6,82 +6,24 @@ pub(crate) struct Executor {
 }
 
 impl Executor {
-  async fn blocking<T>(
-    &self,
-    f: impl FnOnce() -> io::Result<T> + Send + 'static,
-  ) -> Result<T, Error>
-  where
-    T: Send + 'static,
-  {
-    match timeout(self.limits.timeout, task::spawn_blocking(f)).await {
-      Ok(result) => Ok(result??),
-      Err(_) => Err(Error::msg(format!(
-        "tool timed out after {} seconds",
-        self.limits.timeout.as_secs()
-      ))),
-    }
-  }
-
-  async fn collect_output(
-    output: Option<task::JoinHandle<io::Result<String>>>,
-  ) -> Result<String, Error> {
-    match output {
-      Some(output) => Ok(output.await??),
-      None => Ok(String::new()),
-    }
-  }
-
-  async fn collect_output_lossy(
-    output: Option<task::JoinHandle<io::Result<String>>>,
-  ) -> String {
-    let Some(output) = output else {
-      return String::new();
-    };
-
-    match timeout(Duration::from_secs(1), output).await {
-      Ok(Ok(Ok(output))) => output,
-      Ok(Ok(Err(_)) | Err(_)) | Err(_) => String::new(),
-    }
-  }
-
-  pub(crate) async fn execute(
-    &self,
-    mut command: tokio::process::Command,
-    input: Option<String>,
-  ) -> ToolResult {
+  pub(crate) async fn execute(&self, mut command: AsyncCommand) -> ToolResult {
     command.kill_on_drop(true);
 
     command.stderr(Stdio::piped());
     command.stdout(Stdio::piped());
-
-    if input.is_some() {
-      command.stdin(Stdio::piped());
-    }
 
     let mut child = match command.spawn() {
       Ok(child) => child,
       Err(error) => return ToolResult::error(error),
     };
 
-    let stdout = child
-      .stdout
-      .take()
-      .map(|stdout| task::spawn(Self::read_pipe(stdout, self.limits)));
+    let stdout = child.stdout.take().expect("stdout is piped");
+    let stdout = task::spawn(self.read_pipe(stdout));
 
-    let stderr = child
-      .stderr
-      .take()
-      .map(|stderr| task::spawn(Self::read_pipe(stderr, self.limits)));
+    let stderr = child.stderr.take().expect("stderr is piped");
+    let stderr = task::spawn(self.read_pipe(stderr));
 
-    let status = timeout(self.limits.timeout, async {
-      if let Some(input) = input {
-        let stdin = child.stdin.take().context("failed to open tool stdin")?;
-        Self::write_input(stdin, input).await?;
-      }
-
-      Ok::<_, Error>(child.wait().await?)
-    })
-    .await;
+    let status = timeout(self.limits.timeout, child.wait()).await;
 
     let status = match status {
       Ok(Ok(status)) => status,
@@ -89,98 +31,28 @@ impl Executor {
       Err(_) => return self.timeout_result(child, stdout, stderr).await,
     };
 
-    let stdout = match Self::collect_output(stdout).await {
-      Ok(stdout) => stdout,
+    let stdout = match stdout.await {
+      Ok(Ok(stdout)) => stdout,
+      Ok(Err(error)) => return ToolResult::error(error),
       Err(error) => return ToolResult::error(error),
     };
 
-    let stderr = match Self::collect_output(stderr).await {
-      Ok(stderr) => stderr,
+    let stderr = match stderr.await {
+      Ok(Ok(stderr)) => stderr,
+      Ok(Err(error)) => return ToolResult::error(error),
       Err(error) => return ToolResult::error(error),
     };
 
     ToolResult::command(status.code(), stdout, stderr)
   }
 
-  pub(crate) async fn read_file(&self, tool: &ReadFileTool) -> ToolResult {
-    let limits = self.limits;
-
-    let path = tool
-      .cwd
-      .as_ref()
-      .map_or_else(|| tool.path.clone(), |cwd| cwd.join(&tool.path));
-
-    let (start_line, end_line) = (tool.start_line, tool.end_line);
-
-    let result = self
-      .blocking(move || {
-        let file = File::open(path)?;
-
-        let bytes = match (start_line, end_line) {
-          (None, None) => {
-            let mut reader = file.take(limits.output_limit as u64 + 1);
-            let mut bytes = Vec::new();
-
-            reader.read_to_end(&mut bytes)?;
-
-            bytes
-          }
-          (start_line, end_line) => {
-            let (start_line, end_line) = (
-              start_line.unwrap_or(1).max(1),
-              end_line.unwrap_or(usize::MAX),
-            );
-
-            let maximum = limits.output_limit.saturating_add(1);
-
-            let mut bytes = Vec::new();
-            let mut line = Vec::new();
-            let mut reader = io::BufReader::new(file);
-
-            for number in 1.. {
-              line.clear();
-
-              if reader.read_until(b'\n', &mut line)? == 0 {
-                break;
-              }
-
-              if number < start_line {
-                continue;
-              }
-
-              if number > end_line || bytes.len() >= maximum {
-                break;
-              }
-
-              bytes.extend_from_slice(
-                &line[..line.len().min(maximum.saturating_sub(bytes.len()))],
-              );
-            }
-
-            bytes
-          }
-        };
-
-        Ok(limits.decode(bytes))
-      })
-      .await;
-
-    match result {
-      Ok(content) => ToolResult::content(content),
-      Err(error) => ToolResult::error(error),
-    }
-  }
-
-  async fn read_pipe<R>(
-    mut reader: R,
-    limits: ExecutionLimit,
-  ) -> io::Result<String>
+  async fn read_pipe<R>(self, mut reader: R) -> io::Result<String>
   where
     R: AsyncRead + Send + Unpin + 'static,
   {
     let (mut bytes, mut buffer) = (Vec::new(), [0; 8192]);
 
-    let maximum = limits.output_limit.saturating_add(1);
+    let maximum = self.limits.output_limit.saturating_add(1);
 
     loop {
       let count = reader.read(&mut buffer).await?;
@@ -202,19 +74,30 @@ impl Executor {
       }
     }
 
-    Ok(limits.decode(bytes))
+    Ok(self.limits.decode(bytes))
   }
 
   async fn timeout_result(
     &self,
     mut child: tokio::process::Child,
-    stdout: Option<task::JoinHandle<io::Result<String>>>,
-    stderr: Option<task::JoinHandle<io::Result<String>>>,
+    stdout: OutputTask,
+    stderr: OutputTask,
   ) -> ToolResult {
     let kill = child.start_kill();
 
-    let stdout = Self::collect_output_lossy(stdout).await;
-    let stderr = Self::collect_output_lossy(stderr).await;
+    let stdout = timeout(Duration::from_secs(1), stdout)
+      .await
+      .ok()
+      .and_then(Result::ok)
+      .and_then(Result::ok)
+      .unwrap_or_default();
+
+    let stderr = timeout(Duration::from_secs(1), stderr)
+      .await
+      .ok()
+      .and_then(Result::ok)
+      .and_then(Result::ok)
+      .unwrap_or_default();
 
     let wait = timeout(Duration::from_secs(1), child.wait()).await;
 
@@ -247,134 +130,25 @@ impl Executor {
 
     ToolResult::command(None, stdout, stderr)
   }
-
-  #[cfg(test)]
-  pub(crate) fn with_limits(limits: ExecutionLimit) -> Self {
-    Self { limits }
-  }
-
-  async fn write_input<W>(
-    mut stdin: W,
-    input: impl AsRef<[u8]>,
-  ) -> Result<(), Error>
-  where
-    W: AsyncWrite + Unpin,
-  {
-    stdin.write_all(input.as_ref()).await?;
-    stdin.shutdown().await?;
-
-    drop(stdin);
-
-    Ok(())
-  }
 }
 
 #[cfg(test)]
 mod tests {
-  use {super::*, tempfile::NamedTempFile};
-
-  #[tokio::test]
-  async fn collect_output_lossy_returns_output() {
-    let output = task::spawn(async { Ok::<_, io::Error>("foo".to_string()) });
-
-    let output = Executor::collect_output_lossy(Some(output)).await;
-
-    assert_eq!(output, "foo");
-  }
-
-  #[tokio::test]
-  async fn read_file_output_is_capped() {
-    let executor = Executor::with_limits(ExecutionLimit {
-      output_limit: 8,
-      timeout: Duration::from_secs(30),
-      truncated_marker: "...",
-    });
-
-    let file = NamedTempFile::new().unwrap();
-
-    fs::write(file.path(), "foo bar baz").unwrap();
-
-    let result = executor
-      .read_file(&ReadFileTool {
-        cwd: None,
-        end_line: None,
-        path: file.path().to_owned(),
-        start_line: None,
-      })
-      .await;
-
-    assert_eq!(result.output().unwrap(), "foo b...");
-  }
-
-  #[tokio::test]
-  async fn read_file_range_can_start_after_output_limit() {
-    let executor = Executor::with_limits(ExecutionLimit {
-      output_limit: 8,
-      timeout: Duration::from_secs(30),
-      truncated_marker: "...",
-    });
-
-    let file = NamedTempFile::new().unwrap();
-
-    fs::write(file.path(), "foo foo foo\nbar\n").unwrap();
-
-    let result = executor
-      .read_file(&ReadFileTool {
-        cwd: None,
-        end_line: Some(2),
-        path: file.path().to_owned(),
-        start_line: Some(2),
-      })
-      .await;
-
-    assert_eq!(result.output().unwrap(), "bar\n");
-  }
-
-  #[tokio::test]
-  async fn read_file_reads_line_range() {
-    let executor = Executor::default();
-
-    let file = NamedTempFile::new().unwrap();
-
-    fs::write(file.path(), "foo\nbar\nbaz\nqux\n").unwrap();
-
-    let result = executor
-      .read_file(&ReadFileTool {
-        cwd: None,
-        end_line: Some(3),
-        path: file.path().to_owned(),
-        start_line: Some(2),
-      })
-      .await;
-
-    assert_eq!(result.output().unwrap(), "bar\nbaz\n");
-  }
+  use super::*;
 
   #[tokio::test]
   async fn read_pipe_output_is_capped() {
-    let limits = ExecutionLimit {
-      output_limit: 8,
-      timeout: Duration::from_secs(30),
-      truncated_marker: "...",
+    let executor = Executor {
+      limits: ExecutionLimit {
+        output_limit: 8,
+        timeout: Duration::from_secs(30),
+        truncated_marker: "...",
+      },
     };
 
-    let output = Executor::read_pipe(&b"foo bar baz"[..], limits)
-      .await
-      .unwrap();
-
-    assert_eq!(output, "foo b...");
-  }
-
-  #[tokio::test]
-  async fn write_input_closes_stdin() {
-    let (stdin, mut stdout) = tokio::io::duplex(1024);
-
-    Executor::write_input(stdin, "foo").await.unwrap();
-
-    let mut output = String::new();
-
-    stdout.read_to_string(&mut output).await.unwrap();
-
-    assert_eq!(output, "foo");
+    assert_eq!(
+      executor.read_pipe(&b"foo bar baz"[..]).await.unwrap(),
+      "foo b..."
+    );
   }
 }

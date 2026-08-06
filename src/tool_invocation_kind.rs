@@ -107,6 +107,17 @@ mod tests {
     );
   }
 
+  #[test]
+  fn command_requires_approval() {
+    let invocation = ToolInvocationKind::Command(CommandTool {
+      arguments: Vec::new(),
+      cwd: None,
+      program: "foo".into(),
+    });
+
+    assert!(invocation.requires_approval());
+  }
+
   #[tokio::test]
   async fn denied_approval_short_circuits_approval_required_tools() {
     let invocation = ToolInvocationKind::Command(CommandTool {
@@ -122,50 +133,17 @@ mod tests {
 
   #[test]
   fn metadata_methods_delegate_to_the_wrapped_tool() {
-    let tool = ReadFileTool {
+    let tool = CommandTool {
+      arguments: vec!["bar".into()],
       cwd: None,
-      end_line: Some(10),
-      path: "foo.rs".into(),
-      start_line: Some(1),
+      program: "foo".into(),
     };
 
-    let invocation = ToolInvocationKind::ReadFile(tool.clone());
+    let invocation = ToolInvocationKind::Command(tool.clone());
 
-    assert_eq!(invocation.name(), ReadFileTool::NAME);
+    assert_eq!(invocation.name(), CommandTool::NAME);
     assert_eq!(invocation.display(), tool.display());
     assert_eq!(invocation.subject(), tool.subject());
     assert_eq!(invocation.details(), tool.details());
-  }
-
-  #[test]
-  fn mutating_tools_require_approval() {
-    let invocation = ToolInvocationKind::ApplyPatch(ApplyPatchTool {
-      cwd: None,
-      patch: "bar".into(),
-    });
-
-    assert!(invocation.requires_approval());
-  }
-
-  #[test]
-  fn readonly_tools_do_not_require_approval() {
-    let invocation = ToolInvocationKind::ReadFile(ReadFileTool {
-      cwd: None,
-      end_line: None,
-      path: "foo".into(),
-      start_line: None,
-    });
-
-    assert!(!invocation.requires_approval());
-  }
-
-  #[test]
-  fn search_with_passthrough_flag_requires_approval() {
-    let invocation = ToolInvocationKind::SearchFiles(SearchFilesTool {
-      arguments: vec!["--pre".into(), "foo".into()],
-      cwd: None,
-    });
-
-    assert!(invocation.requires_approval());
   }
 }

@@ -332,9 +332,10 @@ mod tests {
   fn render_tool_entry_after_agent() {
     let invocation = ToolInvocation {
       id: "bar".into(),
-      kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
+      kind: ToolInvocationKind::Command(CommandTool {
         arguments: vec!["--files".into()],
-        cwd: Some(".".into()),
+        cwd: None,
+        program: "rg".into(),
       }),
     };
 
@@ -356,7 +357,7 @@ mod tests {
           Span::raw(" "),
           Span::styled("●", Style::GreenBold),
           Span::raw(" "),
-          Span::raw("Searched --files in ."),
+          Span::raw("Ran rg --files"),
         ]),
         LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
@@ -371,9 +372,10 @@ mod tests {
   fn render_tool_entry_after_user() {
     let invocation = ToolInvocation {
       id: "bar".into(),
-      kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
+      kind: ToolInvocationKind::Command(CommandTool {
         arguments: vec!["--files".into()],
         cwd: None,
+        program: "rg".into(),
       }),
     };
 
@@ -396,7 +398,7 @@ mod tests {
           Span::raw(" "),
           Span::styled("●", Style::CyanBold),
           Span::raw(" "),
-          Span::raw("Searching --files"),
+          Span::raw("Running rg --files"),
         ]),
         LineComponent::blank(),
       ]
@@ -456,9 +458,10 @@ mod tests {
   fn render_tool_entry_limits_output() {
     let invocation = ToolInvocation {
       id: "bar".into(),
-      kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
+      kind: ToolInvocationKind::Command(CommandTool {
         arguments: vec!["--files".into()],
         cwd: None,
+        program: "rg".into(),
       }),
     };
 
@@ -479,7 +482,7 @@ mod tests {
           Span::raw(" "),
           Span::styled("●", Style::GreenBold),
           Span::raw(" "),
-          Span::raw("Searched --files"),
+          Span::raw("Ran rg --files"),
         ]),
         LineComponent::from([
           Span::styled("   │ ", Style::DarkGray),
@@ -506,9 +509,10 @@ mod tests {
   fn render_tool_entry_pending() {
     let invocation = ToolInvocation {
       id: "bar".into(),
-      kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
+      kind: ToolInvocationKind::Command(CommandTool {
         arguments: vec!["--files".into()],
-        cwd: Some("baz".into()),
+        cwd: None,
+        program: "rg".into(),
       }),
     };
 
@@ -525,7 +529,7 @@ mod tests {
           Span::raw(" "),
           Span::styled("●", Style::CyanBold),
           Span::raw(" "),
-          Span::raw("Searching --files in baz"),
+          Span::raw("Running rg --files"),
         ]),
         LineComponent::blank(),
       ]

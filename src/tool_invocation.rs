@@ -56,22 +56,6 @@ mod tests {
   }
 
   #[test]
-  fn parses_apply_patch_tool_call() {
-    let invocation = invocation("apply_patch", json!({"patch": "bar"}));
-
-    assert_eq!(
-      invocation,
-      ToolInvocation {
-        id: "foo".into(),
-        kind: ToolInvocationKind::ApplyPatch(ApplyPatchTool {
-          cwd: None,
-          patch: "bar".into(),
-        }),
-      },
-    );
-  }
-
-  #[test]
   fn parses_command_tool_call() {
     let invocation = invocation(
       "command",
@@ -86,41 +70,6 @@ mod tests {
           arguments: vec!["baz".into()],
           cwd: None,
           program: "bar".into(),
-        }),
-      },
-    );
-  }
-
-  #[test]
-  fn parses_read_file_tool_call() {
-    let invocation = invocation("read_file", json!({"path": "bar"}));
-
-    assert_eq!(
-      invocation,
-      ToolInvocation {
-        id: "foo".into(),
-        kind: ToolInvocationKind::ReadFile(ReadFileTool {
-          cwd: None,
-          end_line: None,
-          path: "bar".into(),
-          start_line: None,
-        }),
-      },
-    );
-  }
-
-  #[test]
-  fn parses_search_files_tool_call() {
-    let invocation =
-      invocation("search_files", json!({"arguments": ["foo"], "cwd": "bar"}));
-
-    assert_eq!(
-      invocation,
-      ToolInvocation {
-        id: "foo".into(),
-        kind: ToolInvocationKind::SearchFiles(SearchFilesTool {
-          arguments: vec!["foo".into()],
-          cwd: Some("bar".into()),
         }),
       },
     );

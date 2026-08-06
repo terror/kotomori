@@ -126,8 +126,8 @@ use {
     env,
     ffi::OsStr,
     fmt::{self, Debug, Display, Formatter},
-    fs::{self, File},
-    io::{self, BufRead, Read, Stdout, Write},
+    fs,
+    io::{self, Stdout, Write},
     iter::once,
     mem,
     ops::RangeInclusive,
@@ -147,7 +147,7 @@ use {
   subcommand::Subcommand,
   terminal::Terminal,
   tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt},
     sync::{
       mpsc::{self, UnboundedReceiver, UnboundedSender},
       oneshot,
@@ -163,7 +163,7 @@ use {
   tool_registry::ToolRegistry,
   tool_result::ToolResult,
   tool_spec::ToolSpec,
-  tools::{ApplyPatchTool, CommandTool, ReadFileTool, SearchFilesTool},
+  tools::CommandTool,
   transcript::Transcript,
   transcript_entry::TranscriptEntry,
   unicode_width::UnicodeWidthChar,
@@ -299,7 +299,7 @@ pub(crate) static SYSTEM_PROMPT: LazyLock<String> = LazyLock::new(|| {
     Work directly in the local repository. Inspect the code before changing it.
     Prefer small focused edits. Match the project's existing style.
 
-    Use available tools to read, search, edit, and run automated checks.
+    Use the command tool to read, search, edit, and run automated checks.
     Preserve user changes. Avoid destructive commands unless explicitly requested.
     Report clearly what changed and what was verified.
     "
@@ -308,6 +308,8 @@ pub(crate) static SYSTEM_PROMPT: LazyLock<String> = LazyLock::new(|| {
   .to_string()
 });
 
+type AsyncCommand = tokio::process::Command;
+type OutputTask = task::JoinHandle<io::Result<String>>;
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 
 #[tokio::main]

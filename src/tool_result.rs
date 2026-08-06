@@ -24,6 +24,7 @@ impl ToolResult {
     }
   }
 
+  #[cfg(test)]
   pub(crate) fn content(content: impl Into<String>) -> Self {
     Self {
       content: Some(content.into()),
