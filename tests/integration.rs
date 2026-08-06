@@ -514,7 +514,15 @@ fn config_sets_default_model() -> Result {
 }
 
 #[test]
-fn dev_mode_displays_time_to_first_draw() -> Result {
+fn dev_mode_controls_time_to_first_draw() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:local")
+    .wait(SETTLE_INTERVAL)
+    .expect_screen_excludes("first draw ")
+    .quit()
+    .run()?;
+
   Test::new()
     .env("KOTOMORI_DEV", "1")
     .argument("--model")

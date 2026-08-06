@@ -95,7 +95,7 @@ use {
     process::{self, Stdio},
     str::{self, FromStr},
     sync::{
-      Arc, LazyLock, Mutex,
+      Arc, LazyLock, Mutex, OnceLock,
       atomic::{self, AtomicU64},
     },
     thread,
@@ -199,8 +199,7 @@ mod user_message_content;
 mod viewport;
 mod write_ext;
 
-pub(crate) static FIRST_DRAW_STARTED_AT: LazyLock<Option<Instant>> =
-  LazyLock::new(|| env::var_os("KOTOMORI_DEV").is_some().then(Instant::now));
+static FIRST_DRAW_STARTED_AT: OnceLock<Instant> = OnceLock::new();
 
 pub(crate) static SYSTEM_PROMPT: LazyLock<String> = LazyLock::new(|| {
   indoc! {
@@ -225,7 +224,9 @@ type Result<T = (), E = Error> = std::result::Result<T, E>;
 
 #[tokio::main]
 async fn main() {
-  LazyLock::force(&FIRST_DRAW_STARTED_AT);
+  if env::var_os("KOTOMORI_DEV").is_some() {
+    FIRST_DRAW_STARTED_AT.get_or_init(Instant::now);
+  }
 
   if let Err(error) = Arguments::parse().run().await {
     eprintln!("error: {error}");

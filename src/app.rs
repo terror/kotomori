@@ -131,8 +131,8 @@ impl App {
 
     let mut renderer = Renderer::new();
 
-    let mut first_draw_started_at = *FIRST_DRAW_STARTED_AT;
-    let mut first_draw_duration = None;
+    let (mut first_draw_started_at, mut first_draw_duration) =
+      (FIRST_DRAW_STARTED_AT.get().copied(), None);
 
     self.listen_for_input();
 
