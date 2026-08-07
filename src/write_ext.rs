@@ -5,7 +5,6 @@ pub(crate) trait WriteExt {
   fn clear_line(&mut self) -> Result;
   fn clear_screen(&mut self) -> Result;
   fn end_synchronized_update(&mut self) -> Result;
-  fn move_by(&mut self, diff: isize) -> Result;
   fn move_down(&mut self, lines: usize) -> Result;
   fn move_up(&mut self, lines: usize) -> Result;
   fn write_line(&mut self, line: &str) -> Result;
@@ -38,16 +37,6 @@ impl<T: Write> WriteExt for T {
 
   fn end_synchronized_update(&mut self) -> Result {
     queue!(self, EndSynchronizedUpdate)?;
-
-    Ok(())
-  }
-
-  fn move_by(&mut self, diff: isize) -> Result {
-    match diff.cmp(&0) {
-      Ordering::Less => self.move_up(diff.unsigned_abs())?,
-      Ordering::Equal => {}
-      Ordering::Greater => self.move_down(diff.unsigned_abs())?,
-    }
 
     Ok(())
   }
@@ -132,33 +121,6 @@ mod tests {
     stdout.end_synchronized_update().unwrap();
 
     assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[?2026l");
-  }
-
-  #[test]
-  fn move_by_moves_down_for_positive_diff() {
-    let mut stdout = Vec::new();
-
-    stdout.move_by(2).unwrap();
-
-    assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[2B");
-  }
-
-  #[test]
-  fn move_by_moves_up_for_negative_diff() {
-    let mut stdout = Vec::new();
-
-    stdout.move_by(-2).unwrap();
-
-    assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[2A");
-  }
-
-  #[test]
-  fn move_by_writes_nothing_for_zero_diff() {
-    let mut stdout = Vec::new();
-
-    stdout.move_by(0).unwrap();
-
-    assert_eq!(stdout, Vec::<u8>::new());
   }
 
   #[test]

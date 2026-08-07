@@ -47,14 +47,18 @@ impl<W: Write> Renderer<W> {
       return Ok(());
     };
 
-    self.stdout.move_by(presented.cursor.diff_to(
-      presented.viewport,
-      presented.frame.last_row(),
-      presented.viewport,
-    ))?;
+    let target_row = presented.frame.last_row();
+
+    self
+      .stdout
+      .move_up(presented.cursor_row.saturating_sub(target_row))?;
+
+    self
+      .stdout
+      .move_down(target_row.saturating_sub(presented.cursor_row))?;
 
     if let Some(presented) = &mut self.presented {
-      presented.cursor = Cursor::new(presented.frame.last_row());
+      presented.cursor_row = presented.frame.last_row();
     }
 
     Ok(())
@@ -100,16 +104,16 @@ impl<W: Write> Renderer<W> {
 
   fn line_feed(
     &mut self,
-    cursor: &mut Cursor,
+    cursor_row: &mut usize,
     viewport: &mut Viewport,
   ) -> Result {
     write!(self.stdout, "\r\n")?;
 
-    if viewport.screen_row(cursor.row) >= viewport.height.saturating_sub(1) {
+    if viewport.screen_row(*cursor_row) >= viewport.height.saturating_sub(1) {
       *viewport = viewport.scrolled_down(1);
     }
 
-    cursor.row = cursor.row.saturating_add(1);
+    *cursor_row = cursor_row.saturating_add(1);
 
     Ok(())
   }
@@ -119,10 +123,14 @@ impl<W: Write> Renderer<W> {
     next: Frame,
     diff: Diff,
   ) -> Result<PresentedFrame> {
-    let (mut viewport, presented_len, mut cursor) = {
+    let (mut viewport, presented_len, mut cursor_row) = {
       let presented = self.presented.as_ref().unwrap();
 
-      (presented.viewport, presented.frame.len(), presented.cursor)
+      (
+        presented.viewport,
+        presented.frame.len(),
+        presented.cursor_row,
+      )
     };
 
     let append_start =
@@ -140,34 +148,38 @@ impl<W: Write> Renderer<W> {
       let move_to_bottom = viewport
         .height
         .saturating_sub(1)
-        .saturating_sub(viewport.screen_row(cursor.row));
+        .saturating_sub(viewport.screen_row(cursor_row));
 
       self.stdout.move_down(move_to_bottom)?;
 
       let bottom = viewport.bottom();
 
-      cursor = Cursor::new(bottom);
+      cursor_row = bottom;
 
       for _ in bottom..move_target_row {
-        self.line_feed(&mut cursor, &mut viewport)?;
+        self.line_feed(&mut cursor_row, &mut viewport)?;
       }
     }
 
     self
       .stdout
-      .move_by(cursor.diff_to(viewport, move_target_row, viewport))?;
+      .move_up(cursor_row.saturating_sub(move_target_row))?;
 
-    cursor = Cursor::new(move_target_row);
+    self
+      .stdout
+      .move_down(move_target_row.saturating_sub(cursor_row))?;
+
+    cursor_row = move_target_row;
 
     if append_start {
-      self.line_feed(&mut cursor, &mut viewport)?;
+      self.line_feed(&mut cursor_row, &mut viewport)?;
     } else {
       write!(self.stdout, "\r")?;
     }
 
     for row in diff.changed.first..=diff.changed.last {
       if row > diff.changed.first {
-        self.line_feed(&mut cursor, &mut viewport)?;
+        self.line_feed(&mut cursor_row, &mut viewport)?;
       }
 
       if let Some(line) = next.lines.get(row) {
@@ -177,15 +189,16 @@ impl<W: Write> Renderer<W> {
       }
     }
 
-    self
-      .stdout
-      .move_by(cursor.diff_to(viewport, next.last_row(), viewport))?;
+    let last_row = next.last_row();
 
-    cursor = Cursor::new(next.last_row());
+    self.stdout.move_up(cursor_row.saturating_sub(last_row))?;
+    self.stdout.move_down(last_row.saturating_sub(cursor_row))?;
+
+    cursor_row = last_row;
 
     self.stdout.end_synchronized_update()?;
 
-    Ok(PresentedFrame::new(cursor, next, viewport))
+    Ok(PresentedFrame::new(cursor_row, next, viewport))
   }
 }
 
@@ -236,7 +249,7 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(1, 1),
       )),
@@ -276,7 +289,7 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
@@ -311,7 +324,7 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(2, 1),
       )),
@@ -338,7 +351,7 @@ mod tests {
       Viewport::anchored_to_bottom(3, 1),
     );
 
-    assert_eq!(renderer.presented.as_ref().unwrap().cursor, Cursor::new(2),);
+    assert_eq!(renderer.presented.as_ref().unwrap().cursor_row, 2);
   }
 
   #[test]
@@ -353,7 +366,7 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
@@ -393,14 +406,14 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(3, 24),
       )),
       ..Default::default()
     };
 
-    renderer.presented.as_mut().unwrap().cursor = Cursor::new(1);
+    renderer.presented.as_mut().unwrap().cursor_row = 1;
 
     renderer.finish().unwrap();
 
@@ -408,7 +421,7 @@ mod tests {
       String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[1B"
     );
-    assert_eq!(renderer.presented.as_ref().unwrap().cursor, Cursor::new(2),);
+    assert_eq!(renderer.presented.as_ref().unwrap().cursor_row, 2);
   }
 
   #[test]
@@ -498,7 +511,7 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(5, 3),
       )),
@@ -538,7 +551,7 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(3, 24),
       )),
@@ -573,7 +586,7 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(3, 2),
       )),
@@ -608,7 +621,7 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
@@ -649,7 +662,7 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame.clone(),
         Viewport::anchored_to_bottom(5, 3),
       )),
@@ -689,7 +702,7 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
@@ -724,7 +737,7 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        Cursor::new(frame.last_row()),
+        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(3, 24),
       )),
