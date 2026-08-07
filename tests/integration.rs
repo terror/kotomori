@@ -786,6 +786,46 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
 }
 
 #[test]
+fn resume_picker_cancels_with_escape_and_ctrl_c() -> Result {
+  let state = tempfile::Builder::new()
+    .prefix("kotomori-state")
+    .tempdir()?;
+
+  let workspace = tempfile::Builder::new()
+    .prefix("kotomori-workspace")
+    .tempdir()?;
+
+  let state = state.path().to_str().unwrap();
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("--model")
+    .argument("mock:local")
+    .type_text("foo")
+    .enter()
+    .expect_screen_contains("queued for mock:local: foo")
+    .wait(SETTLE_INTERVAL)
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("resume")
+    .escape()
+    .expect_exit(0)
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("resume")
+    .ctrl_c()
+    .expect_exit(0)
+    .run()
+}
+
+#[test]
 fn second_turn_conversation() -> Result {
   Test::new()
     .argument("--model")
