@@ -11,17 +11,13 @@ impl Renderer {
     presented: &PresentedFrame,
     next: &Frame,
     diff: Diff,
-    previous_viewport: Viewport,
+    viewport: Viewport,
   ) -> Result<PresentedFrame> {
     let target_row = next.last_row();
 
     stdout.begin_synchronized_update()?;
 
-    stdout.move_by(presented.cursor.diff_to(
-      previous_viewport,
-      target_row,
-      previous_viewport,
-    ))?;
+    stdout.move_by(presented.cursor.diff_to(viewport, target_row, viewport))?;
 
     let deleted_tail_len = diff.deleted_tail_len();
 
@@ -51,7 +47,7 @@ impl Renderer {
     Ok(PresentedFrame::new(
       Cursor::new(target_row),
       next.clone(),
-      previous_viewport,
+      viewport,
     ))
   }
 
@@ -72,16 +68,16 @@ impl Renderer {
 
     let presented = match plan {
       RenderPlan::Full { clear } => Self::full_render(stdout, &next, clear)?,
-      RenderPlan::NoOperation { viewport } => PresentedFrame::new(
+      RenderPlan::NoOperation => PresentedFrame::new(
         self.presented.as_ref().unwrap().cursor,
         next,
-        viewport,
+        self.presented.as_ref().unwrap().viewport,
       ),
-      RenderPlan::Patch { viewport, diff } => Self::patch_render(
+      RenderPlan::Patch { diff } => Self::patch_render(
         stdout,
         self.presented.as_ref().unwrap(),
         next,
-        viewport,
+        self.presented.as_ref().unwrap().viewport,
         diff,
       )?,
     };
@@ -169,16 +165,12 @@ impl Renderer {
     stdout: &mut impl Write,
     presented: &PresentedFrame,
     next: Frame,
-    previous_viewport: Viewport,
+    mut viewport: Viewport,
     diff: Diff,
   ) -> Result<PresentedFrame> {
     if diff.is_pure_tail_delete() {
       return Self::clear_deleted_tail(
-        stdout,
-        presented,
-        &next,
-        diff,
-        previous_viewport,
+        stdout, presented, &next, diff, viewport,
       );
     }
 
@@ -196,7 +188,6 @@ impl Renderer {
     };
 
     let mut cursor = presented.cursor;
-    let mut viewport = previous_viewport;
 
     stdout.begin_synchronized_update()?;
 

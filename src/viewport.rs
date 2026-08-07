@@ -16,6 +16,7 @@ impl Viewport {
     self.top.saturating_add(self.height.saturating_sub(1))
   }
 
+  #[cfg(test)]
   pub(crate) fn new(top: usize, height: usize) -> Self {
     Self { height, top }
   }
