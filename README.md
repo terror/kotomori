@@ -6,7 +6,7 @@
 [![codecov](https://img.shields.io/codecov/c/gh/terror/kotomori?style=flat&labelColor=1d1d1d&color=424242&logo=Codecov&logoColor=white)](https://codecov.io/gh/terror/kotomori)
 [![downloads](https://img.shields.io/github/downloads/terror/kotomori/total.svg?style=flat&labelColor=1d1d1d&color=424242)](https://github.com/terror/kotomori/releases)
 
-**kotomori** (言の森) is a coding agent implemented in Rust, with a focus on
+**kotomori** (言森) is a coding agent implemented in Rust, with a focus on
 performance and simplicity.
 
 <img width="1667" alt="val" src="screenshot.png" />
