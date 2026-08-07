@@ -43,6 +43,7 @@ use {
   message::Message,
   model::Model,
   options::Options,
+  patch::Patch,
   presented_frame::PresentedFrame,
   provider::Provider,
   provider_sink::ProviderSink,
@@ -149,6 +150,7 @@ mod loader;
 mod message;
 mod model;
 mod options;
+mod patch;
 mod presented_frame;
 mod provider;
 mod provider_sink;
