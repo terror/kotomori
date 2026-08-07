@@ -17,7 +17,7 @@ impl<'a> RenderPlanner<'a> {
     }
   }
 
-  pub(crate) fn plan(self, next: &Frame) -> RenderPlan<'a> {
+  pub(crate) fn plan(self, next: &Frame) -> RenderPlan {
     let Some(presented) = self.presented else {
       return RenderPlan::Full { clear: false };
     };
@@ -38,8 +38,7 @@ impl<'a> RenderPlanner<'a> {
 
     let Some(diff) = Diff::between(&presented.frame, next) else {
       return RenderPlan::NoOperation {
-        previous: presented,
-        previous_viewport: presented.previous_viewport(next),
+        viewport: presented.previous_viewport(next),
       };
     };
 
@@ -58,8 +57,7 @@ impl<'a> RenderPlanner<'a> {
     }
 
     RenderPlan::Patch {
-      previous: presented,
-      previous_viewport,
+      viewport: previous_viewport,
       diff,
     }
   }

@@ -75,17 +75,18 @@ impl Renderer {
 
     let presented = match plan {
       RenderPlan::Full { clear } => Self::full_render(stdout, &next, clear)?,
-      RenderPlan::NoOperation {
-        previous,
-        previous_viewport,
-      } => {
-        PresentedFrame::new(previous.cursor, next.clone(), previous_viewport)
-      }
-      RenderPlan::Patch {
-        previous,
-        previous_viewport,
+      RenderPlan::NoOperation { viewport } => PresentedFrame::new(
+        self.presented.as_ref().unwrap().cursor,
+        next,
+        viewport,
+      ),
+      RenderPlan::Patch { viewport, diff } => Self::patch_render(
+        stdout,
+        self.presented.as_ref().unwrap(),
+        next,
+        viewport,
         diff,
-      } => Self::patch_render(stdout, previous, next, previous_viewport, diff)?,
+      )?,
     };
 
     self.max_lines_rendered = if plan.clears() {
