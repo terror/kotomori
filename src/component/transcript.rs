@@ -8,6 +8,12 @@ pub(crate) struct TranscriptComponent<'a> {
 impl<'a> TranscriptComponent<'a> {
   const FRAMES: &'static [&'static str] = &["✦", "✧", "✶", "✹", "✶", "✧"];
 
+  fn ensure_trailing_blank_line(lines: &mut Vec<LineComponent>) {
+    if !lines.last().is_some_and(LineComponent::is_blank) {
+      lines.push(LineComponent::blank());
+    }
+  }
+
   pub(crate) fn new(state: &'a Transcript) -> Self {
     Self { state }
   }
@@ -71,10 +77,7 @@ impl<'a> TranscriptComponent<'a> {
     for entry in &self.state.entries {
       match entry {
         TranscriptEntry::Agent(content) => {
-          if !matches!(lines.last(), Some(line) if line == &LineComponent::blank())
-          {
-            lines.push(LineComponent::blank());
-          }
+          Self::ensure_trailing_blank_line(&mut lines);
 
           lines.extend(
             content
@@ -85,10 +88,7 @@ impl<'a> TranscriptComponent<'a> {
           lines.push(LineComponent::blank());
         }
         TranscriptEntry::Error(error) => {
-          if !matches!(lines.last(), Some(line) if line == &LineComponent::blank())
-          {
-            lines.push(LineComponent::blank());
-          }
+          Self::ensure_trailing_blank_line(&mut lines);
 
           lines.extend(TranscriptErrorComponent::new(error).render(width));
         }
@@ -103,10 +103,7 @@ impl<'a> TranscriptComponent<'a> {
           ]);
         }
         TranscriptEntry::Reasoning(reasoning) => {
-          if !matches!(lines.last(), Some(line) if line == &LineComponent::blank())
-          {
-            lines.push(LineComponent::blank());
-          }
+          Self::ensure_trailing_blank_line(&mut lines);
 
           lines.extend(reasoning.lines().map(|line| {
             LineComponent::from([Span::styled(
@@ -118,10 +115,7 @@ impl<'a> TranscriptComponent<'a> {
           lines.push(LineComponent::blank());
         }
         TranscriptEntry::Tool { invocation, result } => {
-          if !matches!(lines.last(), Some(line) if line == &LineComponent::blank())
-          {
-            lines.push(LineComponent::blank());
-          }
+          Self::ensure_trailing_blank_line(&mut lines);
 
           lines.extend(
             TranscriptToolInvocationComponent::new(invocation, result.as_ref())

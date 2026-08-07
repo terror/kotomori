@@ -10,6 +10,10 @@ impl LineComponent {
     Self::raw("")
   }
 
+  pub(crate) fn is_blank(&self) -> bool {
+    self.spans.iter().all(|span| span.text.is_empty())
+  }
+
   pub(crate) fn raw(text: impl Into<String>) -> Self {
     Self {
       spans: [Span::raw(text)].into_iter().collect(),
