@@ -685,7 +685,7 @@ fn resume_filters_and_loads_session() -> Result {
     .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
     .argument("--model")
-    .argument("mock:local")
+    .argument("mock:other")
     .argument("resume")
     .expect_screen_contains("foo")
     .expect_screen_contains("bar")
