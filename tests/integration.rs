@@ -553,7 +553,7 @@ fn initial_prompt_submits() -> Result {
 fn interrupt_active_agent() -> Result {
   Test::new()
     .argument("--model")
-    .argument("mock:local")
+    .argument("mock:slow-streaming")
     .type_text("foo")
     .enter()
     .ctrl_c()

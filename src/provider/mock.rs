@@ -38,9 +38,13 @@ impl Provider for Mock {
 
         let response = format!("queued for mock:{model}: {input}");
 
-        for c in response.chars() {
-          sink.delta(c.to_string())?;
-          sleep(Duration::from_millis(20)).await;
+        if model == "slow-streaming" {
+          for c in response.chars() {
+            sink.delta(c.to_string())?;
+            sleep(Duration::from_millis(20)).await;
+          }
+        } else {
+          sink.delta(response)?;
         }
       }
     }
