@@ -31,22 +31,29 @@ impl<W: Write> Renderer<W> {
   }
 
   fn draw_frame(&mut self, next: Frame) -> Result {
-    let plan = RenderPlan::between(self.presented.as_ref(), &next);
+    let Some(presented) = self.presented.as_ref() else {
+      self.stdout.begin_synchronized_update()?;
+      self.stdout.write_lines(&next.lines)?;
+      self.stdout.end_synchronized_update()?;
 
-    if plan == RenderPlan::NoOperation {
+      self.presented = Some(next.into());
+
       return Ok(());
-    }
+    };
+
+    let Some(plan) = RenderPlan::between(presented, &next) else {
+      return Ok(());
+    };
 
     self.stdout.begin_synchronized_update()?;
 
     let presented = match plan {
-      RenderPlan::Full { clear } => {
-        self.full_render(&next, clear)?;
+      RenderPlan::Full => {
+        self.full_render(&next)?;
 
         next.into()
       }
-      RenderPlan::NoOperation => unreachable!(),
-      RenderPlan::Patch { changed } => {
+      RenderPlan::Patch(changed) => {
         let viewport_top = self.patch_render(&next, changed)?;
 
         PresentedFrame::new(next, viewport_top)
@@ -80,10 +87,8 @@ impl<W: Write> Renderer<W> {
     ))
   }
 
-  fn full_render(&mut self, next: &Frame, clear: bool) -> Result {
-    if clear {
-      self.stdout.clear_screen()?;
-    }
+  fn full_render(&mut self, next: &Frame) -> Result {
+    self.stdout.clear_screen()?;
 
     self.stdout.write_lines(&next.lines)?;
 
@@ -151,13 +156,7 @@ impl<W: Write> Renderer<W> {
       }
     }
 
-    self
-      .stdout
-      .move_up(cursor_row.saturating_sub(move_target_row))?;
-
-    self
-      .stdout
-      .move_down(move_target_row.saturating_sub(cursor_row))?;
+    self.stdout.move_to_row(cursor_row, move_target_row)?;
 
     cursor_row = move_target_row;
 
@@ -185,8 +184,7 @@ impl<W: Write> Renderer<W> {
 
     let last_row = next.last_row();
 
-    self.stdout.move_up(cursor_row.saturating_sub(last_row))?;
-    self.stdout.move_down(last_row.saturating_sub(cursor_row))?;
+    self.stdout.move_to_row(cursor_row, last_row)?;
 
     Ok(viewport_top)
   }
@@ -425,7 +423,7 @@ mod tests {
   }
 
   #[test]
-  fn full_render_without_clear_prepares_lines() {
+  fn initial_render_prepares_lines_without_clearing() {
     let mut renderer = TestRenderer::default();
 
     renderer
