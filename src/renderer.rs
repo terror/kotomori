@@ -33,11 +33,21 @@ impl<W: Write> Renderer<W> {
   fn draw_frame(&mut self, next: Frame) -> Result {
     let plan = RenderPlan::between(self.presented.as_ref(), &next);
 
-    self.presented = Some(match plan {
-      RenderPlan::Full { clear } => self.full_render(next, clear)?,
-      RenderPlan::NoOperation => return Ok(()),
-      RenderPlan::Patch { changed } => self.patch_render(next, changed)?,
-    });
+    if plan == RenderPlan::NoOperation {
+      return Ok(());
+    }
+
+    self.stdout.begin_synchronized_update()?;
+
+    let viewport_top = match plan {
+      RenderPlan::Full { clear } => self.full_render(&next, clear)?,
+      RenderPlan::NoOperation => unreachable!(),
+      RenderPlan::Patch { changed } => self.patch_render(&next, changed)?,
+    };
+
+    self.stdout.end_synchronized_update()?;
+
+    self.presented = Some(PresentedFrame::new(next, viewport_top));
 
     Ok(())
   }
@@ -62,22 +72,14 @@ impl<W: Write> Renderer<W> {
     ))
   }
 
-  fn full_render(
-    &mut self,
-    next: Frame,
-    clear: bool,
-  ) -> Result<PresentedFrame> {
-    self.stdout.begin_synchronized_update()?;
-
+  fn full_render(&mut self, next: &Frame, clear: bool) -> Result<usize> {
     if clear {
       self.stdout.clear_screen()?;
     }
 
     self.stdout.write_lines(&next.lines)?;
 
-    self.stdout.end_synchronized_update()?;
-
-    Ok(next.into())
+    Ok(next.len().saturating_sub(next.dimensions.height))
   }
 
   fn line_feed(
@@ -101,9 +103,9 @@ impl<W: Write> Renderer<W> {
 
   fn patch_render(
     &mut self,
-    next: Frame,
+    next: &Frame,
     changed: ChangedRange,
-  ) -> Result<PresentedFrame> {
+  ) -> Result<usize> {
     let presented = self.presented.as_ref().unwrap();
 
     let (mut cursor_row, mut viewport_top) =
@@ -117,8 +119,6 @@ impl<W: Write> Renderer<W> {
     } else {
       changed.first
     };
-
-    self.stdout.begin_synchronized_update()?;
 
     let viewport_bottom =
       viewport_top.saturating_add(next.dimensions.height.saturating_sub(1));
@@ -184,9 +184,7 @@ impl<W: Write> Renderer<W> {
     self.stdout.move_up(cursor_row.saturating_sub(last_row))?;
     self.stdout.move_down(last_row.saturating_sub(cursor_row))?;
 
-    self.stdout.end_synchronized_update()?;
-
-    Ok(PresentedFrame::new(next, viewport_top))
+    Ok(viewport_top)
   }
 }
 
@@ -360,19 +358,28 @@ mod tests {
 
   #[test]
   fn full_render_clears_screen() {
-    let mut renderer = TestRenderer::default();
-
-    renderer
-      .full_render(
+    let mut renderer = TestRenderer {
+      presented: Some(
         Frame::new(
-          vec!["bar".into(), "baz".into()],
+          Vec::new(),
           Dimensions {
-            height: 10,
+            height: 9,
             width: 80,
           },
-        ),
-        true,
-      )
+        )
+        .into(),
+      ),
+      ..Default::default()
+    };
+
+    renderer
+      .draw_frame(Frame::new(
+        vec!["bar".into(), "baz".into()],
+        Dimensions {
+          height: 10,
+          width: 80,
+        },
+      ))
       .unwrap();
 
     assert_eq!(
@@ -383,19 +390,28 @@ mod tests {
 
   #[test]
   fn full_render_rebuilds_scrollback_when_clearing() {
-    let mut renderer = TestRenderer::default();
-
-    renderer
-      .full_render(
+    let mut renderer = TestRenderer {
+      presented: Some(
         Frame::new(
-          vec!["foo".into(), "bar".into(), "baz".into()],
+          Vec::new(),
           Dimensions {
-            height: 2,
+            height: 1,
             width: 80,
           },
-        ),
-        true,
-      )
+        )
+        .into(),
+      ),
+      ..Default::default()
+    };
+
+    renderer
+      .draw_frame(Frame::new(
+        vec!["foo".into(), "bar".into(), "baz".into()],
+        Dimensions {
+          height: 2,
+          width: 80,
+        },
+      ))
       .unwrap();
 
     assert_eq!(
@@ -409,16 +425,13 @@ mod tests {
     let mut renderer = TestRenderer::default();
 
     renderer
-      .full_render(
-        Frame::new(
-          vec!["foo".into(), "bar".into()],
-          Dimensions {
-            height: 10,
-            width: 80,
-          },
-        ),
-        false,
-      )
+      .draw_frame(Frame::new(
+        vec!["foo".into(), "bar".into()],
+        Dimensions {
+          height: 10,
+          width: 80,
+        },
+      ))
       .unwrap();
 
     assert_eq!(
