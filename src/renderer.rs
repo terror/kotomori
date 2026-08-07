@@ -159,8 +159,6 @@ impl<W: Write> Renderer<W> {
         &mut viewport_top,
         next.dimensions.height,
       )?;
-    } else {
-      write!(self.stdout, "\r")?;
     }
 
     for row in changed.first..=changed.last {
@@ -172,11 +170,9 @@ impl<W: Write> Renderer<W> {
         )?;
       }
 
-      if let Some(line) = next.lines.get(row) {
-        self.stdout.write_line(line)?;
-      } else {
-        self.stdout.clear_line()?;
-      }
+      self
+        .stdout
+        .replace_line(next.lines.get(row).map(String::as_str))?;
     }
 
     let last_row = next.last_row();
@@ -250,7 +246,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[?2026h\r\n\x1b[2K\x1b[?2026l",
+      "\x1b[?2026h\r\n\x1b[1G\x1b[2K\x1b[?2026l",
     );
 
     assert_eq!(renderer.presented.as_ref().unwrap().viewport_top, 1,);
@@ -283,7 +279,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[?2026h\r\n\x1b[2Kbar\x1b[?2026l",
+      "\x1b[?2026h\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
     );
   }
 
@@ -314,7 +310,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[?2026h\r\n\x1b[2Kbaz\x1b[?2026l",
+      "\x1b[?2026h\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
     );
 
     assert_eq!(renderer.presented.as_ref().unwrap().viewport_top, 2,);
@@ -347,7 +343,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[?2026h\r\x1b[2K\x1b[?2026l",
+      "\x1b[?2026h\x1b[1G\x1b[2K\x1b[?2026l",
     );
 
     assert_eq!(
@@ -473,7 +469,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[?2026h\x1b[2A\r\x1b[2Kbob\r\n\x1b[2Kqux\r\n\x1b[2K\x1b[1A\x1b[?2026l",
+      "\x1b[?2026h\x1b[2A\x1b[1G\x1b[2Kbob\r\n\x1b[1G\x1b[2Kqux\r\n\x1b[1G\x1b[2K\x1b[1A\x1b[?2026l",
     );
 
     assert_eq!(renderer.presented.as_ref().unwrap().viewport_top, 2,);
@@ -506,7 +502,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[?2026h\x1b[1A\r\x1b[2Kqux\x1b[1B\x1b[?2026l",
+      "\x1b[?2026h\x1b[1A\x1b[1G\x1b[2Kqux\x1b[1B\x1b[?2026l",
     );
   }
 
@@ -669,7 +665,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[?2026h\x1b[1A\r\x1b[2K\r\n\x1b[2K\x1b[2A\x1b[?2026l",
+      "\x1b[?2026h\x1b[1A\x1b[1G\x1b[2K\r\n\x1b[1G\x1b[2K\x1b[2A\x1b[?2026l",
     );
   }
 }
