@@ -113,7 +113,7 @@ mod tests {
     let mut picker = ResumePicker::new(vec![
       Session {
         created_at: 0,
-        cwd: "foo".into(),
+        directory: "foo".into(),
         entries: Vec::new(),
         id: Some(1),
         model: "mock:local".into(),
@@ -122,7 +122,7 @@ mod tests {
       },
       Session {
         created_at: 0,
-        cwd: "bar".into(),
+        directory: "bar".into(),
         entries: Vec::new(),
         id: Some(2),
         model: "mock:local".into(),

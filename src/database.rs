@@ -11,23 +11,24 @@ impl Database {
   const SCHEMA_VERSION: usize = Self::MIGRATIONS.len();
 
   pub(crate) fn get_sessions(&self) -> Result<Vec<Session>> {
-    let cwd = env::current_dir().context("failed to read current directory")?;
+    let directory =
+      env::current_dir().context("failed to read current directory")?;
 
-    let cwd = cwd
+    let directory = directory
       .to_str()
       .context("current directory is not valid UTF-8")?;
 
     let mut statement = self.connection.prepare(
-      "SELECT id, updated_at, cwd, model, title
+      "SELECT id, updated_at, directory, model, title
        FROM sessions
-       WHERE cwd = ?1
+       WHERE directory = ?1
        ORDER BY updated_at DESC, id DESC",
     )?;
 
-    let rows = statement.query_map([cwd], |row| {
+    let rows = statement.query_map([directory], |row| {
       Ok(Session {
         created_at: 0,
-        cwd: row.get::<_, String>(2)?.into(),
+        directory: row.get::<_, String>(2)?.into(),
         entries: Vec::new(),
         id: Some(row.get(0)?),
         model: row.get(3)?,
@@ -43,14 +44,14 @@ impl Database {
     self
       .connection
       .query_row(
-        "SELECT id, created_at, updated_at, cwd, model, title, entries
+        "SELECT id, created_at, updated_at, directory, model, title, entries
          FROM sessions
          WHERE id = ?1",
         [id],
         |row| {
           Ok(Session {
             created_at: row.get_u64(1)?,
-            cwd: row.get::<_, String>(3)?.into(),
+            directory: row.get::<_, String>(3)?.into(),
             entries: serde_json::from_str(&row.get::<_, String>(6)?).map_err(
               |error| {
                 rusqlite::Error::FromSqlConversionFailure(
@@ -95,8 +96,8 @@ impl Database {
   }
 
   pub(crate) fn save_session(&self, session: &mut Session) -> Result {
-    let cwd = session
-      .cwd
+    let directory = session
+      .directory
       .to_str()
       .context("session directory is not valid UTF-8")?;
 
@@ -113,12 +114,19 @@ impl Database {
       let updated = self.connection.execute(
         "UPDATE sessions SET
            updated_at = ?1,
-           cwd = ?2,
+           directory = ?2,
            model = ?3,
            title = ?4,
            entries = ?5
          WHERE id = ?6",
-        params![updated_at, cwd, session.model, session.title, entries, id,],
+        params![
+          updated_at,
+          directory,
+          session.model,
+          session.title,
+          entries,
+          id,
+        ],
       )?;
 
       if updated == 0 {
@@ -127,13 +135,13 @@ impl Database {
     } else {
       session.id = Some(self.connection.query_row(
         "INSERT INTO sessions (
-           created_at, updated_at, cwd, model, title, entries
+           created_at, updated_at, directory, model, title, entries
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          RETURNING id",
         params![
           created_at,
           updated_at,
-          cwd,
+          directory,
           session.model,
           session.title,
           entries,
@@ -247,7 +255,7 @@ mod tests {
 
     let mut session = Session {
       created_at: 0,
-      cwd: env::current_dir().unwrap(),
+      directory: env::current_dir().unwrap(),
       entries: Vec::new(),
       id: None,
       model: "mock:local".into(),
@@ -277,15 +285,15 @@ mod tests {
     let database =
       Database::try_from(Connection::open_in_memory().unwrap()).unwrap();
 
-    let cwd = env::current_dir().unwrap();
+    let directory = env::current_dir().unwrap();
 
     database
       .connection
       .execute(
         "INSERT INTO sessions (
-           created_at, updated_at, cwd, model, title, entries
+           created_at, updated_at, directory, model, title, entries
          ) VALUES (0, 0, ?1, 'mock:local', NULL, '{}')",
-        [cwd.to_str().unwrap()],
+        [directory.to_str().unwrap()],
       )
       .unwrap();
 

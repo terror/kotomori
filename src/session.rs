@@ -3,7 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Session {
   pub(crate) created_at: u64,
-  pub(crate) cwd: PathBuf,
+  pub(crate) directory: PathBuf,
   pub(crate) entries: Vec<TranscriptEntry>,
   pub(crate) id: Option<i64>,
   pub(crate) model: String,
@@ -33,7 +33,7 @@ impl Session {
     format!(
       "{} · {} · {}",
       self.model,
-      DirectoryDisplay::new(&self.cwd),
+      DirectoryDisplay::new(&self.directory),
       self.age()
     )
   }
@@ -43,7 +43,7 @@ impl Session {
       "{} {} {} {}",
       self.title.as_deref().unwrap_or("Untitled session"),
       self.model,
-      DirectoryDisplay::new(&self.cwd),
+      DirectoryDisplay::new(&self.directory),
       self.id.map_or_else(String::new, |id| id.to_string()),
     )
     .chars()
@@ -68,7 +68,8 @@ impl Session {
 
     Ok(Self {
       created_at: now,
-      cwd: env::current_dir().context("failed to read current directory")?,
+      directory: env::current_dir()
+        .context("failed to read current directory")?,
       entries: Vec::new(),
       id: None,
       model: settings.model.to_string(),
