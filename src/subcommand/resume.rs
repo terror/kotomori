@@ -1,7 +1,7 @@
 use super::*;
 
 pub(crate) async fn run(settings: Settings) -> Result {
-  let sessions = SessionStore::list()?;
+  let sessions = Database::new()?.list()?;
 
   if sessions.is_empty() {
     println!("No saved sessions.");

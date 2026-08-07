@@ -2,8 +2,9 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct Session {
+  pub(crate) database: Database,
   pub(crate) file: SessionFile,
-  pub(crate) path: PathBuf,
+  pub(crate) persisted: bool,
 }
 
 impl Session {
@@ -11,12 +12,13 @@ impl Session {
   const VERSION: u32 = 1;
 
   pub(crate) fn new(settings: &Settings) -> Result<Self> {
-    let now = SessionStore::now()?;
+    let database = Database::new()?;
+    let now = Database::now()?;
 
-    let id = SessionStore::id()?;
+    let id = Database::id()?;
 
     Ok(Self {
-      path: SessionStore::sessions_dir()?.join(format!("{id}.json")),
+      database,
       file: SessionFile {
         created_at: now,
         cwd: env::current_dir().context("failed to read current directory")?,
@@ -27,19 +29,23 @@ impl Session {
         updated_at: now,
         version: Self::VERSION,
       },
+      persisted: false,
     })
   }
 
   pub(crate) fn save(&mut self, transcript: &Transcript) -> Result {
-    if transcript.is_empty() && !self.path.exists() {
+    if transcript.is_empty() && !self.persisted {
       return Ok(());
     }
 
     self.file.entries.clone_from(&transcript.entries);
     self.file.title = Self::title(&transcript.entries);
-    self.file.updated_at = SessionStore::now()?;
+    self.file.updated_at = Database::now()?;
 
-    SessionStore::write(&self.path, &self.file)
+    self.database.write(&self.file)?;
+    self.persisted = true;
+
+    Ok(())
   }
 
   pub(crate) fn set_model(&mut self, model: &Model) {

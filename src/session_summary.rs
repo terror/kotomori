@@ -3,8 +3,8 @@ use super::*;
 #[derive(Clone, Debug)]
 pub(crate) struct SessionSummary {
   pub(crate) cwd: PathBuf,
+  pub(crate) id: String,
   pub(crate) model: String,
-  pub(crate) path: PathBuf,
   pub(crate) search: String,
   pub(crate) title: String,
   pub(crate) updated_at: u64,
@@ -12,7 +12,7 @@ pub(crate) struct SessionSummary {
 
 impl SessionSummary {
   fn age(&self) -> String {
-    let Ok(now) = SessionStore::now() else {
+    let Ok(now) = Database::now() else {
       return "unknown age".into();
     };
 
@@ -46,7 +46,7 @@ impl SessionSummary {
     })
   }
 
-  pub(crate) fn new(path: PathBuf, file: SessionFile) -> Self {
+  pub(crate) fn new(id: String, file: SessionFile) -> Self {
     let title = file
       .title
       .or_else(|| Session::title(&file.entries))
@@ -61,8 +61,8 @@ impl SessionSummary {
 
     Self {
       cwd: file.cwd,
+      id,
       model: file.model,
-      path,
       search,
       title,
       updated_at: file.updated_at,
@@ -78,11 +78,11 @@ mod tests {
   fn summary_matches_all_query_terms() {
     let summary = SessionSummary {
       cwd: "baz".into(),
+      id: "qux".into(),
       model: "mock:local".into(),
-      path: "qux".into(),
       search: "foo bar baz".into(),
       title: "foo".into(),
-      updated_at: SessionStore::now().unwrap(),
+      updated_at: Database::now().unwrap(),
     };
 
     assert!(summary.matches("foo baz"));

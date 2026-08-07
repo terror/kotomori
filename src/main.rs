@@ -27,6 +27,7 @@ use {
       EndSynchronizedUpdate, enable_raw_mode,
     },
   },
+  database::Database,
   dimensions::Dimensions,
   directory_display::DirectoryDisplay,
   duration_ext::DurationExt,
@@ -64,13 +65,13 @@ use {
     },
     message::{Reasoning, ToolResultContent, UserContent},
   },
+  rusqlite::{Connection, TransactionBehavior, params},
   schemars::JsonSchema,
   screen::Screen,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
   serde_json::Value,
   session::Session,
   session_file::SessionFile,
-  session_store::SessionStore,
   session_summary::SessionSummary,
   settings::Settings,
   smallvec::SmallVec,
@@ -78,9 +79,7 @@ use {
   state::State,
   std::{
     backtrace::BacktraceStatus,
-    cmp::Reverse,
     env,
-    ffi::OsStr,
     fmt::{self, Debug, Display, Formatter},
     fs,
     io::{self, BufWriter, Stdout, Write},
@@ -139,6 +138,7 @@ mod command;
 mod component;
 mod composer;
 mod config;
+mod database;
 mod dimensions;
 mod directory_display;
 mod duration_ext;
@@ -166,7 +166,6 @@ mod resume_picker_action;
 mod screen;
 mod session;
 mod session_file;
-mod session_store;
 mod session_summary;
 mod settings;
 mod span;

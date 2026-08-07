@@ -45,7 +45,7 @@ impl App {
 
           match action {
             ResumePickerAction::Cancel => self.screen = Screen::Quit,
-            ResumePickerAction::Resume(path) => self.resume(&path)?,
+            ResumePickerAction::Resume(id) => self.resume(&id)?,
           }
         }
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
@@ -106,8 +106,8 @@ impl App {
     )
   }
 
-  fn resume(&mut self, path: &Path) -> Result {
-    let session = SessionStore::load(path)?;
+  fn resume(&mut self, id: &str) -> Result {
+    let session = Database::new()?.load(id)?;
 
     let mut settings = self.settings.clone();
 

@@ -64,8 +64,8 @@ impl ResumePicker {
         }
       }
       Action::Submit => {
-        if let Some(path) = self.selected_path() {
-          return Some(ResumePickerAction::Resume(path));
+        if let Some(id) = self.selected_id() {
+          return Some(ResumePickerAction::Resume(id));
         }
       }
       Action::Interrupt | Action::Quit => {
@@ -96,11 +96,11 @@ impl ResumePicker {
     }
   }
 
-  fn selected_path(&self) -> Option<PathBuf> {
+  fn selected_id(&self) -> Option<String> {
     self
       .filtered()
       .get(self.selected)
-      .map(|session| session.path.clone())
+      .map(|session| session.id.clone())
   }
 }
 
@@ -113,16 +113,16 @@ mod tests {
     let mut picker = ResumePicker::new(vec![
       SessionSummary {
         cwd: "foo".into(),
+        id: "foo".into(),
         model: "mock:local".into(),
-        path: "foo".into(),
         search: "foo".into(),
         title: "foo".into(),
         updated_at: 0,
       },
       SessionSummary {
         cwd: "bar".into(),
+        id: "bar".into(),
         model: "mock:local".into(),
-        path: "bar".into(),
         search: "bar".into(),
         title: "bar".into(),
         updated_at: 0,
@@ -138,9 +138,9 @@ mod tests {
       picker
         .filtered()
         .into_iter()
-        .map(|session| session.path.as_path())
+        .map(|session| session.id.as_str())
         .collect::<Vec<_>>(),
-      [Path::new("bar")],
+      ["bar"],
     );
   }
 }
