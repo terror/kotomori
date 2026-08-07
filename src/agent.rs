@@ -177,8 +177,8 @@ mod tests {
   #[derive(Debug)]
   enum Output {
     Delta(&'static str),
-    ReasoningDelta(&'static str),
     Reasoning(&'static str),
+    ReasoningDelta(&'static str),
     ToolCall,
   }
 
@@ -223,8 +223,8 @@ mod tests {
   }
 
   struct TestAgent {
-    _directory: TempDir,
     agent: Agent,
+    directory: TempDir,
     events: UnboundedReceiver<Event>,
     requests: Arc<Mutex<Vec<Vec<Message>>>>,
   }
@@ -254,8 +254,8 @@ mod tests {
       };
 
       Self {
-        _directory: directory,
         agent,
+        directory,
         events,
         requests,
       }
@@ -266,9 +266,9 @@ mod tests {
   async fn command_tools_wait_for_approval() {
     let TestAgent {
       agent,
+      directory: _directory,
       mut events,
       requests,
-      _directory,
     } = TestAgent::new(
       vec![vec![Output::ToolCall], vec![Output::Delta("done")]],
       false,
@@ -549,7 +549,7 @@ mod tests {
     {
       let test_agent = TestAgent::new(Vec::new(), true);
 
-      let agents_path = test_agent._directory.path().join("AGENTS.md");
+      let agents_path = test_agent.directory.path().join("AGENTS.md");
 
       if let Some(agents) = agents {
         fs::write(&agents_path, agents).unwrap();
@@ -557,7 +557,7 @@ mod tests {
 
       assert_eq!(
         test_agent.agent.system_prompt().unwrap(),
-        expected(test_agent._directory.path(), &agents_path)
+        expected(test_agent.directory.path(), &agents_path)
       );
     }
 

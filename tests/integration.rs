@@ -25,7 +25,7 @@ const SCREEN_COLS: u16 = 80;
 const SCREEN_ROWS: u16 = 24;
 const SETTLE_INTERVAL: Duration = Duration::from_millis(200);
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(3);
-static PTY_LOCK: Mutex<()> = Mutex::new(());
+static PTY_OPEN_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug)]
 enum Step {
@@ -132,8 +132,6 @@ impl Test {
   }
 
   fn run(self) -> Result {
-    let _guard = PTY_LOCK.lock().unwrap();
-
     let mut running = Running::spawn(&self)?;
 
     running.expect_screen_contains("kotomori", STARTUP_TIMEOUT)?;
@@ -311,12 +309,16 @@ impl Running {
   fn spawn(test: &Test) -> Result<Self> {
     let pty_system = native_pty_system();
 
-    let pair = pty_system.openpty(PtySize {
-      cols: SCREEN_COLS,
-      pixel_height: 0,
-      pixel_width: 0,
-      rows: SCREEN_ROWS,
-    })?;
+    let pair = {
+      let _guard = PTY_OPEN_LOCK.lock().unwrap();
+
+      pty_system.openpty(PtySize {
+        cols: SCREEN_COLS,
+        pixel_height: 0,
+        pixel_width: 0,
+        rows: SCREEN_ROWS,
+      })?
+    };
 
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_kotomori"));
 
