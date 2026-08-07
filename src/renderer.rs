@@ -36,7 +36,7 @@ impl<W: Write> Renderer<W> {
     self.presented = Some(match plan {
       RenderPlan::Full { clear } => self.full_render(next, clear)?,
       RenderPlan::NoOperation => return Ok(()),
-      RenderPlan::Patch { diff } => self.patch_render(next, diff)?,
+      RenderPlan::Patch { changed } => self.patch_render(next, changed)?,
     });
 
     Ok(())
@@ -102,7 +102,7 @@ impl<W: Write> Renderer<W> {
   fn patch_render(
     &mut self,
     next: Frame,
-    diff: Diff,
+    changed: ChangedRange,
   ) -> Result<PresentedFrame> {
     let presented = self.presented.as_ref().unwrap();
 
@@ -110,12 +110,12 @@ impl<W: Write> Renderer<W> {
       (presented.frame.last_row(), presented.viewport_top);
 
     let append_start =
-      diff.changed.first > 0 && diff.changed.first == presented.frame.len();
+      changed.first > 0 && changed.first == presented.frame.len();
 
     let move_target_row = if append_start {
-      diff.changed.first.saturating_sub(1)
+      changed.first.saturating_sub(1)
     } else {
-      diff.changed.first
+      changed.first
     };
 
     self.stdout.begin_synchronized_update()?;
@@ -163,8 +163,8 @@ impl<W: Write> Renderer<W> {
       write!(self.stdout, "\r")?;
     }
 
-    for row in diff.changed.first..=diff.changed.last {
-      if row > diff.changed.first {
+    for row in changed.first..=changed.last {
+      if row > changed.first {
         self.line_feed(
           &mut cursor_row,
           &mut viewport_top,
