@@ -6,6 +6,21 @@ pub(crate) struct Renderer<W: Write = BufWriter<Stdout>> {
   stdout: W,
 }
 
+impl Renderer {
+  pub(crate) fn new() -> Result<Self> {
+    enable_raw_mode().context("failed to enable raw mode")?;
+
+    let mut stdout = BufWriter::new(io::stdout());
+
+    queue!(stdout, Hide).context("failed to hide cursor")?;
+
+    Ok(Self {
+      presented: None,
+      stdout,
+    })
+  }
+}
+
 impl<W: Write> Renderer<W> {
   fn clear_deleted_tail(
     &mut self,
@@ -234,21 +249,6 @@ impl<W: Write> Renderer<W> {
     self.stdout.end_synchronized_update()?;
 
     Ok(PresentedFrame::new(cursor, next, viewport))
-  }
-}
-
-impl Renderer {
-  pub(crate) fn new() -> Result<Self> {
-    enable_raw_mode().context("failed to enable raw mode")?;
-
-    let mut stdout = BufWriter::new(io::stdout());
-
-    queue!(stdout, Hide).context("failed to hide cursor")?;
-
-    Ok(Self {
-      presented: None,
-      stdout,
-    })
   }
 }
 
