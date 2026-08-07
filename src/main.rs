@@ -122,7 +122,6 @@ use {
   transcript_entry::TranscriptEntry,
   unicode_width::UnicodeWidthChar,
   user_message_content::UserMessageContent,
-  viewport::Viewport,
   write_ext::WriteExt,
 };
 
@@ -186,7 +185,6 @@ mod tool_spec;
 mod transcript;
 mod transcript_entry;
 mod user_message_content;
-mod viewport;
 mod write_ext;
 
 static FIRST_DRAW_STARTED_AT: OnceLock<Instant> = OnceLock::new();

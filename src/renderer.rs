@@ -83,12 +83,15 @@ impl<W: Write> Renderer<W> {
   fn line_feed(
     &mut self,
     cursor_row: &mut usize,
-    viewport: &mut Viewport,
+    viewport_top: &mut usize,
+    viewport_height: usize,
   ) -> Result {
     write!(self.stdout, "\r\n")?;
 
-    if viewport.screen_row(*cursor_row) >= viewport.height.saturating_sub(1) {
-      *viewport = viewport.scrolled_down(1);
+    if cursor_row.saturating_sub(*viewport_top)
+      >= viewport_height.saturating_sub(1)
+    {
+      *viewport_top = viewport_top.saturating_add(1);
     }
 
     *cursor_row = cursor_row.saturating_add(1);
@@ -101,18 +104,13 @@ impl<W: Write> Renderer<W> {
     next: Frame,
     diff: Diff,
   ) -> Result<PresentedFrame> {
-    let (mut viewport, presented_len, mut cursor_row) = {
-      let presented = self.presented.as_ref().unwrap();
+    let presented = self.presented.as_ref().unwrap();
 
-      (
-        presented.viewport,
-        presented.frame.len(),
-        presented.frame.last_row(),
-      )
-    };
+    let (mut cursor_row, mut viewport_top) =
+      (presented.frame.last_row(), presented.viewport_top);
 
     let append_start =
-      diff.changed.first > 0 && diff.changed.first == presented_len;
+      diff.changed.first > 0 && diff.changed.first == presented.frame.len();
 
     let move_target_row = if append_start {
       diff.changed.first.saturating_sub(1)
@@ -122,20 +120,26 @@ impl<W: Write> Renderer<W> {
 
     self.stdout.begin_synchronized_update()?;
 
-    if move_target_row > viewport.bottom() {
-      let move_to_bottom = viewport
+    let viewport_bottom =
+      viewport_top.saturating_add(next.dimensions.height.saturating_sub(1));
+
+    if move_target_row > viewport_bottom {
+      let move_to_bottom = next
+        .dimensions
         .height
         .saturating_sub(1)
-        .saturating_sub(viewport.screen_row(cursor_row));
+        .saturating_sub(cursor_row.saturating_sub(viewport_top));
 
       self.stdout.move_down(move_to_bottom)?;
 
-      let bottom = viewport.bottom();
+      cursor_row = viewport_bottom;
 
-      cursor_row = bottom;
-
-      for _ in bottom..move_target_row {
-        self.line_feed(&mut cursor_row, &mut viewport)?;
+      for _ in viewport_bottom..move_target_row {
+        self.line_feed(
+          &mut cursor_row,
+          &mut viewport_top,
+          next.dimensions.height,
+        )?;
       }
     }
 
@@ -150,14 +154,22 @@ impl<W: Write> Renderer<W> {
     cursor_row = move_target_row;
 
     if append_start {
-      self.line_feed(&mut cursor_row, &mut viewport)?;
+      self.line_feed(
+        &mut cursor_row,
+        &mut viewport_top,
+        next.dimensions.height,
+      )?;
     } else {
       write!(self.stdout, "\r")?;
     }
 
     for row in diff.changed.first..=diff.changed.last {
       if row > diff.changed.first {
-        self.line_feed(&mut cursor_row, &mut viewport)?;
+        self.line_feed(
+          &mut cursor_row,
+          &mut viewport_top,
+          next.dimensions.height,
+        )?;
       }
 
       if let Some(line) = next.lines.get(row) {
@@ -174,7 +186,7 @@ impl<W: Write> Renderer<W> {
 
     self.stdout.end_synchronized_update()?;
 
-    Ok(PresentedFrame::new(next, viewport))
+    Ok(PresentedFrame::new(next, viewport_top))
   }
 }
 
@@ -224,10 +236,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame,
-        Viewport::anchored_to_bottom(1, 1),
-      )),
+      presented: Some(frame.into()),
       ..Default::default()
     };
 
@@ -246,10 +255,7 @@ mod tests {
       "\x1b[?2026h\r\n\x1b[2K\x1b[?2026l",
     );
 
-    assert_eq!(
-      renderer.presented.as_ref().unwrap().viewport,
-      Viewport::anchored_to_bottom(2, 1),
-    );
+    assert_eq!(renderer.presented.as_ref().unwrap().viewport_top, 1,);
   }
 
   #[test]
@@ -263,10 +269,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame,
-        Viewport::anchored_to_bottom(1, 24),
-      )),
+      presented: Some(frame.into()),
       ..Default::default()
     };
 
@@ -297,10 +300,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame,
-        Viewport::anchored_to_bottom(2, 1),
-      )),
+      presented: Some(frame.into()),
       ..Default::default()
     };
 
@@ -319,10 +319,7 @@ mod tests {
       "\x1b[?2026h\r\n\x1b[2Kbaz\x1b[?2026l",
     );
 
-    assert_eq!(
-      renderer.presented.as_ref().unwrap().viewport,
-      Viewport::anchored_to_bottom(3, 1),
-    );
+    assert_eq!(renderer.presented.as_ref().unwrap().viewport_top, 2,);
   }
 
   #[test]
@@ -336,10 +333,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame,
-        Viewport::anchored_to_bottom(1, 24),
-      )),
+      presented: Some(frame.into()),
       ..Default::default()
     };
 
@@ -450,10 +444,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame,
-        Viewport::anchored_to_bottom(5, 3),
-      )),
+      presented: Some(frame.into()),
       ..Default::default()
     };
 
@@ -472,10 +463,7 @@ mod tests {
       "\x1b[?2026h\x1b[2A\r\x1b[2Kbob\r\n\x1b[2Kqux\r\n\x1b[2K\x1b[1A\x1b[?2026l",
     );
 
-    assert_eq!(
-      renderer.presented.as_ref().unwrap().viewport,
-      Viewport::new(2, 3),
-    );
+    assert_eq!(renderer.presented.as_ref().unwrap().viewport_top, 2,);
   }
 
   #[test]
@@ -489,10 +477,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame,
-        Viewport::anchored_to_bottom(3, 24),
-      )),
+      presented: Some(frame.into()),
       ..Default::default()
     };
 
@@ -523,10 +508,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame,
-        Viewport::anchored_to_bottom(3, 2),
-      )),
+      presented: Some(frame.into()),
       ..Default::default()
     };
 
@@ -557,10 +539,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame,
-        Viewport::anchored_to_bottom(1, 24),
-      )),
+      presented: Some(frame.into()),
       ..Default::default()
     };
 
@@ -597,10 +576,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame.clone(),
-        Viewport::anchored_to_bottom(5, 3),
-      )),
+      presented: Some(frame.clone().into()),
       ..Default::default()
     };
 
@@ -619,10 +595,7 @@ mod tests {
       "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\r\n\x1b[1G\x1b[2Kqux\r\n\x1b[1G\x1b[2Kquux\x1b[?2026l",
     );
 
-    assert_eq!(
-      renderer.presented.as_ref().unwrap().viewport,
-      Viewport::new(1, 4),
-    );
+    assert_eq!(renderer.presented.as_ref().unwrap().viewport_top, 1,);
   }
 
   #[test]
@@ -636,10 +609,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame,
-        Viewport::anchored_to_bottom(1, 24),
-      )),
+      presented: Some(frame.into()),
       ..Default::default()
     };
 
@@ -670,10 +640,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame,
-        Viewport::anchored_to_bottom(3, 24),
-      )),
+      presented: Some(frame.into()),
       ..Default::default()
     };
 
