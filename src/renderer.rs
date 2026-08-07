@@ -136,25 +136,7 @@ impl<W: Write> Renderer<W> {
     let viewport_bottom =
       viewport_top.saturating_add(next.dimensions.height.saturating_sub(1));
 
-    if move_target_row > viewport_bottom {
-      let move_to_bottom = next
-        .dimensions
-        .height
-        .saturating_sub(1)
-        .saturating_sub(cursor_row.saturating_sub(viewport_top));
-
-      self.stdout.move_down(move_to_bottom)?;
-
-      cursor_row = viewport_bottom;
-
-      for _ in viewport_bottom..move_target_row {
-        self.line_feed(
-          &mut cursor_row,
-          &mut viewport_top,
-          next.dimensions.height,
-        )?;
-      }
-    }
+    debug_assert!(move_target_row <= viewport_bottom);
 
     self.stdout.move_to_row(cursor_row, move_target_row)?;
 
