@@ -9,6 +9,7 @@ use {
   arguments::Arguments,
   async_trait::async_trait,
   changed_range::ChangedRange,
+  channel::Channel,
   clap::{Args, Parser},
   command::Command,
   component::{Component, ViewComponent},
@@ -133,6 +134,7 @@ mod app;
 mod approval_request;
 mod arguments;
 mod changed_range;
+mod channel;
 mod command;
 mod component;
 mod composer;
