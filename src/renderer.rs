@@ -252,6 +252,15 @@ impl Renderer {
   }
 }
 
+impl<W: Default + Write> Default for Renderer<W> {
+  fn default() -> Self {
+    Self {
+      presented: None,
+      stdout: W::default(),
+    }
+  }
+}
+
 #[cfg(not(test))]
 impl<W: Write> Drop for Renderer<W> {
   fn drop(&mut self) {
@@ -276,6 +285,8 @@ impl<W: Write> Drop for Renderer<W> {
 mod tests {
   use super::*;
 
+  type TestRenderer = Renderer<Vec<u8>>;
+
   #[test]
   fn appending_blank_line_scrolls() {
     let frame = Frame::new(
@@ -286,13 +297,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(1, 1),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer
@@ -326,13 +337,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer
@@ -361,13 +372,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(2, 1),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer
@@ -403,13 +414,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer
@@ -443,13 +454,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(3, 24),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer.presented.as_mut().unwrap().cursor = Cursor::new(1);
@@ -465,10 +476,7 @@ mod tests {
 
   #[test]
   fn full_render_clears_screen() {
-    let mut renderer = Renderer {
-      presented: None,
-      stdout: Vec::new(),
-    };
+    let mut renderer = TestRenderer::default();
 
     renderer
       .full_render(
@@ -491,10 +499,7 @@ mod tests {
 
   #[test]
   fn full_render_rebuilds_scrollback_when_clearing() {
-    let mut renderer = Renderer {
-      presented: None,
-      stdout: Vec::new(),
-    };
+    let mut renderer = TestRenderer::default();
 
     renderer
       .full_render(
@@ -517,10 +522,7 @@ mod tests {
 
   #[test]
   fn full_render_without_clear_prepares_lines() {
-    let mut renderer = Renderer {
-      presented: None,
-      stdout: Vec::new(),
-    };
+    let mut renderer = TestRenderer::default();
 
     renderer
       .full_render(
@@ -557,13 +559,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(5, 3),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer
@@ -597,13 +599,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(3, 24),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer
@@ -632,13 +634,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(3, 2),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer
@@ -667,13 +669,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer
@@ -708,13 +710,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame.clone(),
         Viewport::anchored_to_bottom(5, 3),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer
@@ -748,13 +750,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer
@@ -783,13 +785,13 @@ mod tests {
       },
     );
 
-    let mut renderer = Renderer {
+    let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(3, 24),
       )),
-      stdout: Vec::new(),
+      ..Default::default()
     };
 
     renderer
