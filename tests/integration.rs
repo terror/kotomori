@@ -297,6 +297,8 @@ struct Test {
   arguments: Vec<String>,
   cwd: Option<PathBuf>,
   env: Vec<(String, String)>,
+  expected_stderr: String,
+  expected_stdout: String,
   steps: Vec<Step>,
   tempdir: TempDir,
 }
@@ -365,6 +367,8 @@ impl Test {
       arguments: Vec::new(),
       cwd: None,
       env: Vec::new(),
+      expected_stderr: String::new(),
+      expected_stdout: String::new(),
       steps: Vec::new(),
       tempdir: tempfile::Builder::new()
         .prefix("kotomori-test")
@@ -406,6 +410,45 @@ impl Test {
     }
 
     Ok(())
+  }
+
+  fn status(self, expected: i32) -> Result {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_kotomori"));
+
+    command
+      .args(&self.arguments)
+      .current_dir(self.cwd.as_deref().unwrap_or(self.tempdir.path()))
+      .env("KOTOMORI_HOME", self.tempdir.path().join("kotomori-home"))
+      .env("RUST_BACKTRACE", "0")
+      .env("XDG_CONFIG_HOME", self.tempdir.path().join("xdg-config"))
+      .env_remove("KOTOMORI_DEV");
+
+    for (key, value) in &self.env {
+      command.env(key, value);
+    }
+
+    let output = command.output()?;
+
+    ensure!(
+      output.status.code() == Some(expected),
+      "expected exit code {expected}, got {:?}\n{}",
+      output.status.code(),
+      String::from_utf8_lossy(&output.stderr),
+    );
+
+    assert_eq!(String::from_utf8(output.stderr)?, self.expected_stderr);
+    assert_eq!(String::from_utf8(output.stdout)?, self.expected_stdout);
+
+    Ok(())
+  }
+
+  fn stdout(mut self, expected: &str) -> Self {
+    self.expected_stdout = expected.into();
+    self
+  }
+
+  fn success(self) -> Result {
+    self.status(0)
   }
 
   fn tab(self) -> Self {
@@ -788,25 +831,10 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
 
 #[test]
 fn resume_with_no_sessions_exits_successfully() -> Result {
-  let test = Test::new();
-
-  let output = Command::new(env!("CARGO_BIN_EXE_kotomori"))
-    .arg("resume")
-    .current_dir(test.tempdir.path())
-    .env("KOTOMORI_HOME", test.tempdir.path().join("kotomori-home"))
-    .env("XDG_CONFIG_HOME", test.tempdir.path().join("xdg-config"))
-    .output()?;
-
-  ensure!(
-    output.status.success(),
-    "unexpected exit status: {}\n{}",
-    output.status,
-    String::from_utf8_lossy(&output.stderr),
-  );
-
-  assert_eq!(output.stdout, b"No saved sessions.\n");
-
-  Ok(())
+  Test::new()
+    .argument("resume")
+    .stdout("No saved sessions.\n")
+    .success()
 }
 
 #[test]
