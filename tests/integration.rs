@@ -382,27 +382,26 @@ impl Test {
 
     running.expect_screen_contains("kotomori", STARTUP_TIMEOUT)?;
 
-    for step in self.steps {
-      match step {
-        Step::ExpectExit(code) => {
-          running.expect_exit(code, EXPECT_TIMEOUT)?;
-        }
+    for (index, step) in self.steps.into_iter().enumerate() {
+      let context = format!("step {}: {step:?}", index + 1);
+
+      let result = match step {
+        Step::ExpectExit(code) => running.expect_exit(code, EXPECT_TIMEOUT),
         Step::ExpectScreenContains(text) => {
-          running.expect_screen_contains(&text, EXPECT_TIMEOUT)?;
+          running.expect_screen_contains(&text, EXPECT_TIMEOUT)
         }
         Step::ExpectScreenExcludes(text) => {
-          running.expect_screen_excludes(&text, EXPECT_TIMEOUT)?;
+          running.expect_screen_excludes(&text, EXPECT_TIMEOUT)
         }
-        Step::Quit => {
-          running.quit()?;
-        }
+        Step::Quit => running.quit(),
         Step::Wait(duration) => {
           thread::sleep(duration);
+          Ok(())
         }
-        Step::Write(bytes) => {
-          running.write(&bytes)?;
-        }
-      }
+        Step::Write(bytes) => running.write(&bytes),
+      };
+
+      result.context(context)?;
     }
 
     Ok(())
