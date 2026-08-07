@@ -12,7 +12,7 @@ pub(crate) enum RenderPlan<'a> {
   Patch {
     previous: &'a PresentedFrame,
     previous_viewport: Viewport,
-    patch: PatchPlan,
+    diff: Diff,
   },
 }
 
