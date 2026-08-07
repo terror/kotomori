@@ -748,6 +748,17 @@ fn resume_filters_and_loads_session() -> Result {
     .type_text("baz")
     .enter()
     .expect_screen_contains("queued for mock:local: baz")
+    .wait(SETTLE_INTERVAL)
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("resume")
+    .argument("--last")
+    .type_text("latest")
+    .enter()
+    .expect_screen_contains("queued for mock:local: latest")
     .run()
 }
 
