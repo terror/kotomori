@@ -213,14 +213,8 @@ impl Renderer {
       write!(stdout, "\r")?;
     }
 
-    for (index, line) in next
-      .lines
-      .iter()
-      .enumerate()
-      .take(writable_range.end().saturating_add(1))
-      .skip(*writable_range.start())
-    {
-      if index > *writable_range.start() {
+    for (offset, line) in next.lines[writable_range].iter().enumerate() {
+      if offset > 0 {
         Self::line_feed(stdout, &mut cursor, &mut viewport)?;
       }
 
