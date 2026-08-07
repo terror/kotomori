@@ -88,34 +88,12 @@ impl<W: Write> Renderer<W> {
     ))
   }
 
-  fn line_feed(
-    &mut self,
-    cursor_row: &mut usize,
-    viewport_top: &mut usize,
-    viewport_height: usize,
-  ) -> Result {
-    write!(self.stdout, "\r\n")?;
-
-    if cursor_row.saturating_sub(*viewport_top)
-      >= viewport_height.saturating_sub(1)
-    {
-      *viewport_top = viewport_top.saturating_add(1);
-    }
-
-    *cursor_row = cursor_row.saturating_add(1);
-
-    Ok(())
-  }
-
   fn patch_render(
     &mut self,
     next: &Frame,
     changed: ChangedRange,
   ) -> Result<usize> {
     let presented = self.presented.as_ref().unwrap();
-
-    let (mut cursor_row, mut viewport_top) =
-      (presented.frame.last_row(), presented.viewport_top);
 
     let append_start =
       changed.first > 0 && changed.first == presented.frame.len();
@@ -126,30 +104,23 @@ impl<W: Write> Renderer<W> {
       changed.first
     };
 
-    let viewport_bottom =
-      viewport_top.saturating_add(next.dimensions.height.saturating_sub(1));
+    let viewport_bottom = presented
+      .viewport_top
+      .saturating_add(next.dimensions.height.saturating_sub(1));
 
     debug_assert!(move_target_row <= viewport_bottom);
 
-    self.stdout.move_to_row(cursor_row, move_target_row)?;
-
-    cursor_row = move_target_row;
+    self
+      .stdout
+      .move_to_row(presented.frame.last_row(), move_target_row)?;
 
     if append_start {
-      self.line_feed(
-        &mut cursor_row,
-        &mut viewport_top,
-        next.dimensions.height,
-      )?;
+      write!(self.stdout, "\r\n")?;
     }
 
     for row in changed.first..=changed.last {
       if row > changed.first {
-        self.line_feed(
-          &mut cursor_row,
-          &mut viewport_top,
-          next.dimensions.height,
-        )?;
+        write!(self.stdout, "\r\n")?;
       }
 
       self
@@ -159,9 +130,16 @@ impl<W: Write> Renderer<W> {
 
     let last_row = next.last_row();
 
-    self.stdout.move_to_row(cursor_row, last_row)?;
+    self.stdout.move_to_row(changed.last, last_row)?;
 
-    Ok(viewport_top)
+    Ok(
+      presented.viewport_top.max(
+        changed
+          .last
+          .saturating_add(1)
+          .saturating_sub(next.dimensions.height),
+      ),
+    )
   }
 }
 
