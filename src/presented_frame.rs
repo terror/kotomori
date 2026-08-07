@@ -17,10 +17,7 @@ impl PresentedFrame {
 
 impl From<Frame> for PresentedFrame {
   fn from(frame: Frame) -> Self {
-    let viewport_top = frame
-      .len()
-      .max(frame.dimensions.height)
-      .saturating_sub(frame.dimensions.height);
+    let viewport_top = frame.len().saturating_sub(frame.dimensions.height);
 
     Self {
       frame,
