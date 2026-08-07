@@ -7,7 +7,6 @@ mod framed_lines;
 mod header;
 mod hint;
 mod line;
-mod message;
 mod transcript;
 mod transcript_error;
 mod transcript_tool_invocation;
@@ -17,8 +16,7 @@ pub(crate) use {
   approval_prompt::ApprovalPromptComponent, composer::ComposerComponent,
   footer::FooterComponent, framed_lines::FramedLinesComponent,
   header::HeaderComponent, hint::HintComponent, line::LineComponent,
-  message::MessageComponent, transcript::TranscriptComponent,
-  transcript_error::TranscriptErrorComponent,
+  transcript::TranscriptComponent, transcript_error::TranscriptErrorComponent,
   transcript_tool_invocation::TranscriptToolInvocationComponent,
   view::ViewComponent,
 };
