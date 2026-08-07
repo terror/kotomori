@@ -2,19 +2,12 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct RenderPlanner<'a> {
-  max_lines_rendered: usize,
   presented: Option<&'a PresentedFrame>,
 }
 
 impl<'a> RenderPlanner<'a> {
-  pub(crate) fn new(
-    max_lines_rendered: usize,
-    presented: Option<&'a PresentedFrame>,
-  ) -> Self {
-    Self {
-      max_lines_rendered,
-      presented,
-    }
+  pub(crate) fn new(presented: Option<&'a PresentedFrame>) -> Self {
+    Self { presented }
   }
 
   pub(crate) fn plan(self, next: &Frame) -> RenderPlan {
@@ -27,12 +20,6 @@ impl<'a> RenderPlanner<'a> {
     }
 
     if presented.frame.dimensions.height != next.dimensions.height {
-      return RenderPlan::Full { clear: true };
-    }
-
-    if next.len() < self.max_lines_rendered
-      && env::var_os("KOTOMORI_CLEAR_ON_SHRINK").is_some()
-    {
       return RenderPlan::Full { clear: true };
     }
 
