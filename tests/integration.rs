@@ -504,11 +504,6 @@ fn command_completion_quits() -> Result {
 }
 
 #[test]
-fn ctrl_c_quits_gracefully() -> Result {
-  Test::new().quit().run()
-}
-
-#[test]
 fn config_sets_default_model() -> Result {
   Test::new()
     .config(
@@ -521,6 +516,11 @@ fn config_sets_default_model() -> Result {
     .enter()
     .expect_screen_contains("queued for mock:bar: foo")
     .run()
+}
+
+#[test]
+fn ctrl_c_quits_gracefully() -> Result {
+  Test::new().quit().run()
 }
 
 #[test]
@@ -587,6 +587,48 @@ fn prompt_round_trip() -> Result {
     .enter()
     .expect_screen_contains("foo")
     .expect_screen_contains("queued for mock:local: foo")
+    .run()
+}
+
+#[test]
+fn provider_error_recovers() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:error")
+    .type_text("foo")
+    .enter()
+    .expect_screen_contains("mock provider error")
+    .type_text("bar")
+    .enter()
+    .expect_screen_contains("queued for mock:error: bar")
+    .run()
+}
+
+#[test]
+fn provider_malformed_tool_arguments_recovers() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:malformed-tool-arguments")
+    .type_text("foo")
+    .enter()
+    .expect_screen_contains("failed to decode `command` arguments")
+    .type_text("bar")
+    .enter()
+    .expect_screen_contains("queued for mock:malformed-tool-arguments: bar")
+    .run()
+}
+
+#[test]
+fn provider_unknown_tool_recovers() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:unknown-tool")
+    .type_text("foo")
+    .enter()
+    .expect_screen_contains("unknown tool `unknown`")
+    .type_text("bar")
+    .enter()
+    .expect_screen_contains("queued for mock:unknown-tool: bar")
     .run()
 }
 
