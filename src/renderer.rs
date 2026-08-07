@@ -23,7 +23,23 @@ impl Renderer {
 
 impl<W: Write> Renderer<W> {
   pub(crate) fn draw(&mut self, component: &impl Component) -> Result {
-    self.draw_frame(Self::frame(component)?)?;
+    let (width, height) =
+      crossterm_terminal::size().context("failed to read terminal size")?;
+
+    let lines = component
+      .render(width)
+      .into_iter()
+      .flat_map(|line| line.render(width))
+      .map(|line| format!("{line}{}", Style::None.sequence()))
+      .collect::<Vec<_>>();
+
+    self.draw_frame(Frame::new(
+      lines,
+      Dimensions {
+        height: usize::from(height),
+        width,
+      },
+    ))?;
 
     self.stdout.flush()?;
 
@@ -87,26 +103,6 @@ impl<W: Write> Renderer<W> {
     self.presented = Some(presented);
 
     Ok(())
-  }
-
-  fn frame(component: &impl Component) -> Result<Frame> {
-    let (width, height) =
-      crossterm_terminal::size().context("failed to read terminal size")?;
-
-    let lines = component
-      .render(width)
-      .into_iter()
-      .flat_map(|line| line.render(width))
-      .map(|line| format!("{line}{}", Style::None.sequence()))
-      .collect::<Vec<_>>();
-
-    Ok(Frame::new(
-      lines,
-      Dimensions {
-        height: usize::from(height),
-        width,
-      },
-    ))
   }
 }
 
