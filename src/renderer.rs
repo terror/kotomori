@@ -174,10 +174,8 @@ impl Renderer {
 
     let writable_range = diff.writable_range().unwrap();
 
-    let append_start = next.len() > presented.frame.len()
-      && diff.changed.first == presented.frame.len();
-
-    let append_start = append_start && diff.changed.first > 0;
+    let append_start =
+      diff.changed.first > 0 && diff.changed.first == presented.frame.len();
 
     let move_target_row = if append_start {
       diff.changed.first.saturating_sub(1)
