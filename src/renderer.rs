@@ -42,11 +42,13 @@ impl<W: Write> Renderer<W> {
     let presented = match plan {
       RenderPlan::Full { clear } => {
         self.full_render(&next, clear)?;
+
         next.into()
       }
       RenderPlan::NoOperation => unreachable!(),
       RenderPlan::Patch { changed } => {
         let viewport_top = self.patch_render(&next, changed)?;
+
         PresentedFrame::new(next, viewport_top)
       }
     };
