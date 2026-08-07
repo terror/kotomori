@@ -34,7 +34,7 @@ impl<W: Write> Renderer<W> {
     let plan = RenderPlan::between(self.presented.as_ref(), &next);
 
     self.presented = Some(match plan {
-      RenderPlan::Full { clear } => self.full_render(&next, clear)?,
+      RenderPlan::Full { clear } => self.full_render(next, clear)?,
       RenderPlan::NoOperation => return Ok(()),
       RenderPlan::Patch { diff } => self.patch_render(next, diff)?,
     });
@@ -86,7 +86,7 @@ impl<W: Write> Renderer<W> {
 
   fn full_render(
     &mut self,
-    next: &Frame,
+    next: Frame,
     clear: bool,
   ) -> Result<PresentedFrame> {
     self.stdout.begin_synchronized_update()?;
@@ -99,7 +99,7 @@ impl<W: Write> Renderer<W> {
 
     self.stdout.end_synchronized_update()?;
 
-    Ok(next.clone().into())
+    Ok(next.into())
   }
 
   fn line_feed(
@@ -430,7 +430,7 @@ mod tests {
 
     renderer
       .full_render(
-        &Frame::new(
+        Frame::new(
           vec!["bar".into(), "baz".into()],
           Dimensions {
             height: 10,
@@ -453,7 +453,7 @@ mod tests {
 
     renderer
       .full_render(
-        &Frame::new(
+        Frame::new(
           vec!["foo".into(), "bar".into(), "baz".into()],
           Dimensions {
             height: 2,
@@ -476,7 +476,7 @@ mod tests {
 
     renderer
       .full_render(
-        &Frame::new(
+        Frame::new(
           vec!["foo".into(), "bar".into()],
           Dimensions {
             height: 10,
