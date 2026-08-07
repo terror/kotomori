@@ -1,5 +1,3 @@
-#![cfg(not(windows))]
-
 use {
   anyhow::{Context, Error, bail, ensure},
   portable_pty::{CommandBuilder, PtySize, native_pty_system},
@@ -207,8 +205,15 @@ impl Running {
     }
 
     let child = pair.slave.spawn_command(command)?;
+
     let output = Self::read_thread(pair.master.try_clone_reader()?);
-    let writer = pair.master.take_writer()?;
+
+    let mut writer = pair.master.take_writer()?;
+
+    if cfg!(windows) {
+      writer.write_all(b"\x1b[1;1R")?;
+      writer.flush()?;
+    }
 
     Ok(Self {
       _master: pair.master,
