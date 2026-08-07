@@ -701,6 +701,91 @@ fn resume_filters_and_loads_session() -> Result {
 }
 
 #[test]
+fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
+  let state = tempfile::Builder::new()
+    .prefix("kotomori-state")
+    .tempdir()?;
+
+  let workspace = tempfile::Builder::new()
+    .prefix("kotomori-workspace")
+    .tempdir()?;
+
+  let state = state.path().to_str().unwrap();
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("--model")
+    .argument("mock:approval-required-command")
+    .type_text("approved tool result")
+    .enter()
+    .expect_screen_contains("Approve echo bar?")
+    .type_text("y")
+    .expect_screen_contains("Ran echo bar")
+    .expect_screen_contains("done")
+    .wait(SETTLE_INTERVAL)
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("--model")
+    .argument("mock:approval-required-command")
+    .type_text("denied tool result")
+    .enter()
+    .expect_screen_contains("Approve echo bar?")
+    .type_text("n")
+    .expect_screen_contains("Failed running echo bar")
+    .expect_screen_contains("permission denied")
+    .expect_screen_contains("done")
+    .wait(SETTLE_INTERVAL)
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("--model")
+    .argument("mock:slow-streaming")
+    .type_text("interrupted response")
+    .enter()
+    .expect_screen_contains("queued")
+    .ctrl_c()
+    .expect_screen_contains("Conversation interrupted")
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("resume")
+    .type_text("approved tool result")
+    .enter()
+    .expect_screen_contains("Ran echo bar")
+    .expect_screen_contains("done")
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("resume")
+    .type_text("denied tool result")
+    .enter()
+    .expect_screen_contains("Failed running echo bar")
+    .expect_screen_contains("permission denied")
+    .expect_screen_contains("done")
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("resume")
+    .type_text("interrupted response")
+    .enter()
+    .expect_screen_contains("queued")
+    .expect_screen_contains("Conversation interrupted")
+    .run()
+}
+
+#[test]
 fn second_turn_conversation() -> Result {
   Test::new()
     .argument("--model")
