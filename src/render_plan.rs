@@ -24,12 +24,12 @@ impl RenderPlan {
       return Self::NoOperation;
     };
 
-    if diff.changed.first < presented.viewport.top {
+    if diff.changed.first < presented.viewport_top {
       return Self::Full { clear: true };
     }
 
     if diff.changed.first >= next.len()
-      && next.last_row() < presented.viewport.top
+      && next.last_row() < presented.viewport_top
     {
       return Self::Full { clear: true };
     }
