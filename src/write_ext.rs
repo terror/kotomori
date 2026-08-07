@@ -2,24 +2,17 @@ use super::*;
 
 pub(crate) trait WriteExt {
   fn begin_synchronized_update(&mut self) -> Result;
-  fn clear_line(&mut self) -> Result;
   fn clear_screen(&mut self) -> Result;
   fn end_synchronized_update(&mut self) -> Result;
   fn move_down(&mut self, lines: usize) -> Result;
   fn move_up(&mut self, lines: usize) -> Result;
-  fn write_line(&mut self, line: &str) -> Result;
+  fn replace_line(&mut self, line: Option<&str>) -> Result;
   fn write_lines(&mut self, lines: &[String]) -> Result;
 }
 
 impl<T: Write> WriteExt for T {
   fn begin_synchronized_update(&mut self) -> Result {
     queue!(self, BeginSynchronizedUpdate)?;
-
-    Ok(())
-  }
-
-  fn clear_line(&mut self) -> Result {
-    queue!(self, Clear(ClearType::CurrentLine))?;
 
     Ok(())
   }
@@ -57,10 +50,12 @@ impl<T: Write> WriteExt for T {
     Ok(())
   }
 
-  fn write_line(&mut self, line: &str) -> Result {
-    self.clear_line()?;
+  fn replace_line(&mut self, line: Option<&str>) -> Result {
+    queue!(self, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
 
-    write!(self, "{line}")?;
+    if let Some(line) = line {
+      write!(self, "{line}")?;
+    }
 
     Ok(())
   }
@@ -71,9 +66,7 @@ impl<T: Write> WriteExt for T {
         write!(self, "\r\n")?;
       }
 
-      queue!(self, MoveToColumn(0))?;
-
-      self.write_line(line)?;
+      self.replace_line(Some(line))?;
     }
 
     Ok(())
@@ -91,15 +84,6 @@ mod tests {
     stdout.begin_synchronized_update().unwrap();
 
     assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[?2026h");
-  }
-
-  #[test]
-  fn clear_line_writes_sequence() {
-    let mut stdout = Vec::new();
-
-    stdout.clear_line().unwrap();
-
-    assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[2K");
   }
 
   #[test]
@@ -124,12 +108,21 @@ mod tests {
   }
 
   #[test]
-  fn write_line_clears_and_writes_line() {
+  fn replace_line_clears_line() {
     let mut stdout = Vec::new();
 
-    stdout.write_line("foo").unwrap();
+    stdout.replace_line(None).unwrap();
 
-    assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[2Kfoo");
+    assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[1G\x1b[2K");
+  }
+
+  #[test]
+  fn replace_line_clears_and_writes_line() {
+    let mut stdout = Vec::new();
+
+    stdout.replace_line(Some("foo")).unwrap();
+
+    assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[1G\x1b[2Kfoo");
   }
 
   #[test]
