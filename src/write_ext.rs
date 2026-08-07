@@ -5,6 +5,7 @@ pub(crate) trait WriteExt {
   fn clear_screen(&mut self) -> Result;
   fn end_synchronized_update(&mut self) -> Result;
   fn move_down(&mut self, lines: usize) -> Result;
+  fn move_to_row(&mut self, current: usize, target: usize) -> Result;
   fn move_up(&mut self, lines: usize) -> Result;
   fn replace_line(&mut self, line: Option<&str>) -> Result;
   fn write_lines(&mut self, lines: &[String]) -> Result;
@@ -38,6 +39,14 @@ impl<T: Write> WriteExt for T {
     if lines > 0 {
       queue!(self, MoveDown(u16::try_from(lines).unwrap_or(u16::MAX)))?;
     }
+
+    Ok(())
+  }
+
+  fn move_to_row(&mut self, current: usize, target: usize) -> Result {
+    self.move_up(current.saturating_sub(target))?;
+
+    self.move_down(target.saturating_sub(current))?;
 
     Ok(())
   }
