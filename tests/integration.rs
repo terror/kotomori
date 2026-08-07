@@ -1,7 +1,7 @@
 #![cfg(not(windows))]
 
 use {
-  anyhow::{Context, Error, bail},
+  anyhow::{Context, Error, bail, ensure},
   portable_pty::{CommandBuilder, PtySize, native_pty_system},
   std::{
     fs,
@@ -194,7 +194,12 @@ impl Running {
       format!("timed out waiting for exit\n{}", self.screen())
     })?;
 
-    assert_eq!(status.exit_code(), code);
+    ensure!(
+      status.exit_code() == code,
+      "expected exit code {code}, got {}\n{}",
+      status.exit_code(),
+      self.screen(),
+    );
 
     Ok(())
   }
