@@ -45,7 +45,7 @@ impl App {
 
           match action {
             ResumePickerAction::Cancel => self.screen = Screen::Quit,
-            ResumePickerAction::Resume(path) => self.resume(&path)?,
+            ResumePickerAction::Resume(id) => self.resume(id)?,
           }
         }
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
@@ -106,19 +106,22 @@ impl App {
     )
   }
 
-  fn resume(&mut self, path: &Path) -> Result {
-    let session = SessionStore::load(path)?;
+  fn resume(&mut self, id: i64) -> Result {
+    let database = Database::new()?;
+
+    let session = database.load_session(id)?;
 
     let mut settings = self.settings.clone();
 
-    settings.model = session.file.model.parse().with_context(|| {
-      format!("failed to parse session model {}", session.file.model)
+    settings.model = session.model.parse().with_context(|| {
+      format!("failed to parse session model {}", session.model)
     })?;
 
     self.agent = Some(Agent::new(self.event_channel.sender(), &settings)?);
 
-    self.screen =
-      Screen::Session(Box::new(State::with_session(&settings, session)?));
+    self.screen = Screen::Session(Box::new(State::with_session(
+      &settings, database, session,
+    )?));
 
     self.settings = settings;
 

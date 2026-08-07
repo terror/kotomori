@@ -4,7 +4,7 @@ use super::*;
 pub(crate) struct ResumePicker {
   pub(crate) query: String,
   pub(crate) selected: usize,
-  sessions: Vec<SessionSummary>,
+  sessions: Vec<Session>,
 }
 
 impl ResumePicker {
@@ -18,7 +18,7 @@ impl ResumePicker {
     };
   }
 
-  pub(crate) fn filtered(&self) -> Vec<&SessionSummary> {
+  pub(crate) fn filtered(&self) -> Vec<&Session> {
     self
       .sessions
       .iter()
@@ -64,8 +64,8 @@ impl ResumePicker {
         }
       }
       Action::Submit => {
-        if let Some(path) = self.selected_path() {
-          return Some(ResumePickerAction::Resume(path));
+        if let Some(id) = self.selected_id() {
+          return Some(ResumePickerAction::Resume(id));
         }
       }
       Action::Interrupt | Action::Quit => {
@@ -88,7 +88,7 @@ impl ResumePicker {
     None
   }
 
-  pub(crate) fn new(sessions: Vec<SessionSummary>) -> Self {
+  pub(crate) fn new(sessions: Vec<Session>) -> Self {
     Self {
       query: String::new(),
       selected: 0,
@@ -96,11 +96,11 @@ impl ResumePicker {
     }
   }
 
-  fn selected_path(&self) -> Option<PathBuf> {
+  fn selected_id(&self) -> Option<i64> {
     self
       .filtered()
       .get(self.selected)
-      .map(|session| session.path.clone())
+      .and_then(|session| session.id)
   }
 }
 
@@ -111,20 +111,22 @@ mod tests {
   #[test]
   fn filters_sessions() {
     let mut picker = ResumePicker::new(vec![
-      SessionSummary {
-        cwd: "foo".into(),
+      Session {
+        created_at: 0,
+        directory: "foo".into(),
+        entries: Vec::new(),
+        id: Some(1),
         model: "mock:local".into(),
-        path: "foo".into(),
-        search: "foo".into(),
-        title: "foo".into(),
+        title: Some("foo".into()),
         updated_at: 0,
       },
-      SessionSummary {
-        cwd: "bar".into(),
+      Session {
+        created_at: 0,
+        directory: "bar".into(),
+        entries: Vec::new(),
+        id: Some(2),
         model: "mock:local".into(),
-        path: "bar".into(),
-        search: "bar".into(),
-        title: "bar".into(),
+        title: Some("bar".into()),
         updated_at: 0,
       },
     ]);
@@ -138,9 +140,9 @@ mod tests {
       picker
         .filtered()
         .into_iter()
-        .map(|session| session.path.as_path())
+        .filter_map(|session| session.id)
         .collect::<Vec<_>>(),
-      [Path::new("bar")],
+      [2],
     );
   }
 }

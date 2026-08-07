@@ -27,6 +27,7 @@ use {
       EndSynchronizedUpdate, enable_raw_mode,
     },
   },
+  database::Database,
   dimensions::Dimensions,
   directory_display::DirectoryDisplay,
   duration_ext::DurationExt,
@@ -64,23 +65,20 @@ use {
     },
     message::{Reasoning, ToolResultContent, UserContent},
   },
+  row_ext::RowExt,
+  rusqlite::{Connection, TransactionBehavior, params},
   schemars::JsonSchema,
   screen::Screen,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
   serde_json::Value,
   session::Session,
-  session_file::SessionFile,
-  session_store::SessionStore,
-  session_summary::SessionSummary,
   settings::Settings,
   smallvec::SmallVec,
   span::Span,
   state::State,
   std::{
     backtrace::BacktraceStatus,
-    cmp::Reverse,
     env,
-    ffi::OsStr,
     fmt::{self, Debug, Display, Formatter},
     fs,
     io::{self, BufWriter, Stdout, Write},
@@ -89,10 +87,7 @@ use {
     path::{Path, PathBuf},
     process::{self, Stdio},
     str::{self, FromStr},
-    sync::{
-      Arc, LazyLock, Mutex, OnceLock,
-      atomic::{self, AtomicU64},
-    },
+    sync::{Arc, LazyLock, Mutex, OnceLock},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
   },
@@ -126,6 +121,9 @@ use {
   write_ext::WriteExt,
 };
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 mod action;
 mod agent;
 mod agent_activity;
@@ -139,6 +137,7 @@ mod command;
 mod component;
 mod composer;
 mod config;
+mod database;
 mod dimensions;
 mod directory_display;
 mod duration_ext;
@@ -163,11 +162,9 @@ mod renderer;
 mod request;
 mod resume_picker;
 mod resume_picker_action;
+mod row_ext;
 mod screen;
 mod session;
-mod session_file;
-mod session_store;
-mod session_summary;
 mod settings;
 mod span;
 mod state;

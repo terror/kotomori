@@ -64,7 +64,10 @@ impl Component for ViewComponent<'_> {
 
           lines.push(LineComponent::from([
             Span::styled(marker, style),
-            Span::styled(session.title.as_str(), style),
+            Span::styled(
+              session.title.as_deref().unwrap_or("Untitled session"),
+              style,
+            ),
             Span::styled("  ", Style::DarkGray),
             Span::styled(session.detail(), Style::DarkGray),
           ]));

@@ -9,7 +9,14 @@ repository = "https://github.com/terror/kotomori"
 edition = "2024"
 categories = ["command-line-utilities", "development-tools"]
 keywords = ["ai", "agent", "coding", "terminal", "cli"]
-include = ["/LICENSE", "/README.md", "/screenshot.png", "/src/", "/tests/"]
+include = [
+  "/LICENSE",
+  "/README.md",
+  "/migrations/",
+  "/screenshot.png",
+  "/src/",
+  "/tests/",
+]
 
 [workspace]
 members = [".", "crates/*"]
@@ -43,6 +50,7 @@ indoc = "2.0.7"
 lexiclean = "0.0.1"
 ratatui-textarea = "0.9.1"
 rig = { version = "0.37.0", default-features = false, features = ["reqwest", "rustls"] }
+rusqlite = { version = "0.40.1", features = ["bundled"] }
 schemars = { version = "1.2.1", features = ["derive"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
