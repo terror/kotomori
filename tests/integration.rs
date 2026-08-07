@@ -7,6 +7,7 @@ use {
     fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
+    process::Command,
     sync::{
       Mutex,
       mpsc::{self, Receiver, RecvTimeoutError},
@@ -783,6 +784,29 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
     .expect_screen_contains("queued")
     .expect_screen_contains("Conversation interrupted")
     .run()
+}
+
+#[test]
+fn resume_with_no_sessions_exits_successfully() -> Result {
+  let test = Test::new();
+
+  let output = Command::new(env!("CARGO_BIN_EXE_kotomori"))
+    .arg("resume")
+    .current_dir(test.tempdir.path())
+    .env("KOTOMORI_HOME", test.tempdir.path().join("kotomori-home"))
+    .env("XDG_CONFIG_HOME", test.tempdir.path().join("xdg-config"))
+    .output()?;
+
+  ensure!(
+    output.status.success(),
+    "unexpected exit status: {}\n{}",
+    output.status,
+    String::from_utf8_lossy(&output.stderr),
+  );
+
+  assert_eq!(output.stdout, b"No saved sessions.\n");
+
+  Ok(())
 }
 
 #[test]
