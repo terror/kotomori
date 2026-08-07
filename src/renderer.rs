@@ -2,7 +2,6 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct Renderer {
-  max_lines_rendered: usize,
   presented: Option<PresentedFrame>,
 }
 
@@ -69,9 +68,7 @@ impl Renderer {
   }
 
   fn draw_frame(&mut self, stdout: &mut impl Write, next: Frame) -> Result {
-    let plan =
-      RenderPlanner::new(self.max_lines_rendered, self.presented.as_ref())
-        .plan(&next);
+    let plan = RenderPlanner::new(self.presented.as_ref()).plan(&next);
 
     let presented = match plan {
       RenderPlan::Full { clear } => Self::full_render(stdout, &next, clear)?,
@@ -87,12 +84,6 @@ impl Renderer {
         viewport,
         diff,
       )?,
-    };
-
-    self.max_lines_rendered = if plan.clears() {
-      presented.frame.len()
-    } else {
-      self.max_lines_rendered.max(presented.frame.len())
     };
 
     self.presented = Some(presented);
@@ -171,10 +162,7 @@ impl Renderer {
   }
 
   pub(crate) fn new() -> Self {
-    Self {
-      max_lines_rendered: 0,
-      presented: None,
-    }
+    Self { presented: None }
   }
 
   fn patch_render(
@@ -291,7 +279,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
@@ -336,7 +323,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
@@ -376,7 +362,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
@@ -423,7 +408,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
@@ -468,7 +452,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
@@ -572,7 +555,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
@@ -617,7 +599,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
@@ -657,7 +638,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
@@ -697,7 +677,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
@@ -743,7 +722,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame.clone(),
@@ -788,7 +766,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
@@ -828,7 +805,6 @@ mod tests {
     );
 
     let mut subject = Renderer {
-      max_lines_rendered: frame.len(),
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
