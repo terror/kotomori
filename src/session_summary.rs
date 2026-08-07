@@ -12,11 +12,11 @@ pub(crate) struct SessionSummary {
 
 impl SessionSummary {
   fn age(&self) -> String {
-    let Ok(now) = Session::now() else {
+    let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
       return "unknown age".into();
     };
 
-    let seconds = now.saturating_sub(self.updated_at);
+    let seconds = now.as_secs().saturating_sub(self.updated_at);
 
     match seconds {
       0..=59 => "now".into(),
@@ -84,7 +84,10 @@ mod tests {
       model: "mock:local".into(),
       search: "foo bar baz".into(),
       title: "foo".into(),
-      updated_at: Session::now().unwrap(),
+      updated_at: SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs(),
     };
 
     assert!(summary.matches("foo baz"));

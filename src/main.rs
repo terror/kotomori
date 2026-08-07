@@ -124,6 +124,9 @@ use {
   write_ext::WriteExt,
 };
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 mod action;
 mod agent;
 mod agent_activity;

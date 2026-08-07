@@ -22,13 +22,19 @@ impl Session {
 
     Ok(format!(
       "{}-{}-{counter}",
-      Self::timestamp()?.as_nanos(),
+      SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .context("system clock is before the unix epoch")?
+        .as_nanos(),
       process::id()
     ))
   }
 
   pub(crate) fn new(settings: &Settings) -> Result<Self> {
-    let now = Self::now()?;
+    let now = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .context("system clock is before the unix epoch")?
+      .as_secs();
 
     Ok(Self {
       created_at: now,
@@ -42,10 +48,6 @@ impl Session {
     })
   }
 
-  pub(crate) fn now() -> Result<u64> {
-    Ok(Self::timestamp()?.as_secs())
-  }
-
   pub(crate) fn save(
     &mut self,
     database: &Database,
@@ -56,8 +58,26 @@ impl Session {
     }
 
     self.entries.clone_from(&transcript.entries);
-    self.title = Self::title(&transcript.entries);
-    self.updated_at = Self::now()?;
+
+    self.title = transcript.entries.iter().find_map(|entry| {
+      let TranscriptEntry::User(content) = entry else {
+        return None;
+      };
+
+      let title = content
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .as_str()
+        .truncate(Self::TITLE_LENGTH);
+
+      (!title.is_empty()).then_some(title)
+    });
+
+    self.updated_at = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .context("system clock is before the unix epoch")?
+      .as_secs();
 
     database.add_session(self)?;
 
@@ -68,31 +88,5 @@ impl Session {
 
   pub(crate) fn set_model(&mut self, model: &Model) {
     self.model = model.to_string();
-  }
-
-  fn timestamp() -> Result<Duration> {
-    SystemTime::now()
-      .duration_since(UNIX_EPOCH)
-      .context("system clock is before the unix epoch")
-  }
-
-  pub(crate) fn title(entries: &[TranscriptEntry]) -> Option<String> {
-    entries.iter().find_map(|entry| match entry {
-      TranscriptEntry::User(content) => {
-        let title = content
-          .split_whitespace()
-          .collect::<Vec<_>>()
-          .join(" ")
-          .as_str()
-          .truncate(Self::TITLE_LENGTH);
-
-        (!title.is_empty()).then_some(title)
-      }
-      TranscriptEntry::Agent(_)
-      | TranscriptEntry::Error(_)
-      | TranscriptEntry::Interrupted
-      | TranscriptEntry::Reasoning(_)
-      | TranscriptEntry::Tool { .. } => None,
-    })
   }
 }

@@ -153,6 +153,7 @@ impl TryFrom<Connection> for Database {
 
     let transaction =
       connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+
     let version: i64 =
       transaction.query_row("PRAGMA user_version", [], |row| row.get(0))?;
 
@@ -178,6 +179,7 @@ impl TryFrom<Connection> for Database {
       transaction.execute_batch(migration).with_context(|| {
         format!("failed to apply database migration {version}")
       })?;
+
       transaction.pragma_update(
         None,
         "user_version",
@@ -197,8 +199,6 @@ impl TryFrom<&Path> for Database {
   fn try_from(path: &Path) -> Result<Self> {
     #[cfg(unix)]
     {
-      use std::os::unix::fs::PermissionsExt;
-
       let directory = path
         .parent()
         .context("database path has no parent directory")?;
@@ -213,8 +213,6 @@ impl TryFrom<&Path> for Database {
 
     #[cfg(unix)]
     {
-      use std::os::unix::fs::PermissionsExt;
-
       fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
     }
 
