@@ -127,9 +127,7 @@ impl App {
   }
 
   pub(crate) async fn run(mut self) -> Result {
-    let mut terminal = Terminal::new()?;
-
-    let mut renderer = Renderer::new();
+    let mut renderer = Renderer::new()?;
 
     let (mut first_draw_started_at, mut first_draw_duration) =
       (FIRST_DRAW_STARTED_AT.get().copied(), None);
@@ -139,10 +137,7 @@ impl App {
     let mut tick_interval = interval(Self::TICK_INTERVAL);
 
     while !self.screen.should_quit() {
-      renderer.draw(
-        &mut terminal.stdout,
-        &ViewComponent::new(&self.screen, first_draw_duration),
-      )?;
+      renderer.draw(&ViewComponent::new(&self.screen, first_draw_duration))?;
 
       if let Some(started_at) = first_draw_started_at.take() {
         first_draw_duration = Some(started_at.elapsed());
@@ -165,7 +160,7 @@ impl App {
       self.drain_pending_events()?;
     }
 
-    renderer.finish(&mut terminal.stdout)?;
+    renderer.finish()?;
 
     Ok(())
   }
