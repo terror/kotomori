@@ -11,13 +11,16 @@ impl Renderer {
     presented: &PresentedFrame,
     next: &Frame,
     diff: Diff,
-    viewport: Viewport,
   ) -> Result<PresentedFrame> {
     let target_row = next.last_row();
 
     stdout.begin_synchronized_update()?;
 
-    stdout.move_by(presented.cursor.diff_to(viewport, target_row, viewport))?;
+    stdout.move_by(presented.cursor.diff_to(
+      presented.viewport,
+      target_row,
+      presented.viewport,
+    ))?;
 
     let deleted_tail_len = diff.deleted_tail_len();
 
@@ -47,7 +50,7 @@ impl Renderer {
     Ok(PresentedFrame::new(
       Cursor::new(target_row),
       next.clone(),
-      viewport,
+      presented.viewport,
     ))
   }
 
@@ -73,7 +76,6 @@ impl Renderer {
         stdout,
         self.presented.as_ref().unwrap(),
         next,
-        self.presented.as_ref().unwrap().viewport,
         diff,
       )?,
     };
@@ -163,14 +165,13 @@ impl Renderer {
     stdout: &mut impl Write,
     presented: &PresentedFrame,
     next: Frame,
-    mut viewport: Viewport,
     diff: Diff,
   ) -> Result<PresentedFrame> {
     if diff.is_pure_tail_delete() {
-      return Self::clear_deleted_tail(
-        stdout, presented, &next, diff, viewport,
-      );
+      return Self::clear_deleted_tail(stdout, presented, &next, diff);
     }
+
+    let mut viewport = presented.viewport;
 
     let writable_range = diff.writable_range().unwrap();
 
