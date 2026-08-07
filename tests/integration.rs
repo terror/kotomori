@@ -204,7 +204,9 @@ impl Running {
     }
 
     let child = pair.slave.spawn_command(command)?;
+
     let output = Self::read_thread(pair.master.try_clone_reader()?);
+
     let mut writer = pair.master.take_writer()?;
 
     if cfg!(windows) {
