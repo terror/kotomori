@@ -58,36 +58,17 @@ impl Renderer {
 
   pub(crate) fn draw(
     &mut self,
-    stdout: &mut Stdout,
+    stdout: &mut impl Write,
     component: &impl Component,
   ) -> Result {
-    let (width, height) =
-      crossterm_terminal::size().context("failed to read terminal size")?;
-
-    let rendered = component
-      .render(width)
-      .into_iter()
-      .flat_map(|line| line.render(width))
-      .map(|line| format!("{line}{}", Style::None.sequence()))
-      .collect::<Vec<_>>();
-
-    self.draw_rendered(stdout, rendered, width, height)?;
+    self.draw_frame(stdout, Self::frame(component)?)?;
 
     stdout.flush()?;
 
     Ok(())
   }
 
-  fn draw_rendered(
-    &mut self,
-    stdout: &mut impl Write,
-    rendered: Vec<String>,
-    width: u16,
-    height: u16,
-  ) -> Result {
-    let height = usize::from(height);
-    let next = Frame::new(rendered, Dimensions { height, width });
-
+  fn draw_frame(&mut self, stdout: &mut impl Write, next: Frame) -> Result {
     let plan =
       RenderPlanner::new(self.max_lines_rendered, self.presented.as_ref())
         .plan(&next);
@@ -138,6 +119,26 @@ impl Renderer {
     }
 
     Ok(())
+  }
+
+  fn frame(component: &impl Component) -> Result<Frame> {
+    let (width, height) =
+      crossterm_terminal::size().context("failed to read terminal size")?;
+
+    let lines = component
+      .render(width)
+      .into_iter()
+      .flat_map(|line| line.render(width))
+      .map(|line| format!("{line}{}", Style::None.sequence()))
+      .collect::<Vec<_>>();
+
+    Ok(Frame::new(
+      lines,
+      Dimensions {
+        height: usize::from(height),
+        width,
+      },
+    ))
   }
 
   fn full_render(
@@ -308,7 +309,16 @@ mod tests {
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(&mut stdout, vec!["foo".into(), String::new()], 80, 1)
+      .draw_frame(
+        &mut stdout,
+        Frame::new(
+          vec!["foo".into(), String::new()],
+          Dimensions {
+            height: 1,
+            width: 80,
+          },
+        ),
+      )
       .unwrap();
 
     assert_eq!(
@@ -344,7 +354,16 @@ mod tests {
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(&mut stdout, vec!["foo".into(), "bar".into()], 80, 24)
+      .draw_frame(
+        &mut stdout,
+        Frame::new(
+          vec!["foo".into(), "bar".into()],
+          Dimensions {
+            height: 24,
+            width: 80,
+          },
+        ),
+      )
       .unwrap();
 
     assert_eq!(
@@ -375,11 +394,15 @@ mod tests {
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(
+      .draw_frame(
         &mut stdout,
-        vec!["foo".into(), "bar".into(), "baz".into()],
-        80,
-        1,
+        Frame::new(
+          vec!["foo".into(), "bar".into(), "baz".into()],
+          Dimensions {
+            height: 1,
+            width: 80,
+          },
+        ),
       )
       .unwrap();
 
@@ -418,7 +441,16 @@ mod tests {
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(&mut stdout, Vec::new(), 80, 24)
+      .draw_frame(
+        &mut stdout,
+        Frame::new(
+          Vec::new(),
+          Dimensions {
+            height: 24,
+            width: 80,
+          },
+        ),
+      )
       .unwrap();
 
     assert_eq!(
@@ -558,11 +590,15 @@ mod tests {
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(
+      .draw_frame(
         &mut stdout,
-        vec!["foo".into(), "bar".into(), "bob".into(), "qux".into()],
-        80,
-        3,
+        Frame::new(
+          vec!["foo".into(), "bar".into(), "bob".into(), "qux".into()],
+          Dimensions {
+            height: 3,
+            width: 80,
+          },
+        ),
       )
       .unwrap();
 
@@ -599,11 +635,15 @@ mod tests {
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(
+      .draw_frame(
         &mut stdout,
-        vec!["foo".into(), "qux".into(), "baz".into()],
-        80,
-        24,
+        Frame::new(
+          vec!["foo".into(), "qux".into(), "baz".into()],
+          Dimensions {
+            height: 24,
+            width: 80,
+          },
+        ),
       )
       .unwrap();
 
@@ -635,11 +675,15 @@ mod tests {
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(
+      .draw_frame(
         &mut stdout,
-        vec!["qux".into(), "bar".into(), "baz".into()],
-        80,
-        2,
+        Frame::new(
+          vec!["qux".into(), "bar".into(), "baz".into()],
+          Dimensions {
+            height: 2,
+            width: 80,
+          },
+        ),
       )
       .unwrap();
 
@@ -671,7 +715,16 @@ mod tests {
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(&mut stdout, vec!["foo".into(), "bar".into()], 80, 25)
+      .draw_frame(
+        &mut stdout,
+        Frame::new(
+          vec!["foo".into(), "bar".into()],
+          Dimensions {
+            height: 25,
+            width: 80,
+          },
+        ),
+      )
       .unwrap();
 
     assert_eq!(
@@ -708,7 +761,16 @@ mod tests {
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(&mut stdout, frame.lines, 80, 4)
+      .draw_frame(
+        &mut stdout,
+        Frame::new(
+          frame.lines,
+          Dimensions {
+            height: 4,
+            width: 80,
+          },
+        ),
+      )
       .unwrap();
 
     assert_eq!(
@@ -744,7 +806,16 @@ mod tests {
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(&mut stdout, vec!["foo".into(), "bar".into()], 81, 24)
+      .draw_frame(
+        &mut stdout,
+        Frame::new(
+          vec!["foo".into(), "bar".into()],
+          Dimensions {
+            height: 24,
+            width: 81,
+          },
+        ),
+      )
       .unwrap();
 
     assert_eq!(
@@ -775,7 +846,16 @@ mod tests {
     let mut stdout = Vec::new();
 
     subject
-      .draw_rendered(&mut stdout, vec!["foo".into()], 80, 24)
+      .draw_frame(
+        &mut stdout,
+        Frame::new(
+          vec!["foo".into()],
+          Dimensions {
+            height: 24,
+            width: 80,
+          },
+        ),
+      )
       .unwrap();
 
     assert_eq!(

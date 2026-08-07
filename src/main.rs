@@ -87,7 +87,7 @@ use {
     ffi::OsStr,
     fmt::{self, Debug, Display, Formatter},
     fs,
-    io::{self, Stdout, Write},
+    io::{self, BufWriter, Stdout, Write},
     iter::once,
     mem,
     ops::RangeInclusive,
@@ -95,11 +95,11 @@ use {
     process::{self, Stdio},
     str::{self, FromStr},
     sync::{
-      Arc, LazyLock, Mutex,
+      Arc, LazyLock, Mutex, OnceLock,
       atomic::{self, AtomicU64},
     },
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
   },
   str_ext::StrExt,
   strum::{EnumIter, IntoEnumIterator},
@@ -108,6 +108,7 @@ use {
   terminal::Terminal,
   tokio::{
     io::{AsyncRead, AsyncReadExt},
+    runtime::Runtime,
     sync::{
       mpsc::{self, UnboundedReceiver, UnboundedSender},
       oneshot,
@@ -199,6 +200,8 @@ mod user_message_content;
 mod viewport;
 mod write_ext;
 
+static FIRST_DRAW_STARTED_AT: OnceLock<Instant> = OnceLock::new();
+
 pub(crate) static SYSTEM_PROMPT: LazyLock<String> = LazyLock::new(|| {
   indoc! {
     "
@@ -220,9 +223,18 @@ type AsyncCommand = tokio::process::Command;
 type OutputTask = task::JoinHandle<io::Result<String>>;
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 
-#[tokio::main]
-async fn main() {
-  if let Err(error) = Arguments::parse().run().await {
+fn main() {
+  let first_draw_started_at = Instant::now();
+
+  if env::var_os("KOTOMORI_DEV").is_some() {
+    FIRST_DRAW_STARTED_AT.get_or_init(|| first_draw_started_at);
+  }
+
+  let result = Runtime::new()
+    .context("failed to initialize async runtime")
+    .and_then(|runtime| runtime.block_on(Arguments::parse().run()));
+
+  if let Err(error) = result {
     eprintln!("error: {error}");
 
     for (i, error) in error.chain().skip(1).enumerate() {
