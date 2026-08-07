@@ -1,7 +1,7 @@
 #![cfg(not(windows))]
 
 use {
-  anyhow::{Context, Error, bail},
+  anyhow::{Context, Error, bail, ensure},
   portable_pty::{CommandBuilder, PtySize, native_pty_system},
   std::{
     fs,
@@ -37,149 +37,12 @@ enum Step {
   Write(Vec<u8>),
 }
 
-#[derive(Debug)]
-struct Test {
-  arguments: Vec<String>,
-  cwd: Option<PathBuf>,
-  env: Vec<(String, String)>,
-  steps: Vec<Step>,
-  tempdir: TempDir,
-}
-
 struct Running {
   _master: Box<dyn portable_pty::MasterPty + Send>,
   child: Option<Box<dyn portable_pty::Child + Send + Sync>>,
   output: Receiver<Vec<u8>>,
   parser: vt100::Parser,
   writer: Box<dyn Write + Send>,
-}
-
-impl Test {
-  fn argument(mut self, argument: &str) -> Self {
-    self.arguments.push(argument.into());
-    self
-  }
-
-  fn config(self, config: &str) -> Self {
-    let path = self.tempdir.path().join("config.toml");
-
-    fs::write(&path, config).unwrap();
-
-    self.env("KOTOMORI_CONFIG", path.to_str().unwrap())
-  }
-
-  fn ctrl_c(self) -> Self {
-    self.write("\x03")
-  }
-
-  fn ctrl_j(self) -> Self {
-    self.write("\n")
-  }
-
-  fn cwd(mut self, cwd: &Path) -> Self {
-    self.cwd = Some(cwd.into());
-    self
-  }
-
-  fn down(self) -> Self {
-    self.write("\x1b[B")
-  }
-
-  fn enter(self) -> Self {
-    self.write("\r")
-  }
-
-  fn env(mut self, key: &str, value: &str) -> Self {
-    self.env.push((key.into(), value.into()));
-    self
-  }
-
-  fn escape(self) -> Self {
-    self.write("\x1b")
-  }
-
-  fn expect_exit(mut self, code: u32) -> Self {
-    self.steps.push(Step::ExpectExit(code));
-    self
-  }
-
-  fn expect_screen_contains(mut self, text: &str) -> Self {
-    self.steps.push(Step::ExpectScreenContains(text.into()));
-    self
-  }
-
-  fn expect_screen_excludes(mut self, text: &str) -> Self {
-    self.steps.push(Step::ExpectScreenExcludes(text.into()));
-    self
-  }
-
-  fn new() -> Self {
-    Self {
-      arguments: Vec::new(),
-      cwd: None,
-      env: Vec::new(),
-      steps: Vec::new(),
-      tempdir: tempfile::Builder::new()
-        .prefix("kotomori-test")
-        .tempdir()
-        .unwrap(),
-    }
-  }
-
-  fn quit(mut self) -> Self {
-    self.steps.push(Step::Quit);
-    self
-  }
-
-  fn run(self) -> Result {
-    let mut running = Running::spawn(&self)?;
-
-    running.expect_screen_contains("kotomori", STARTUP_TIMEOUT)?;
-
-    for step in self.steps {
-      match step {
-        Step::ExpectExit(code) => {
-          running.expect_exit(code, EXPECT_TIMEOUT)?;
-        }
-        Step::ExpectScreenContains(text) => {
-          running.expect_screen_contains(&text, EXPECT_TIMEOUT)?;
-        }
-        Step::ExpectScreenExcludes(text) => {
-          running.expect_screen_excludes(&text, EXPECT_TIMEOUT)?;
-        }
-        Step::Quit => {
-          running.quit()?;
-        }
-        Step::Wait(duration) => {
-          thread::sleep(duration);
-        }
-        Step::Write(bytes) => {
-          running.write(&bytes)?;
-        }
-      }
-    }
-
-    Ok(())
-  }
-
-  fn tab(self) -> Self {
-    self.write("\t")
-  }
-
-  fn type_text(mut self, text: &str) -> Self {
-    self.steps.push(Step::Write(text.as_bytes().into()));
-    self
-  }
-
-  fn wait(mut self, duration: Duration) -> Self {
-    self.steps.push(Step::Wait(duration));
-    self
-  }
-
-  fn write(mut self, bytes: &str) -> Self {
-    self.steps.push(Step::Write(bytes.as_bytes().into()));
-    self
-  }
 }
 
 impl Running {
@@ -194,7 +57,12 @@ impl Running {
       format!("timed out waiting for exit\n{}", self.screen())
     })?;
 
-    assert_eq!(status.exit_code(), code);
+    ensure!(
+      status.exit_code() == code,
+      "expected exit code {code}, got {}\n{}",
+      status.exit_code(),
+      self.screen(),
+    );
 
     Ok(())
   }
@@ -420,6 +288,143 @@ impl Drop for Running {
       let _ = child.kill();
       let _ = child.wait();
     }
+  }
+}
+
+#[derive(Debug)]
+struct Test {
+  arguments: Vec<String>,
+  cwd: Option<PathBuf>,
+  env: Vec<(String, String)>,
+  steps: Vec<Step>,
+  tempdir: TempDir,
+}
+
+impl Test {
+  fn argument(mut self, argument: &str) -> Self {
+    self.arguments.push(argument.into());
+    self
+  }
+
+  fn config(self, config: &str) -> Self {
+    let path = self.tempdir.path().join("config.toml");
+
+    fs::write(&path, config).unwrap();
+
+    self.env("KOTOMORI_CONFIG", path.to_str().unwrap())
+  }
+
+  fn ctrl_c(self) -> Self {
+    self.write("\x03")
+  }
+
+  fn ctrl_j(self) -> Self {
+    self.write("\n")
+  }
+
+  fn cwd(mut self, cwd: &Path) -> Self {
+    self.cwd = Some(cwd.into());
+    self
+  }
+
+  fn down(self) -> Self {
+    self.write("\x1b[B")
+  }
+
+  fn enter(self) -> Self {
+    self.write("\r")
+  }
+
+  fn env(mut self, key: &str, value: &str) -> Self {
+    self.env.push((key.into(), value.into()));
+    self
+  }
+
+  fn escape(self) -> Self {
+    self.write("\x1b")
+  }
+
+  fn expect_exit(mut self, code: u32) -> Self {
+    self.steps.push(Step::ExpectExit(code));
+    self
+  }
+
+  fn expect_screen_contains(mut self, text: &str) -> Self {
+    self.steps.push(Step::ExpectScreenContains(text.into()));
+    self
+  }
+
+  fn expect_screen_excludes(mut self, text: &str) -> Self {
+    self.steps.push(Step::ExpectScreenExcludes(text.into()));
+    self
+  }
+
+  fn new() -> Self {
+    Self {
+      arguments: Vec::new(),
+      cwd: None,
+      env: Vec::new(),
+      steps: Vec::new(),
+      tempdir: tempfile::Builder::new()
+        .prefix("kotomori-test")
+        .tempdir()
+        .unwrap(),
+    }
+  }
+
+  fn quit(mut self) -> Self {
+    self.steps.push(Step::Quit);
+    self
+  }
+
+  fn run(self) -> Result {
+    let mut running = Running::spawn(&self)?;
+
+    running.expect_screen_contains("kotomori", STARTUP_TIMEOUT)?;
+
+    for step in self.steps {
+      match step {
+        Step::ExpectExit(code) => {
+          running.expect_exit(code, EXPECT_TIMEOUT)?;
+        }
+        Step::ExpectScreenContains(text) => {
+          running.expect_screen_contains(&text, EXPECT_TIMEOUT)?;
+        }
+        Step::ExpectScreenExcludes(text) => {
+          running.expect_screen_excludes(&text, EXPECT_TIMEOUT)?;
+        }
+        Step::Quit => {
+          running.quit()?;
+        }
+        Step::Wait(duration) => {
+          thread::sleep(duration);
+        }
+        Step::Write(bytes) => {
+          running.write(&bytes)?;
+        }
+      }
+    }
+
+    Ok(())
+  }
+
+  fn tab(self) -> Self {
+    self.write("\t")
+  }
+
+  fn type_text(mut self, text: &str) -> Self {
+    self.steps.push(Step::Write(text.as_bytes().into()));
+    self
+  }
+
+  fn wait(mut self, duration: Duration) -> Self {
+    self.steps.push(Step::Wait(duration));
+    self
+  }
+
+  fn write(mut self, bytes: &str) -> Self {
+    self.steps.push(Step::Write(bytes.as_bytes().into()));
+    self
   }
 }
 
