@@ -6,8 +6,8 @@ pub(crate) struct Database {
 }
 
 impl Database {
+  const DATABASE_NAME: &str = "kotomori.db";
   const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
-
   const SCHEMA_VERSION: usize = Self::MIGRATIONS.len();
 
   pub(crate) fn get_sessions(&self) -> Result<Vec<Session>> {
@@ -47,39 +47,50 @@ impl Database {
          FROM sessions
          WHERE id = ?1",
         [id],
-        Self::session_from_row,
+        |row| {
+          Ok(Session {
+            created_at: row.get_u64(1)?,
+            cwd: row.get::<_, String>(3)?.into(),
+            entries: serde_json::from_str(&row.get::<_, String>(6)?).map_err(
+              |error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                  6,
+                  rusqlite::types::Type::Text,
+                  Box::new(error),
+                )
+              },
+            )?,
+            id: Some(row.get(0)?),
+            model: row.get(4)?,
+            title: row.get(5)?,
+            updated_at: row.get_u64(2)?,
+          })
+        },
       )
       .with_context(|| format!("failed to load session `{id}`"))
   }
 
   pub(crate) fn new() -> Result<Self> {
-    #[cfg(test)]
-    return Self::try_from(Connection::open_in_memory()?);
-
-    #[cfg(not(test))]
-    let root = Self::root()?;
-
-    #[cfg(not(test))]
-    fs::create_dir_all(&root).with_context(|| {
-      format!("failed to create state directory {}", root.display())
-    })?;
-
-    #[cfg(not(test))]
-    Self::try_from(root.join("sessions.db").as_path())
-  }
-
-  #[cfg(not(test))]
-  fn root() -> Result<PathBuf> {
-    if let Some(path) = env::var_os("KOTOMORI_HOME") {
-      Ok(PathBuf::from(path))
-    } else if let Some(path) = env::var_os("XDG_STATE_HOME") {
-      Ok(PathBuf::from(path).join("kotomori"))
+    if cfg!(test) {
+      Self::try_from(Connection::open_in_memory()?)
     } else {
-      let Some(home) = env::var_os("HOME") else {
-        bail!("HOME is not set");
+      let root = if let Some(path) = env::var_os("KOTOMORI_HOME") {
+        PathBuf::from(path)
+      } else if let Some(path) = env::var_os("XDG_STATE_HOME") {
+        PathBuf::from(path).join("kotomori")
+      } else {
+        let Some(home) = env::var_os("HOME") else {
+          bail!("HOME is not set");
+        };
+
+        PathBuf::from(home).join(".local/state/kotomori")
       };
 
-      Ok(PathBuf::from(home).join(".local/state/kotomori"))
+      fs::create_dir_all(&root).with_context(|| {
+        format!("failed to create state directory {}", root.display())
+      })?;
+
+      Self::try_from(root.join(Self::DATABASE_NAME).as_path())
     }
   }
 
@@ -132,26 +143,6 @@ impl Database {
     }
 
     Ok(())
-  }
-
-  fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Session> {
-    Ok(Session {
-      created_at: row.get_u64(1)?,
-      cwd: row.get::<_, String>(3)?.into(),
-      entries: serde_json::from_str(&row.get::<_, String>(6)?).map_err(
-        |error| {
-          rusqlite::Error::FromSqlConversionFailure(
-            6,
-            rusqlite::types::Type::Text,
-            Box::new(error),
-          )
-        },
-      )?,
-      id: Some(row.get(0)?),
-      model: row.get(4)?,
-      title: row.get(5)?,
-      updated_at: row.get_u64(2)?,
-    })
   }
 }
 
