@@ -30,6 +30,23 @@ impl Provider for Mock {
           })?;
         }
       }
+      "error" if request.messages.len() == 1 => {
+        bail!("mock provider error");
+      }
+      "malformed-tool-arguments" if request.messages.len() == 1 => {
+        sink.tool_call(RawToolCall {
+          arguments: serde_json::json!({}),
+          id: "foo".into(),
+          name: "command".into(),
+        })?;
+      }
+      "unknown-tool" if request.messages.len() == 1 => {
+        sink.tool_call(RawToolCall {
+          arguments: serde_json::json!({}),
+          id: "foo".into(),
+          name: "unknown".into(),
+        })?;
+      }
       model => {
         let input = request
           .last_user_message()
