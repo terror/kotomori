@@ -31,18 +31,27 @@ impl<W: Write> Renderer<W> {
   }
 
   fn draw_frame(&mut self, next: Frame) -> Result {
-    let plan = RenderPlan::between(self.presented.as_ref(), &next);
+    let Some(presented) = self.presented.as_ref() else {
+      self.stdout.begin_synchronized_update()?;
+      self.stdout.write_lines(&next.lines)?;
+      self.stdout.end_synchronized_update()?;
 
-    if plan == RenderPlan::NoOperation {
+      let viewport_top = next.len().saturating_sub(next.dimensions.height);
+
+      self.presented = Some(PresentedFrame::new(next, viewport_top));
+
       return Ok(());
-    }
+    };
+
+    let Some(plan) = RenderPlan::between(presented, &next) else {
+      return Ok(());
+    };
 
     self.stdout.begin_synchronized_update()?;
 
     let viewport_top = match plan {
-      RenderPlan::Full { clear } => self.full_render(&next, clear)?,
-      RenderPlan::NoOperation => unreachable!(),
-      RenderPlan::Patch { changed } => self.patch_render(&next, changed)?,
+      RenderPlan::Full => self.full_render(&next)?,
+      RenderPlan::Patch(changed) => self.patch_render(&next, changed)?,
     };
 
     self.stdout.end_synchronized_update()?;
@@ -72,10 +81,8 @@ impl<W: Write> Renderer<W> {
     ))
   }
 
-  fn full_render(&mut self, next: &Frame, clear: bool) -> Result<usize> {
-    if clear {
-      self.stdout.clear_screen()?;
-    }
+  fn full_render(&mut self, next: &Frame) -> Result<usize> {
+    self.stdout.clear_screen()?;
 
     self.stdout.write_lines(&next.lines)?;
 
@@ -417,7 +424,7 @@ mod tests {
   }
 
   #[test]
-  fn full_render_without_clear_prepares_lines() {
+  fn initial_render_prepares_lines_without_clearing() {
     let mut renderer = TestRenderer::default();
 
     renderer
