@@ -66,36 +66,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn append_starts_from_previous_row_and_feeds_line() {
-    let presented = Frame::new(
-      vec!["foo".into()],
-      Dimensions {
-        height: 24,
-        width: 80,
-      },
-    )
-    .into();
-
-    let next = Frame::new(
-      vec!["foo".into(), "bar".into()],
-      Dimensions {
-        height: 24,
-        width: 80,
-      },
-    );
-
-    assert_eq!(
-      RenderPlan::between(&presented, &next),
-      Some(RenderPlan::Patch(Patch {
-        changed: ChangedRange { first: 1, last: 1 },
-        move_target_row: 0,
-        prepend_line_feed: true,
-        viewport_top: 0,
-      })),
-    );
-  }
-
-  #[test]
   fn append_past_viewport_advances_viewport() {
     let presented = Frame::new(
       vec!["foo".into(), "bar".into()],
@@ -121,6 +91,36 @@ mod tests {
         move_target_row: 1,
         prepend_line_feed: true,
         viewport_top: 2,
+      })),
+    );
+  }
+
+  #[test]
+  fn append_starts_from_previous_row_and_feeds_line() {
+    let presented = Frame::new(
+      vec!["foo".into()],
+      Dimensions {
+        height: 24,
+        width: 80,
+      },
+    )
+    .into();
+
+    let next = Frame::new(
+      vec!["foo".into(), "bar".into()],
+      Dimensions {
+        height: 24,
+        width: 80,
+      },
+    );
+
+    assert_eq!(
+      RenderPlan::between(&presented, &next),
+      Some(RenderPlan::Patch(Patch {
+        changed: ChangedRange { first: 1, last: 1 },
+        move_target_row: 0,
+        prepend_line_feed: true,
+        viewport_top: 0,
       })),
     );
   }
