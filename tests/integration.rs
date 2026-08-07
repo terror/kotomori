@@ -435,7 +435,6 @@ fn approval_prompt_approves_command() -> Result {
     .expect_screen_contains("Ran echo bar")
     .expect_screen_contains("bar")
     .expect_screen_contains("done")
-    .quit()
     .run()
 }
 
@@ -451,7 +450,6 @@ fn approval_prompt_denies_command() -> Result {
     .expect_screen_contains("Failed running echo bar")
     .expect_screen_contains("permission denied")
     .expect_screen_contains("done")
-    .quit()
     .run()
 }
 
@@ -467,7 +465,6 @@ fn approval_prompt_denies_command_with_escape() -> Result {
     .expect_screen_contains("Failed running echo bar")
     .expect_screen_contains("permission denied")
     .expect_screen_contains("done")
-    .quit()
     .run()
 }
 
@@ -484,7 +481,6 @@ fn command_completion_clears() -> Result {
     .tab()
     .enter()
     .expect_screen_excludes("queued for mock:local: foo")
-    .quit()
     .run()
 }
 
@@ -504,6 +500,11 @@ fn command_completion_quits() -> Result {
 }
 
 #[test]
+fn ctrl_c_quits_gracefully() -> Result {
+  Test::new().quit().run()
+}
+
+#[test]
 fn config_sets_default_model() -> Result {
   Test::new()
     .config(
@@ -515,7 +516,6 @@ fn config_sets_default_model() -> Result {
     .type_text("foo")
     .enter()
     .expect_screen_contains("queued for mock:bar: foo")
-    .quit()
     .run()
 }
 
@@ -526,7 +526,6 @@ fn dev_mode_controls_time_to_first_draw() -> Result {
     .argument("mock:local")
     .wait(SETTLE_INTERVAL)
     .expect_screen_excludes("first draw ")
-    .quit()
     .run()?;
 
   Test::new()
@@ -535,7 +534,6 @@ fn dev_mode_controls_time_to_first_draw() -> Result {
     .argument("mock:local")
     .wait(SETTLE_INTERVAL)
     .expect_screen_contains("first draw ")
-    .quit()
     .run()
 }
 
@@ -548,7 +546,6 @@ fn initial_prompt_submits() -> Result {
     .argument("foo")
     .enter()
     .expect_screen_contains("queued for mock:local: foo")
-    .quit()
     .run()
 }
 
@@ -561,7 +558,6 @@ fn interrupt_active_agent() -> Result {
     .enter()
     .ctrl_c()
     .expect_screen_contains("Conversation interrupted")
-    .quit()
     .run()
 }
 
@@ -575,7 +571,6 @@ fn multiline_input() -> Result {
     .type_text("bar")
     .enter()
     .expect_screen_contains("queued for mock:local: foo\n bar")
-    .quit()
     .run()
 }
 
@@ -588,7 +583,6 @@ fn prompt_round_trip() -> Result {
     .enter()
     .expect_screen_contains("foo")
     .expect_screen_contains("queued for mock:local: foo")
-    .quit()
     .run()
 }
 
@@ -616,7 +610,7 @@ fn resume_filters_and_loads_session() -> Result {
     .type_text("qux")
     .enter()
     .expect_screen_contains("queued for mock:local: qux")
-    .quit()
+    .wait(SETTLE_INTERVAL)
     .run()?;
 
   Test::new()
@@ -627,7 +621,7 @@ fn resume_filters_and_loads_session() -> Result {
     .type_text("bar")
     .enter()
     .expect_screen_contains("queued for mock:local: bar")
-    .quit()
+    .wait(SETTLE_INTERVAL)
     .run()?;
 
   Test::new()
@@ -638,7 +632,7 @@ fn resume_filters_and_loads_session() -> Result {
     .type_text("foo")
     .enter()
     .expect_screen_contains("queued for mock:local: foo")
-    .quit()
+    .wait(SETTLE_INTERVAL)
     .run()?;
 
   Test::new()
@@ -657,7 +651,6 @@ fn resume_filters_and_loads_session() -> Result {
     .type_text("baz")
     .enter()
     .expect_screen_contains("queued for mock:local: baz")
-    .quit()
     .run()
 }
 
@@ -673,7 +666,6 @@ fn second_turn_conversation() -> Result {
     .type_text("bar")
     .enter()
     .expect_screen_contains("queued for mock:local: bar")
-    .quit()
     .run()
 }
 
@@ -685,7 +677,6 @@ fn unknown_command() -> Result {
     .type_text("/foobar")
     .enter()
     .expect_screen_contains("Unrecognized command '/foobar'")
-    .quit()
     .run()
 }
 
@@ -701,6 +692,5 @@ fn yolo_skips_approval() -> Result {
     .expect_screen_contains("bar")
     .expect_screen_contains("done")
     .expect_screen_excludes("Approve echo bar?")
-    .quit()
     .run()
 }
