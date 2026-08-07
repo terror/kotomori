@@ -73,7 +73,7 @@ impl Database {
         row.get(0)?,
         row.get(3)?,
         row.get(4)?,
-        Self::read_u64(row, 1)?,
+        row.get_u64(1)?,
       ))
     })?;
 
@@ -90,7 +90,7 @@ impl Database {
         [id],
         |row| {
           Ok(Session {
-            created_at: Self::read_u64(row, 1)?,
+            created_at: row.get_u64(1)?,
             cwd: row.get::<_, String>(3)?.into(),
             entries: serde_json::from_str(&row.get::<_, String>(6)?).map_err(
               |error| {
@@ -105,7 +105,7 @@ impl Database {
             model: row.get(4)?,
             persisted: true,
             title: row.get(5)?,
-            updated_at: Self::read_u64(row, 2)?,
+            updated_at: row.get_u64(2)?,
           })
         },
       )
@@ -120,13 +120,6 @@ impl Database {
     })?;
 
     Self::try_from(root.join("sessions.db").as_path())
-  }
-
-  fn read_u64(row: &rusqlite::Row, index: usize) -> rusqlite::Result<u64> {
-    let value = row.get::<_, i64>(index)?;
-
-    u64::try_from(value)
-      .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(index, value))
   }
 
   fn root() -> Result<PathBuf> {
