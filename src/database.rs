@@ -10,19 +10,50 @@ impl Database {
 
   const SCHEMA_VERSION: usize = Self::MIGRATIONS.len();
 
-  pub(crate) fn id() -> Result<String> {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
+  const SESSION_VERSION: u32 = 1;
 
-    let counter = COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
+  pub(crate) fn add_session(&self, session: &Session) -> Result {
+    let cwd = session
+      .cwd
+      .to_str()
+      .context("session directory is not valid UTF-8")?;
 
-    Ok(format!(
-      "{}-{}-{counter}",
-      Self::timestamp()?.as_nanos(),
-      process::id()
-    ))
+    let entries = serde_json::to_string(&session.entries)
+      .context("failed to serialize session transcript")?;
+
+    let created_at = i64::try_from(session.created_at)
+      .context("session creation time exceeds SQLite integer range")?;
+
+    let updated_at = i64::try_from(session.updated_at)
+      .context("session update time exceeds SQLite integer range")?;
+
+    self.connection.execute(
+      "INSERT INTO sessions (
+         id, version, created_at, updated_at, cwd, model, title, entries
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+       ON CONFLICT (id) DO UPDATE SET
+         version = excluded.version,
+         updated_at = excluded.updated_at,
+         cwd = excluded.cwd,
+         model = excluded.model,
+         title = excluded.title,
+         entries = excluded.entries",
+      params![
+        session.id,
+        Self::SESSION_VERSION,
+        created_at,
+        updated_at,
+        cwd,
+        session.model,
+        session.title,
+        entries,
+      ],
+    )?;
+
+    Ok(())
   }
 
-  pub(crate) fn list(&self) -> Result<Vec<SessionSummary>> {
+  pub(crate) fn get_sessions(&self) -> Result<Vec<SessionSummary>> {
     let cwd = env::current_dir().context("failed to read current directory")?;
 
     let cwd = cwd
@@ -30,77 +61,55 @@ impl Database {
       .context("current directory is not valid UTF-8")?;
 
     let mut statement = self.connection.prepare(
-      "SELECT id, version, created_at, updated_at, cwd, model, title, entries
+      "SELECT id, updated_at, cwd, model, title
        FROM sessions
        WHERE cwd = ?1
        ORDER BY updated_at DESC, id DESC",
     )?;
 
     let rows = statement.query_map([cwd], |row| {
-      Ok(SessionFile {
-        id: row.get(0)?,
-        version: row.get(1)?,
-        created_at: Self::read_u64(row, 2)?,
-        updated_at: Self::read_u64(row, 3)?,
-        cwd: row.get::<_, String>(4)?.into(),
-        model: row.get(5)?,
-        title: row.get(6)?,
-        entries: serde_json::from_str(&row.get::<_, String>(7)?).map_err(
-          |error| {
-            rusqlite::Error::FromSqlConversionFailure(
-              7,
-              rusqlite::types::Type::Text,
-              Box::new(error),
-            )
-          },
-        )?,
-      })
+      Ok(SessionSummary::new(
+        row.get::<_, String>(2)?.into(),
+        row.get(0)?,
+        row.get(3)?,
+        row.get(4)?,
+        Self::read_u64(row, 1)?,
+      ))
     })?;
 
-    rows
-      .map(|row| {
-        let file = row?;
-        Ok(SessionSummary::new(file.id.clone(), file))
-      })
-      .collect()
+    rows.collect::<rusqlite::Result<_>>().map_err(Into::into)
   }
 
-  pub(crate) fn load(self, id: &str) -> Result<Session> {
-    let file = self
+  pub(crate) fn load_session(&self, id: &str) -> Result<Session> {
+    self
       .connection
       .query_row(
-        "SELECT id, version, created_at, updated_at, cwd, model, title, entries
+        "SELECT id, created_at, updated_at, cwd, model, title, entries
          FROM sessions
          WHERE id = ?1",
         [id],
         |row| {
-          Ok(SessionFile {
-            id: row.get(0)?,
-            version: row.get(1)?,
-            created_at: Self::read_u64(row, 2)?,
-            updated_at: Self::read_u64(row, 3)?,
-            cwd: row.get::<_, String>(4)?.into(),
-            model: row.get(5)?,
-            title: row.get(6)?,
-            entries: serde_json::from_str(&row.get::<_, String>(7)?).map_err(
+          Ok(Session {
+            created_at: Self::read_u64(row, 1)?,
+            cwd: row.get::<_, String>(3)?.into(),
+            entries: serde_json::from_str(&row.get::<_, String>(6)?).map_err(
               |error| {
                 rusqlite::Error::FromSqlConversionFailure(
-                  7,
+                  6,
                   rusqlite::types::Type::Text,
                   Box::new(error),
                 )
               },
             )?,
+            id: row.get(0)?,
+            model: row.get(4)?,
+            persisted: true,
+            title: row.get(5)?,
+            updated_at: Self::read_u64(row, 2)?,
           })
         },
       )
-      .with_context(|| format!("failed to load session `{id}`"))?;
-
-    Ok(Session {
-      database: self,
-      file,
-      persisted: true,
-    })
+      .with_context(|| format!("failed to load session `{id}`"))
   }
 
   pub(crate) fn new() -> Result<Self> {
@@ -111,10 +120,6 @@ impl Database {
     })?;
 
     Self::try_from(root.join("sessions.db").as_path())
-  }
-
-  pub(crate) fn now() -> Result<u64> {
-    Ok(Self::timestamp()?.as_secs())
   }
 
   fn read_u64(row: &rusqlite::Row, index: usize) -> rusqlite::Result<u64> {
@@ -136,53 +141,6 @@ impl Database {
 
       Ok(PathBuf::from(home).join(".local/state/kotomori"))
     }
-  }
-
-  fn timestamp() -> Result<Duration> {
-    SystemTime::now()
-      .duration_since(UNIX_EPOCH)
-      .context("system clock is before the unix epoch")
-  }
-
-  pub(crate) fn write(&self, file: &SessionFile) -> Result {
-    let cwd = file
-      .cwd
-      .to_str()
-      .context("session directory is not valid UTF-8")?;
-
-    let entries = serde_json::to_string(&file.entries)
-      .context("failed to serialize session transcript")?;
-
-    let created_at = i64::try_from(file.created_at)
-      .context("session creation time exceeds SQLite integer range")?;
-
-    let updated_at = i64::try_from(file.updated_at)
-      .context("session update time exceeds SQLite integer range")?;
-
-    self.connection.execute(
-      "INSERT INTO sessions (
-         id, version, created_at, updated_at, cwd, model, title, entries
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-       ON CONFLICT (id) DO UPDATE SET
-         version = excluded.version,
-         updated_at = excluded.updated_at,
-         cwd = excluded.cwd,
-         model = excluded.model,
-         title = excluded.title,
-         entries = excluded.entries",
-      params![
-        file.id,
-        file.version,
-        created_at,
-        updated_at,
-        cwd,
-        file.model,
-        file.title,
-        entries,
-      ],
-    )?;
-
-    Ok(())
   }
 }
 

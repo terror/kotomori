@@ -71,7 +71,6 @@ use {
   serde::{Deserialize, Serialize, de::DeserializeOwned},
   serde_json::Value,
   session::Session,
-  session_file::SessionFile,
   session_summary::SessionSummary,
   settings::Settings,
   smallvec::SmallVec,
@@ -165,7 +164,6 @@ mod resume_picker;
 mod resume_picker_action;
 mod screen;
 mod session;
-mod session_file;
 mod session_summary;
 mod settings;
 mod span;

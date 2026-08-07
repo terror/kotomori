@@ -12,7 +12,7 @@ pub(crate) struct SessionSummary {
 
 impl SessionSummary {
   fn age(&self) -> String {
-    let Ok(now) = Database::now() else {
+    let Ok(now) = Session::now() else {
       return "unknown age".into();
     };
 
@@ -46,26 +46,28 @@ impl SessionSummary {
     })
   }
 
-  pub(crate) fn new(id: String, file: SessionFile) -> Self {
-    let title = file
-      .title
-      .or_else(|| Session::title(&file.entries))
-      .unwrap_or_else(|| "Untitled session".into());
+  pub(crate) fn new(
+    cwd: PathBuf,
+    id: String,
+    model: String,
+    title: Option<String>,
+    updated_at: u64,
+  ) -> Self {
+    let title = title.unwrap_or_else(|| "Untitled session".into());
+    let directory = DirectoryDisplay::new(&cwd);
 
-    let directory = DirectoryDisplay::new(&file.cwd);
-
-    let search = format!("{} {} {} {}", title, file.model, directory, file.id)
+    let search = format!("{title} {model} {directory} {id}")
       .chars()
       .flat_map(char::to_lowercase)
       .collect();
 
     Self {
-      cwd: file.cwd,
+      cwd,
       id,
-      model: file.model,
+      model,
       search,
       title,
-      updated_at: file.updated_at,
+      updated_at,
     }
   }
 }
@@ -82,7 +84,7 @@ mod tests {
       model: "mock:local".into(),
       search: "foo bar baz".into(),
       title: "foo".into(),
-      updated_at: Database::now().unwrap(),
+      updated_at: Session::now().unwrap(),
     };
 
     assert!(summary.matches("foo baz"));

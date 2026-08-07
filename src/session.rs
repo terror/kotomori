@@ -2,54 +2,78 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct Session {
-  pub(crate) database: Database,
-  pub(crate) file: SessionFile,
+  pub(crate) created_at: u64,
+  pub(crate) cwd: PathBuf,
+  pub(crate) entries: Vec<TranscriptEntry>,
+  pub(crate) id: String,
+  pub(crate) model: String,
   pub(crate) persisted: bool,
+  pub(crate) title: Option<String>,
+  pub(crate) updated_at: u64,
 }
 
 impl Session {
   const TITLE_LENGTH: usize = 80;
-  const VERSION: u32 = 1;
+
+  fn id() -> Result<String> {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    let counter = COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
+
+    Ok(format!(
+      "{}-{}-{counter}",
+      Self::timestamp()?.as_nanos(),
+      process::id()
+    ))
+  }
 
   pub(crate) fn new(settings: &Settings) -> Result<Self> {
-    let database = Database::new()?;
-    let now = Database::now()?;
-
-    let id = Database::id()?;
+    let now = Self::now()?;
 
     Ok(Self {
-      database,
-      file: SessionFile {
-        created_at: now,
-        cwd: env::current_dir().context("failed to read current directory")?,
-        entries: Vec::new(),
-        id,
-        model: settings.model.to_string(),
-        title: None,
-        updated_at: now,
-        version: Self::VERSION,
-      },
+      created_at: now,
+      cwd: env::current_dir().context("failed to read current directory")?,
+      entries: Vec::new(),
+      id: Self::id()?,
+      model: settings.model.to_string(),
       persisted: false,
+      title: None,
+      updated_at: now,
     })
   }
 
-  pub(crate) fn save(&mut self, transcript: &Transcript) -> Result {
+  pub(crate) fn now() -> Result<u64> {
+    Ok(Self::timestamp()?.as_secs())
+  }
+
+  pub(crate) fn save(
+    &mut self,
+    database: &Database,
+    transcript: &Transcript,
+  ) -> Result {
     if transcript.is_empty() && !self.persisted {
       return Ok(());
     }
 
-    self.file.entries.clone_from(&transcript.entries);
-    self.file.title = Self::title(&transcript.entries);
-    self.file.updated_at = Database::now()?;
+    self.entries.clone_from(&transcript.entries);
+    self.title = Self::title(&transcript.entries);
+    self.updated_at = Self::now()?;
 
-    self.database.write(&self.file)?;
+    database.add_session(self)?;
+
     self.persisted = true;
 
     Ok(())
   }
 
   pub(crate) fn set_model(&mut self, model: &Model) {
-    self.file.model = model.to_string();
+    self.model = model.to_string();
+  }
+
+  fn timestamp() -> Result<Duration> {
+    SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .context("system clock is before the unix epoch")
   }
 
   pub(crate) fn title(entries: &[TranscriptEntry]) -> Option<String> {

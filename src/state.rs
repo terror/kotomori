@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct State {
   pub(crate) composer: Composer,
+  database: Database,
   pub(crate) directory: PathBuf,
   pub(crate) input_mode: InputMode,
   pub(crate) model: Model,
@@ -149,7 +150,7 @@ impl State {
   }
 
   pub(crate) fn new(settings: &Settings) -> Result<Self> {
-    Self::with_session(settings, Session::new(settings)?)
+    Self::with_session(settings, Database::new()?, Session::new(settings)?)
   }
 
   fn quit(&mut self) {
@@ -179,7 +180,7 @@ impl State {
   }
 
   fn save_session(&mut self) {
-    if let Err(error) = self.session.save(&self.transcript) {
+    if let Err(error) = self.session.save(&self.database, &self.transcript) {
       self
         .transcript
         .error(format!("failed to save session: {error}"));
@@ -232,14 +233,16 @@ impl State {
 
   pub(crate) fn with_session(
     settings: &Settings,
+    database: Database,
     mut session: Session,
   ) -> Result<Self> {
-    let transcript = Transcript::with_entries(session.file.entries.clone());
+    let transcript = Transcript::with_entries(session.entries.clone());
 
     session.set_model(&settings.model);
 
     Ok(Self {
       composer: Composer::new(settings.prompt.as_deref().unwrap_or_default()),
+      database,
       directory: env::current_dir()?,
       input_mode: InputMode::Compose,
       model: settings.model.clone(),
