@@ -50,14 +50,35 @@ impl<W: Write> Renderer<W> {
     let presented = match plan {
       RenderPlan::Full => {
         self.stdout.clear_screen()?;
+
         self.stdout.write_lines(&next.lines)?;
 
         next.into()
       }
-      RenderPlan::Patch(changed) => {
-        let viewport_top = self.patch_render(&next, changed)?;
+      RenderPlan::Patch(patch) => {
+        self
+          .stdout
+          .move_to_row(presented.frame.last_row(), patch.move_target_row)?;
 
-        PresentedFrame::new(next, viewport_top)
+        if patch.prepend_line_feed {
+          write!(self.stdout, "\r\n")?;
+        }
+
+        for row in patch.changed.first..=patch.changed.last {
+          if row > patch.changed.first {
+            write!(self.stdout, "\r\n")?;
+          }
+
+          self
+            .stdout
+            .replace_line(next.lines.get(row).map(String::as_str))?;
+        }
+
+        self
+          .stdout
+          .move_to_row(patch.changed.last, next.last_row())?;
+
+        PresentedFrame::new(next, patch.viewport_top)
       }
     };
 
@@ -86,60 +107,6 @@ impl<W: Write> Renderer<W> {
         width,
       },
     ))
-  }
-
-  fn patch_render(
-    &mut self,
-    next: &Frame,
-    changed: ChangedRange,
-  ) -> Result<usize> {
-    let presented = self.presented.as_ref().unwrap();
-
-    let append_start =
-      changed.first > 0 && changed.first == presented.frame.len();
-
-    let move_target_row = if append_start {
-      changed.first.saturating_sub(1)
-    } else {
-      changed.first
-    };
-
-    let viewport_bottom = presented
-      .viewport_top
-      .saturating_add(next.dimensions.height.saturating_sub(1));
-
-    debug_assert!(move_target_row <= viewport_bottom);
-
-    self
-      .stdout
-      .move_to_row(presented.frame.last_row(), move_target_row)?;
-
-    if append_start {
-      write!(self.stdout, "\r\n")?;
-    }
-
-    for row in changed.first..=changed.last {
-      if row > changed.first {
-        write!(self.stdout, "\r\n")?;
-      }
-
-      self
-        .stdout
-        .replace_line(next.lines.get(row).map(String::as_str))?;
-    }
-
-    let last_row = next.last_row();
-
-    self.stdout.move_to_row(changed.last, last_row)?;
-
-    Ok(
-      presented.viewport_top.max(
-        changed
-          .last
-          .saturating_add(1)
-          .saturating_sub(next.dimensions.height),
-      ),
-    )
   }
 }
 
