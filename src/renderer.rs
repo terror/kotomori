@@ -85,14 +85,17 @@ impl Renderer {
     width: u16,
     height: u16,
   ) -> Result {
-    let height = usize::from(height);
-    let next = Frame::new(rendered, Dimensions { height, width });
+    let next = Frame::new(
+      rendered,
+      Dimensions {
+        height: usize::from(height),
+        width,
+      },
+    );
 
     let plan =
       RenderPlanner::new(self.max_lines_rendered, self.presented.as_ref())
         .plan(&next);
-
-    let clears = plan.clears();
 
     let presented = match plan {
       RenderPlan::Full { clear } => Self::full_render(stdout, &next, clear)?,
@@ -109,7 +112,7 @@ impl Renderer {
       } => Self::patch_render(stdout, previous, next, previous_viewport, diff)?,
     };
 
-    self.max_lines_rendered = if clears {
+    self.max_lines_rendered = if plan.clears() {
       presented.frame.len()
     } else {
       self.max_lines_rendered.max(presented.frame.len())
