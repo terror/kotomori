@@ -141,14 +141,16 @@ impl Renderer {
 
   fn line_feed(
     stdout: &mut impl Write,
+    cursor: &mut Cursor,
     viewport: &mut Viewport,
-    row: usize,
   ) -> Result {
     write!(stdout, "\r\n")?;
 
-    if viewport.screen_row(row) >= viewport.height.saturating_sub(1) {
+    if viewport.screen_row(cursor.row) >= viewport.height.saturating_sub(1) {
       *viewport = viewport.scrolled_down(1);
     }
+
+    cursor.row = cursor.row.saturating_add(1);
 
     Ok(())
   }
@@ -196,18 +198,18 @@ impl Renderer {
       stdout.move_down(move_to_bottom)?;
 
       let bottom = viewport.bottom();
+      cursor = Cursor::new(bottom);
 
-      for row in bottom..move_target_row {
-        Self::line_feed(stdout, &mut viewport, row)?;
+      for _ in bottom..move_target_row {
+        Self::line_feed(stdout, &mut cursor, &mut viewport)?;
       }
-
-      cursor = Cursor::new(move_target_row);
     }
 
     stdout.move_by(cursor.diff_to(viewport, move_target_row, viewport))?;
+    cursor = Cursor::new(move_target_row);
 
     if append_start {
-      Self::line_feed(stdout, &mut viewport, move_target_row)?;
+      Self::line_feed(stdout, &mut cursor, &mut viewport)?;
     } else {
       write!(stdout, "\r")?;
     }
@@ -220,13 +222,11 @@ impl Renderer {
       .skip(*writable_range.start())
     {
       if index > *writable_range.start() {
-        Self::line_feed(stdout, &mut viewport, index.saturating_sub(1))?;
+        Self::line_feed(stdout, &mut cursor, &mut viewport)?;
       }
 
       stdout.write_line(line)?;
     }
-
-    let mut cursor = Cursor::new(*writable_range.end());
 
     if diff.deleted_tail_len() > 0 {
       if cursor.row < next.last_row() {
@@ -236,13 +236,12 @@ impl Renderer {
       }
 
       for _ in next.len()..presented.frame.len() {
-        Self::line_feed(stdout, &mut viewport, cursor.row)?;
-        cursor = Cursor::new(cursor.row.saturating_add(1));
+        Self::line_feed(stdout, &mut cursor, &mut viewport)?;
         stdout.clear_line()?;
       }
 
       stdout.move_up(diff.deleted_tail_len())?;
-      cursor = Cursor::new(next.last_row());
+      cursor.row = cursor.row.saturating_sub(diff.deleted_tail_len());
     }
 
     stdout.end_synchronized_update()?;
