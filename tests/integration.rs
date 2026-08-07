@@ -562,6 +562,8 @@ fn interrupt_active_agent() -> Result {
     .enter()
     .ctrl_c()
     .expect_screen_contains("Conversation interrupted")
+    .ctrl_c()
+    .expect_exit(0)
     .run()
 }
 
