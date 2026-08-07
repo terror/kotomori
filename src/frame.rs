@@ -7,10 +7,6 @@ pub(crate) struct Frame {
 }
 
 impl Frame {
-  pub(crate) fn is_empty(&self) -> bool {
-    self.lines.is_empty()
-  }
-
   pub(crate) fn last_row(&self) -> usize {
     self.lines.len().saturating_sub(1)
   }
