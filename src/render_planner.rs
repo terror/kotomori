@@ -24,18 +24,14 @@ impl<'a> RenderPlanner<'a> {
     }
 
     let Some(diff) = Diff::between(&presented.frame, next) else {
-      return RenderPlan::NoOperation {
-        viewport: presented.previous_viewport(next),
-      };
+      return RenderPlan::NoOperation;
     };
 
-    let previous_viewport = presented.previous_viewport(next);
-
-    if diff.changed.first < previous_viewport.top {
+    if diff.changed.first < presented.viewport.top {
       return RenderPlan::Full { clear: true };
     }
 
-    if diff.is_pure_tail_delete() && next.last_row() < previous_viewport.top {
+    if diff.is_pure_tail_delete() && next.last_row() < presented.viewport.top {
       return RenderPlan::Full { clear: true };
     }
 
@@ -43,9 +39,6 @@ impl<'a> RenderPlanner<'a> {
       return RenderPlan::Full { clear: true };
     }
 
-    RenderPlan::Patch {
-      viewport: previous_viewport,
-      diff,
-    }
+    RenderPlan::Patch { diff }
   }
 }
