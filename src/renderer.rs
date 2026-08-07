@@ -42,28 +42,6 @@ impl<W: Write> Renderer<W> {
     Ok(())
   }
 
-  pub(crate) fn finish(&mut self) -> Result {
-    let Some(presented) = &self.presented else {
-      return Ok(());
-    };
-
-    let target_row = presented.frame.last_row();
-
-    self
-      .stdout
-      .move_up(presented.cursor_row.saturating_sub(target_row))?;
-
-    self
-      .stdout
-      .move_down(target_row.saturating_sub(presented.cursor_row))?;
-
-    if let Some(presented) = &mut self.presented {
-      presented.cursor_row = presented.frame.last_row();
-    }
-
-    Ok(())
-  }
-
   fn frame(component: &impl Component) -> Result<Frame> {
     let (width, height) =
       crossterm_terminal::size().context("failed to read terminal size")?;
@@ -129,7 +107,7 @@ impl<W: Write> Renderer<W> {
       (
         presented.viewport,
         presented.frame.len(),
-        presented.cursor_row,
+        presented.frame.last_row(),
       )
     };
 
@@ -194,11 +172,9 @@ impl<W: Write> Renderer<W> {
     self.stdout.move_up(cursor_row.saturating_sub(last_row))?;
     self.stdout.move_down(last_row.saturating_sub(cursor_row))?;
 
-    cursor_row = last_row;
-
     self.stdout.end_synchronized_update()?;
 
-    Ok(PresentedFrame::new(cursor_row, next, viewport))
+    Ok(PresentedFrame::new(next, viewport))
   }
 }
 
@@ -249,7 +225,6 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(1, 1),
       )),
@@ -289,7 +264,6 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
@@ -324,7 +298,6 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(2, 1),
       )),
@@ -350,8 +323,6 @@ mod tests {
       renderer.presented.as_ref().unwrap().viewport,
       Viewport::anchored_to_bottom(3, 1),
     );
-
-    assert_eq!(renderer.presented.as_ref().unwrap().cursor_row, 2);
   }
 
   #[test]
@@ -366,7 +337,6 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
@@ -392,36 +362,6 @@ mod tests {
       renderer.presented.as_ref().unwrap().frame.lines,
       Vec::<String>::new(),
     );
-  }
-
-  #[test]
-  fn finishing_moves_cursor_to_last_rendered_line() {
-    let frame = Frame::new(
-      vec!["foo".into(), "bar".into(), "baz".into()],
-      Dimensions {
-        height: 24,
-        width: 80,
-      },
-    );
-
-    let mut renderer = TestRenderer {
-      presented: Some(PresentedFrame::new(
-        frame.last_row(),
-        frame,
-        Viewport::anchored_to_bottom(3, 24),
-      )),
-      ..Default::default()
-    };
-
-    renderer.presented.as_mut().unwrap().cursor_row = 1;
-
-    renderer.finish().unwrap();
-
-    assert_eq!(
-      String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[1B"
-    );
-    assert_eq!(renderer.presented.as_ref().unwrap().cursor_row, 2);
   }
 
   #[test]
@@ -511,7 +451,6 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(5, 3),
       )),
@@ -551,7 +490,6 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(3, 24),
       )),
@@ -586,7 +524,6 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(3, 2),
       )),
@@ -621,7 +558,6 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
@@ -662,7 +598,6 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        frame.last_row(),
         frame.clone(),
         Viewport::anchored_to_bottom(5, 3),
       )),
@@ -702,7 +637,6 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
@@ -737,7 +671,6 @@ mod tests {
 
     let mut renderer = TestRenderer {
       presented: Some(PresentedFrame::new(
-        frame.last_row(),
         frame,
         Viewport::anchored_to_bottom(3, 24),
       )),

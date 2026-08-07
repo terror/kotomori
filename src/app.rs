@@ -160,8 +160,6 @@ impl App {
       self.drain_pending_events()?;
     }
 
-    renderer.finish()?;
-
     Ok(())
   }
 
