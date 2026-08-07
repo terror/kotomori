@@ -96,11 +96,11 @@ impl ResumePicker {
     }
   }
 
-  fn selected_id(&self) -> Option<String> {
+  fn selected_id(&self) -> Option<i64> {
     self
       .filtered()
       .get(self.selected)
-      .map(|session| session.id.clone())
+      .and_then(|session| session.id)
   }
 }
 
@@ -115,9 +115,8 @@ mod tests {
         created_at: 0,
         cwd: "foo".into(),
         entries: Vec::new(),
-        id: "foo".into(),
+        id: Some(1),
         model: "mock:local".into(),
-        persisted: true,
         title: Some("foo".into()),
         updated_at: 0,
       },
@@ -125,9 +124,8 @@ mod tests {
         created_at: 0,
         cwd: "bar".into(),
         entries: Vec::new(),
-        id: "bar".into(),
+        id: Some(2),
         model: "mock:local".into(),
-        persisted: true,
         title: Some("bar".into()),
         updated_at: 0,
       },
@@ -142,9 +140,9 @@ mod tests {
       picker
         .filtered()
         .into_iter()
-        .map(|session| session.id.as_str())
+        .filter_map(|session| session.id)
         .collect::<Vec<_>>(),
-      ["bar"],
+      [2],
     );
   }
 }

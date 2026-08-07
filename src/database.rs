@@ -10,49 +10,6 @@ impl Database {
 
   const SCHEMA_VERSION: usize = Self::MIGRATIONS.len();
 
-  const SESSION_VERSION: u32 = 1;
-
-  pub(crate) fn add_session(&self, session: &Session) -> Result {
-    let cwd = session
-      .cwd
-      .to_str()
-      .context("session directory is not valid UTF-8")?;
-
-    let entries = serde_json::to_string(&session.entries)
-      .context("failed to serialize session transcript")?;
-
-    let created_at = i64::try_from(session.created_at)
-      .context("session creation time exceeds SQLite integer range")?;
-
-    let updated_at = i64::try_from(session.updated_at)
-      .context("session update time exceeds SQLite integer range")?;
-
-    self.connection.execute(
-      "INSERT INTO sessions (
-         id, version, created_at, updated_at, cwd, model, title, entries
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-       ON CONFLICT (id) DO UPDATE SET
-         version = excluded.version,
-         updated_at = excluded.updated_at,
-         cwd = excluded.cwd,
-         model = excluded.model,
-         title = excluded.title,
-         entries = excluded.entries",
-      params![
-        session.id,
-        Self::SESSION_VERSION,
-        created_at,
-        updated_at,
-        cwd,
-        session.model,
-        session.title,
-        entries,
-      ],
-    )?;
-
-    Ok(())
-  }
-
   pub(crate) fn get_sessions(&self) -> Result<Vec<Session>> {
     let cwd = env::current_dir().context("failed to read current directory")?;
 
@@ -61,7 +18,7 @@ impl Database {
       .context("current directory is not valid UTF-8")?;
 
     let mut statement = self.connection.prepare(
-      "SELECT id, created_at, updated_at, cwd, model, title, entries
+      "SELECT id, updated_at, cwd, model, title
        FROM sessions
        WHERE cwd = ?1
        ORDER BY updated_at DESC, id DESC",
@@ -69,29 +26,20 @@ impl Database {
 
     let rows = statement.query_map([cwd], |row| {
       Ok(Session {
-        created_at: row.get_u64(1)?,
-        cwd: row.get::<_, String>(3)?.into(),
-        entries: serde_json::from_str(&row.get::<_, String>(6)?).map_err(
-          |error| {
-            rusqlite::Error::FromSqlConversionFailure(
-              6,
-              rusqlite::types::Type::Text,
-              Box::new(error),
-            )
-          },
-        )?,
-        id: row.get(0)?,
-        model: row.get(4)?,
-        persisted: true,
-        title: row.get(5)?,
-        updated_at: row.get_u64(2)?,
+        created_at: 0,
+        cwd: row.get::<_, String>(2)?.into(),
+        entries: Vec::new(),
+        id: Some(row.get(0)?),
+        model: row.get(3)?,
+        title: row.get(4)?,
+        updated_at: row.get_u64(1)?,
       })
     })?;
 
     rows.collect::<rusqlite::Result<_>>().map_err(Into::into)
   }
 
-  pub(crate) fn load_session(&self, id: &str) -> Result<Session> {
+  pub(crate) fn load_session(&self, id: i64) -> Result<Session> {
     self
       .connection
       .query_row(
@@ -99,26 +47,7 @@ impl Database {
          FROM sessions
          WHERE id = ?1",
         [id],
-        |row| {
-          Ok(Session {
-            created_at: row.get_u64(1)?,
-            cwd: row.get::<_, String>(3)?.into(),
-            entries: serde_json::from_str(&row.get::<_, String>(6)?).map_err(
-              |error| {
-                rusqlite::Error::FromSqlConversionFailure(
-                  6,
-                  rusqlite::types::Type::Text,
-                  Box::new(error),
-                )
-              },
-            )?,
-            id: row.get(0)?,
-            model: row.get(4)?,
-            persisted: true,
-            title: row.get(5)?,
-            updated_at: row.get_u64(2)?,
-          })
-        },
+        Self::session_from_row,
       )
       .with_context(|| format!("failed to load session `{id}`"))
   }
@@ -152,6 +81,77 @@ impl Database {
 
       Ok(PathBuf::from(home).join(".local/state/kotomori"))
     }
+  }
+
+  pub(crate) fn save_session(&self, session: &mut Session) -> Result {
+    let cwd = session
+      .cwd
+      .to_str()
+      .context("session directory is not valid UTF-8")?;
+
+    let entries = serde_json::to_string(&session.entries)
+      .context("failed to serialize session transcript")?;
+
+    let created_at = i64::try_from(session.created_at)
+      .context("session creation time exceeds SQLite integer range")?;
+
+    let updated_at = i64::try_from(session.updated_at)
+      .context("session update time exceeds SQLite integer range")?;
+
+    if let Some(id) = session.id {
+      let updated = self.connection.execute(
+        "UPDATE sessions SET
+           updated_at = ?1,
+           cwd = ?2,
+           model = ?3,
+           title = ?4,
+           entries = ?5
+         WHERE id = ?6",
+        params![updated_at, cwd, session.model, session.title, entries, id,],
+      )?;
+
+      if updated == 0 {
+        bail!("session `{id}` no longer exists");
+      }
+    } else {
+      session.id = Some(self.connection.query_row(
+        "INSERT INTO sessions (
+           created_at, updated_at, cwd, model, title, entries
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         RETURNING id",
+        params![
+          created_at,
+          updated_at,
+          cwd,
+          session.model,
+          session.title,
+          entries,
+        ],
+        |row| row.get(0),
+      )?);
+    }
+
+    Ok(())
+  }
+
+  fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Session> {
+    Ok(Session {
+      created_at: row.get_u64(1)?,
+      cwd: row.get::<_, String>(3)?.into(),
+      entries: serde_json::from_str(&row.get::<_, String>(6)?).map_err(
+        |error| {
+          rusqlite::Error::FromSqlConversionFailure(
+            6,
+            rusqlite::types::Type::Text,
+            Box::new(error),
+          )
+        },
+      )?,
+      id: Some(row.get(0)?),
+      model: row.get(4)?,
+      title: row.get(5)?,
+      updated_at: row.get_u64(2)?,
+    })
   }
 }
 
@@ -246,6 +246,72 @@ mod tests {
         .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
         .unwrap(),
       i64::try_from(Database::SCHEMA_VERSION).unwrap(),
+    );
+  }
+
+  #[test]
+  fn save_session_assigns_and_reuses_integer_id() {
+    let database =
+      Database::try_from(Connection::open_in_memory().unwrap()).unwrap();
+
+    let mut session = Session {
+      created_at: 0,
+      cwd: env::current_dir().unwrap(),
+      entries: Vec::new(),
+      id: None,
+      model: "mock:local".into(),
+      title: None,
+      updated_at: 0,
+    };
+
+    database.save_session(&mut session).unwrap();
+
+    assert_eq!(session.id, Some(1));
+
+    database.save_session(&mut session).unwrap();
+
+    assert_eq!(
+      database
+        .connection
+        .query_row("SELECT COUNT(*) FROM sessions", [], |row| {
+          row.get::<_, u32>(0)
+        })
+        .unwrap(),
+      1,
+    );
+  }
+
+  #[test]
+  fn summaries_do_not_decode_transcripts() {
+    let database =
+      Database::try_from(Connection::open_in_memory().unwrap()).unwrap();
+
+    let cwd = env::current_dir().unwrap();
+
+    database
+      .connection
+      .execute(
+        "INSERT INTO sessions (
+           created_at, updated_at, cwd, model, title, entries
+         ) VALUES (0, 0, ?1, 'mock:local', NULL, '{}')",
+        [cwd.to_str().unwrap()],
+      )
+      .unwrap();
+
+    assert_eq!(database.get_sessions().unwrap().len(), 1);
+
+    assert_eq!(
+      database
+        .load_session(1)
+        .unwrap_err()
+        .chain()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>(),
+      [
+        "failed to load session `1`",
+        "Conversion error from type Text at index: 6, invalid type: map, expected a sequence at line 1 column 0",
+        "invalid type: map, expected a sequence at line 1 column 0",
+      ],
     );
   }
 

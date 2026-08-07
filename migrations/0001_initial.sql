@@ -1,6 +1,5 @@
 CREATE TABLE sessions (
-  id          TEXT PRIMARY KEY NOT NULL,
-  version     INTEGER NOT NULL CHECK (version >= 0),
+  id          INTEGER PRIMARY KEY,
   created_at  INTEGER NOT NULL CHECK (created_at >= 0),
   updated_at  INTEGER NOT NULL CHECK (updated_at >= 0),
   cwd         TEXT NOT NULL CHECK (cwd <> ''),

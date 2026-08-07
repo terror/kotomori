@@ -87,10 +87,7 @@ use {
     path::{Path, PathBuf},
     process::{self, Stdio},
     str::{self, FromStr},
-    sync::{
-      Arc, LazyLock, Mutex, OnceLock,
-      atomic::{self, AtomicU64},
-    },
+    sync::{Arc, LazyLock, Mutex, OnceLock},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
   },

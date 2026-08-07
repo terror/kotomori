@@ -3,5 +3,5 @@ use super::*;
 #[derive(Debug)]
 pub(crate) enum ResumePickerAction {
   Cancel,
-  Resume(String),
+  Resume(i64),
 }

@@ -5,9 +5,8 @@ pub(crate) struct Session {
   pub(crate) created_at: u64,
   pub(crate) cwd: PathBuf,
   pub(crate) entries: Vec<TranscriptEntry>,
-  pub(crate) id: String,
+  pub(crate) id: Option<i64>,
   pub(crate) model: String,
-  pub(crate) persisted: bool,
   pub(crate) title: Option<String>,
   pub(crate) updated_at: u64,
 }
@@ -39,28 +38,13 @@ impl Session {
     )
   }
 
-  fn id() -> Result<String> {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let counter = COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
-
-    Ok(format!(
-      "{}-{}-{counter}",
-      SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("system clock is before the unix epoch")?
-        .as_nanos(),
-      process::id()
-    ))
-  }
-
   pub(crate) fn matches(&self, query: &str) -> bool {
     let search = format!(
       "{} {} {} {}",
       self.title.as_deref().unwrap_or("Untitled session"),
       self.model,
       DirectoryDisplay::new(&self.cwd),
-      self.id,
+      self.id.map_or_else(String::new, |id| id.to_string()),
     )
     .chars()
     .flat_map(char::to_lowercase)
@@ -86,9 +70,8 @@ impl Session {
       created_at: now,
       cwd: env::current_dir().context("failed to read current directory")?,
       entries: Vec::new(),
-      id: Self::id()?,
+      id: None,
       model: settings.model.to_string(),
-      persisted: false,
       title: None,
       updated_at: now,
     })
@@ -99,7 +82,7 @@ impl Session {
     database: &Database,
     transcript: &Transcript,
   ) -> Result {
-    if transcript.is_empty() && !self.persisted {
+    if transcript.is_empty() && self.id.is_none() {
       return Ok(());
     }
 
@@ -125,9 +108,7 @@ impl Session {
       .context("system clock is before the unix epoch")?
       .as_secs();
 
-    database.add_session(self)?;
-
-    self.persisted = true;
+    database.save_session(self)?;
 
     Ok(())
   }
