@@ -54,7 +54,6 @@ use {
   raw_tool_call::RawToolCall,
   reasoning_buffer::ReasoningBuffer,
   render_plan::RenderPlan,
-  render_planner::RenderPlanner,
   renderer::Renderer,
   request::Request,
   resume_picker::ResumePicker,
@@ -165,7 +164,6 @@ mod provider_sink;
 mod raw_tool_call;
 mod reasoning_buffer;
 mod render_plan;
-mod render_planner;
 mod renderer;
 mod request;
 mod resume_picker;
