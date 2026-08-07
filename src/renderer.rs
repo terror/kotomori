@@ -49,7 +49,8 @@ impl<W: Write> Renderer<W> {
 
     let presented = match plan {
       RenderPlan::Full => {
-        self.full_render(&next)?;
+        self.stdout.clear_screen()?;
+        self.stdout.write_lines(&next.lines)?;
 
         next.into()
       }
@@ -85,14 +86,6 @@ impl<W: Write> Renderer<W> {
         width,
       },
     ))
-  }
-
-  fn full_render(&mut self, next: &Frame) -> Result {
-    self.stdout.clear_screen()?;
-
-    self.stdout.write_lines(&next.lines)?;
-
-    Ok(())
   }
 
   fn line_feed(
