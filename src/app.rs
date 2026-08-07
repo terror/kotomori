@@ -106,7 +106,7 @@ impl App {
     )
   }
 
-  fn resume(&mut self, id: i64) -> Result {
+  pub(crate) fn resume(&mut self, id: i64) -> Result {
     let database = Database::new()?;
 
     let session = database.load_session(id)?;
