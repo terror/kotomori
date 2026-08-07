@@ -15,17 +15,15 @@ use {
   composer::Composer,
   config::Config,
   crossterm::{
-    cursor::{
-      Hide, MoveDown, MoveTo, MoveToColumn, MoveToNextLine, MoveUp, Show,
-    },
+    cursor::{Hide, MoveDown, MoveTo, MoveToColumn, MoveUp},
     event::{
       self as crossterm_event, Event as CrosstermEvent, KeyCode, KeyEvent,
       KeyEventKind, KeyModifiers,
     },
-    execute, queue,
+    queue,
     terminal::{
       self as crossterm_terminal, BeginSynchronizedUpdate, Clear, ClearType,
-      EndSynchronizedUpdate, disable_raw_mode, enable_raw_mode,
+      EndSynchronizedUpdate, enable_raw_mode,
     },
   },
   cursor::Cursor,
@@ -103,7 +101,6 @@ use {
   strum::{EnumIter, IntoEnumIterator},
   style::Style,
   subcommand::Subcommand,
-  terminal::Terminal,
   tokio::{
     io::{AsyncRead, AsyncReadExt},
     runtime::Runtime,
@@ -179,7 +176,6 @@ mod state;
 mod str_ext;
 mod style;
 mod subcommand;
-mod terminal;
 #[macro_use]
 mod tools;
 mod tool;
