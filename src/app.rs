@@ -131,12 +131,23 @@ impl App {
 
     let mut renderer = Renderer::new();
 
+    let (mut first_draw_started_at, mut first_draw_duration) =
+      (FIRST_DRAW_STARTED_AT.get().copied(), None);
+
     self.listen_for_input();
 
     let mut tick_interval = interval(Self::TICK_INTERVAL);
 
     while !self.screen.should_quit() {
-      renderer.draw(&mut terminal.stdout, &ViewComponent::new(&self.screen))?;
+      renderer.draw(
+        &mut terminal.stdout,
+        &ViewComponent::new(&self.screen, first_draw_duration),
+      )?;
+
+      if let Some(started_at) = first_draw_started_at.take() {
+        first_draw_duration = Some(started_at.elapsed());
+        continue;
+      }
 
       tokio::select! {
         event = self.event_receiver.recv() => {

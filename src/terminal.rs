@@ -2,16 +2,16 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct Terminal {
-  pub(crate) stdout: Stdout,
+  pub(crate) stdout: BufWriter<Stdout>,
 }
 
 impl Terminal {
   pub(crate) fn new() -> Result<Self> {
     enable_raw_mode().context("failed to enable raw mode")?;
 
-    let mut stdout = io::stdout();
+    let mut stdout = BufWriter::new(io::stdout());
 
-    execute!(stdout, Hide).context("failed to hide cursor")?;
+    queue!(stdout, Hide).context("failed to hide cursor")?;
 
     Ok(Self { stdout })
   }

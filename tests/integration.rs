@@ -321,11 +321,15 @@ impl Running {
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_kotomori"));
 
     command.args(&test.arguments);
+
     command.cwd(test.cwd.as_deref().unwrap_or(test.tempdir.path()));
+
     command.env("KOTOMORI_HOME", test.tempdir.path().join("kotomori-home"));
     command.env("RUST_BACKTRACE", "0");
     command.env("TERM", "xterm-256color");
     command.env("XDG_CONFIG_HOME", test.tempdir.path().join("xdg-config"));
+
+    command.env_remove("KOTOMORI_DEV");
 
     for (key, value) in &test.env {
       command.env(key, value);
@@ -509,6 +513,26 @@ fn config_sets_default_model() -> Result {
     .type_text("foo")
     .enter()
     .expect_screen_contains("queued for mock:bar: foo")
+    .quit()
+    .run()
+}
+
+#[test]
+fn dev_mode_controls_time_to_first_draw() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:local")
+    .wait(SETTLE_INTERVAL)
+    .expect_screen_excludes("first draw ")
+    .quit()
+    .run()?;
+
+  Test::new()
+    .env("KOTOMORI_DEV", "1")
+    .argument("--model")
+    .argument("mock:local")
+    .wait(SETTLE_INTERVAL)
+    .expect_screen_contains("first draw ")
     .quit()
     .run()
 }
