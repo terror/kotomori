@@ -36,9 +36,7 @@ impl<W: Write> Renderer<W> {
       self.stdout.write_lines(&next.lines)?;
       self.stdout.end_synchronized_update()?;
 
-      let viewport_top = next.len().saturating_sub(next.dimensions.height);
-
-      self.presented = Some(PresentedFrame::new(next, viewport_top));
+      self.presented = Some(next.into());
 
       return Ok(());
     };
@@ -49,14 +47,22 @@ impl<W: Write> Renderer<W> {
 
     self.stdout.begin_synchronized_update()?;
 
-    let viewport_top = match plan {
-      RenderPlan::Full => self.full_render(&next)?,
-      RenderPlan::Patch(changed) => self.patch_render(&next, changed)?,
+    let presented = match plan {
+      RenderPlan::Full => {
+        self.full_render(&next)?;
+
+        next.into()
+      }
+      RenderPlan::Patch(changed) => {
+        let viewport_top = self.patch_render(&next, changed)?;
+
+        PresentedFrame::new(next, viewport_top)
+      }
     };
 
     self.stdout.end_synchronized_update()?;
 
-    self.presented = Some(PresentedFrame::new(next, viewport_top));
+    self.presented = Some(presented);
 
     Ok(())
   }
@@ -81,12 +87,12 @@ impl<W: Write> Renderer<W> {
     ))
   }
 
-  fn full_render(&mut self, next: &Frame) -> Result<usize> {
+  fn full_render(&mut self, next: &Frame) -> Result {
     self.stdout.clear_screen()?;
 
     self.stdout.write_lines(&next.lines)?;
 
-    Ok(next.len().saturating_sub(next.dimensions.height))
+    Ok(())
   }
 
   fn line_feed(
