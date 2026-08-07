@@ -68,11 +68,7 @@ impl Renderer {
 
     let presented = match plan {
       RenderPlan::Full { clear } => Self::full_render(stdout, &next, clear)?,
-      RenderPlan::NoOperation => PresentedFrame::new(
-        self.presented.as_ref().unwrap().cursor,
-        next,
-        self.presented.as_ref().unwrap().viewport,
-      ),
+      RenderPlan::NoOperation => return Ok(()),
       RenderPlan::Patch { diff } => Self::patch_render(
         stdout,
         self.presented.as_ref().unwrap(),
