@@ -286,16 +286,16 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(1, 1),
       )),
+      stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .draw_frame(Frame::new(
         vec!["foo".into(), String::new()],
         Dimensions {
@@ -306,12 +306,12 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\r\n\x1b[2K\x1b[?2026l",
     );
 
     assert_eq!(
-      subject.presented.as_ref().unwrap().viewport,
+      renderer.presented.as_ref().unwrap().viewport,
       Viewport::anchored_to_bottom(2, 1),
     );
   }
@@ -326,16 +326,16 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
+      stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .draw_frame(Frame::new(
         vec!["foo".into(), "bar".into()],
         Dimensions {
@@ -346,7 +346,7 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\r\n\x1b[2Kbar\x1b[?2026l",
     );
   }
@@ -361,16 +361,16 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(2, 1),
       )),
+      stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .draw_frame(Frame::new(
         vec!["foo".into(), "bar".into(), "baz".into()],
         Dimensions {
@@ -381,16 +381,16 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\r\n\x1b[2Kbaz\x1b[?2026l",
     );
 
     assert_eq!(
-      subject.presented.as_ref().unwrap().viewport,
+      renderer.presented.as_ref().unwrap().viewport,
       Viewport::anchored_to_bottom(3, 1),
     );
 
-    assert_eq!(subject.presented.as_ref().unwrap().cursor, Cursor::new(2),);
+    assert_eq!(renderer.presented.as_ref().unwrap().cursor, Cursor::new(2),);
   }
 
   #[test]
@@ -403,16 +403,16 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
+      stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .draw_frame(Frame::new(
         Vec::new(),
         Dimensions {
@@ -423,12 +423,12 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\r\x1b[2K\x1b[?2026l",
     );
 
     assert_eq!(
-      subject.presented.as_ref().unwrap().frame.lines,
+      renderer.presented.as_ref().unwrap().frame.lines,
       Vec::<String>::new(),
     );
   }
@@ -443,34 +443,34 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(3, 24),
       )),
+      stdout: Vec::new(),
     };
 
-    subject.presented.as_mut().unwrap().cursor = Cursor::new(1);
+    renderer.presented.as_mut().unwrap().cursor = Cursor::new(1);
 
-    subject.finish().unwrap();
+    renderer.finish().unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[1B"
     );
-    assert_eq!(subject.presented.as_ref().unwrap().cursor, Cursor::new(2),);
+    assert_eq!(renderer.presented.as_ref().unwrap().cursor, Cursor::new(2),);
   }
 
   #[test]
   fn full_render_clears_screen() {
-    let mut subject = Renderer {
+    let mut renderer = Renderer {
       presented: None,
       stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .full_render(
         &Frame::new(
           vec!["bar".into(), "baz".into()],
@@ -484,19 +484,19 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
     );
   }
 
   #[test]
   fn full_render_rebuilds_scrollback_when_clearing() {
-    let mut subject = Renderer {
+    let mut renderer = Renderer {
       presented: None,
       stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .full_render(
         &Frame::new(
           vec!["foo".into(), "bar".into(), "baz".into()],
@@ -510,19 +510,19 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
     );
   }
 
   #[test]
   fn full_render_without_clear_prepares_lines() {
-    let mut subject = Renderer {
+    let mut renderer = Renderer {
       presented: None,
       stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .full_render(
         &Frame::new(
           vec!["foo".into(), "bar".into()],
@@ -536,7 +536,7 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
     );
   }
@@ -557,16 +557,16 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(5, 3),
       )),
+      stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .draw_frame(Frame::new(
         vec!["foo".into(), "bar".into(), "bob".into(), "qux".into()],
         Dimensions {
@@ -577,12 +577,12 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[2A\r\x1b[2Kbob\r\n\x1b[2Kqux\r\n\x1b[2K\x1b[1A\x1b[?2026l",
     );
 
     assert_eq!(
-      subject.presented.as_ref().unwrap().viewport,
+      renderer.presented.as_ref().unwrap().viewport,
       Viewport::new(2, 3),
     );
   }
@@ -597,16 +597,16 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(3, 24),
       )),
+      stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .draw_frame(Frame::new(
         vec!["foo".into(), "qux".into(), "baz".into()],
         Dimensions {
@@ -617,7 +617,7 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[1A\r\x1b[2Kqux\x1b[?2026l",
     );
   }
@@ -632,16 +632,16 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(3, 2),
       )),
+      stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .draw_frame(Frame::new(
         vec!["qux".into(), "bar".into(), "baz".into()],
         Dimensions {
@@ -652,7 +652,7 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kqux\r\n\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
     );
   }
@@ -667,16 +667,16 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
+      stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .draw_frame(Frame::new(
         vec!["foo".into(), "bar".into()],
         Dimensions {
@@ -687,7 +687,7 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
     );
   }
@@ -708,16 +708,16 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame.clone(),
         Viewport::anchored_to_bottom(5, 3),
       )),
+      stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .draw_frame(Frame::new(
         frame.lines,
         Dimensions {
@@ -728,12 +728,12 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\r\n\x1b[1G\x1b[2Kqux\r\n\x1b[1G\x1b[2Kquux\x1b[?2026l",
     );
 
     assert_eq!(
-      subject.presented.as_ref().unwrap().viewport,
+      renderer.presented.as_ref().unwrap().viewport,
       Viewport::new(1, 4),
     );
   }
@@ -748,16 +748,16 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(1, 24),
       )),
+      stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .draw_frame(Frame::new(
         vec!["foo".into(), "bar".into()],
         Dimensions {
@@ -768,7 +768,7 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
     );
   }
@@ -783,16 +783,16 @@ mod tests {
       },
     );
 
-    let mut subject = Renderer {
-      stdout: Vec::new(),
+    let mut renderer = Renderer {
       presented: Some(PresentedFrame::new(
         Cursor::new(frame.last_row()),
         frame,
         Viewport::anchored_to_bottom(3, 24),
       )),
+      stdout: Vec::new(),
     };
 
-    subject
+    renderer
       .draw_frame(Frame::new(
         vec!["foo".into()],
         Dimensions {
@@ -803,7 +803,7 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      String::from_utf8(subject.stdout.clone()).unwrap(),
+      String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[2A\r\x1b[1B\r\x1b[2K\x1b[1B\r\x1b[2K\x1b[2A\x1b[?2026l",
     );
   }
