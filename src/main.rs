@@ -86,7 +86,6 @@ use {
     io::{self, BufWriter, Stdout, Write},
     iter::once,
     mem,
-    ops::RangeInclusive,
     path::{Path, PathBuf},
     process::{self, Stdio},
     str::{self, FromStr},

@@ -22,56 +22,6 @@ impl Renderer {
 }
 
 impl<W: Write> Renderer<W> {
-  fn clear_deleted_tail(
-    &mut self,
-    next: &Frame,
-    diff: Diff,
-  ) -> Result<PresentedFrame> {
-    let presented = self.presented.as_ref().unwrap();
-
-    let target_row = next.last_row();
-
-    self.stdout.begin_synchronized_update()?;
-
-    self.stdout.move_by(presented.cursor.diff_to(
-      presented.viewport,
-      target_row,
-      presented.viewport,
-    ))?;
-
-    let deleted_tail_len = diff.deleted_tail_len();
-
-    if !next.is_empty() {
-      write!(self.stdout, "\r")?;
-
-      if deleted_tail_len > 0 {
-        self.stdout.move_down(1)?;
-      }
-    }
-
-    for index in diff.changed.first..=diff.changed.last {
-      if index > diff.changed.first {
-        self.stdout.move_down(1)?;
-      }
-
-      write!(self.stdout, "\r")?;
-
-      self.stdout.clear_line()?;
-    }
-
-    self
-      .stdout
-      .move_up(deleted_tail_len.saturating_sub(usize::from(next.is_empty())))?;
-
-    self.stdout.end_synchronized_update()?;
-
-    Ok(PresentedFrame::new(
-      Cursor::new(target_row),
-      next.clone(),
-      presented.viewport,
-    ))
-  }
-
   pub(crate) fn draw(&mut self, component: &impl Component) -> Result {
     self.draw_frame(Self::frame(component)?)?;
 
@@ -169,17 +119,11 @@ impl<W: Write> Renderer<W> {
     next: Frame,
     diff: Diff,
   ) -> Result<PresentedFrame> {
-    if diff.is_pure_tail_delete() {
-      return self.clear_deleted_tail(&next, diff);
-    }
-
     let (mut viewport, presented_len, mut cursor) = {
       let presented = self.presented.as_ref().unwrap();
 
       (presented.viewport, presented.frame.len(), presented.cursor)
     };
-
-    let writable_range = diff.writable_range().unwrap();
 
     let append_start =
       diff.changed.first > 0 && diff.changed.first == presented_len;
@@ -221,30 +165,23 @@ impl<W: Write> Renderer<W> {
       write!(self.stdout, "\r")?;
     }
 
-    for (offset, line) in next.lines[writable_range].iter().enumerate() {
-      if offset > 0 {
+    for row in diff.changed.first..=diff.changed.last {
+      if row > diff.changed.first {
         self.line_feed(&mut cursor, &mut viewport)?;
       }
 
-      self.stdout.write_line(line)?;
-    }
-
-    if diff.deleted_tail_len() > 0 {
-      if cursor.row < next.last_row() {
-        let move_down = next.last_row() - cursor.row;
-        self.stdout.move_down(move_down)?;
-        cursor = Cursor::new(next.last_row());
-      }
-
-      for _ in next.len()..presented_len {
-        self.line_feed(&mut cursor, &mut viewport)?;
+      if let Some(line) = next.lines.get(row) {
+        self.stdout.write_line(line)?;
+      } else {
         self.stdout.clear_line()?;
       }
-
-      self.stdout.move_up(diff.deleted_tail_len())?;
-
-      cursor.row = cursor.row.saturating_sub(diff.deleted_tail_len());
     }
+
+    self
+      .stdout
+      .move_by(cursor.diff_to(viewport, next.last_row(), viewport))?;
+
+    cursor = Cursor::new(next.last_row());
 
     self.stdout.end_synchronized_update()?;
 
@@ -620,7 +557,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[?2026h\x1b[1A\r\x1b[2Kqux\x1b[?2026l",
+      "\x1b[?2026h\x1b[1A\r\x1b[2Kqux\x1b[1B\x1b[?2026l",
     );
   }
 
@@ -806,7 +743,7 @@ mod tests {
 
     assert_eq!(
       String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[?2026h\x1b[2A\r\x1b[1B\r\x1b[2K\x1b[1B\r\x1b[2K\x1b[2A\x1b[?2026l",
+      "\x1b[?2026h\x1b[1A\r\x1b[2K\r\n\x1b[2K\x1b[2A\x1b[?2026l",
     );
   }
 }

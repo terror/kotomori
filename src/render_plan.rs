@@ -28,7 +28,9 @@ impl RenderPlan {
       return Self::Full { clear: true };
     }
 
-    if diff.is_pure_tail_delete() && next.last_row() < presented.viewport.top {
+    if diff.changed.first >= next.len()
+      && next.last_row() < presented.viewport.top
+    {
       return Self::Full { clear: true };
     }
 
