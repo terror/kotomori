@@ -64,7 +64,7 @@ impl Renderer {
   }
 
   fn draw_frame(&mut self, stdout: &mut impl Write, next: Frame) -> Result {
-    let plan = RenderPlanner::new(self.presented.as_ref()).plan(&next);
+    let plan = RenderPlan::between(self.presented.as_ref(), &next);
 
     let presented = match plan {
       RenderPlan::Full { clear } => Self::full_render(stdout, &next, clear)?,
