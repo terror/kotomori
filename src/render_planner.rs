@@ -57,23 +57,10 @@ impl<'a> RenderPlanner<'a> {
       return RenderPlan::Full { clear: true };
     }
 
-    let patch = if diff.is_pure_tail_delete() {
-      PatchPlan::ClearDeletedTail { diff }
-    } else {
-      let Some(writable_range) = diff.writable_range() else {
-        return RenderPlan::Full { clear: true };
-      };
-
-      PatchPlan::Update {
-        diff,
-        writable_range,
-      }
-    };
-
     RenderPlan::Patch {
       previous: presented,
       previous_viewport,
-      patch,
+      diff,
     }
   }
 }

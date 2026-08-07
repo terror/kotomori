@@ -105,10 +105,8 @@ impl Renderer {
       RenderPlan::Patch {
         previous,
         previous_viewport,
-        patch,
-      } => {
-        Self::patch_render(stdout, previous, next, previous_viewport, patch)?
-      }
+        diff,
+      } => Self::patch_render(stdout, previous, next, previous_viewport, diff)?,
     };
 
     self.max_lines_rendered = if clears {
@@ -184,23 +182,19 @@ impl Renderer {
     presented: &PresentedFrame,
     next: Frame,
     previous_viewport: Viewport,
-    patch: PatchPlan,
+    diff: Diff,
   ) -> Result<PresentedFrame> {
-    let (diff, writable_range) = match patch {
-      PatchPlan::ClearDeletedTail { diff } => {
-        return Self::clear_deleted_tail(
-          stdout,
-          presented,
-          &next,
-          diff,
-          previous_viewport,
-        );
-      }
-      PatchPlan::Update {
+    if diff.is_pure_tail_delete() {
+      return Self::clear_deleted_tail(
+        stdout,
+        presented,
+        &next,
         diff,
-        writable_range,
-      } => (diff, writable_range),
-    };
+        previous_viewport,
+      );
+    }
+
+    let writable_range = diff.writable_range().unwrap();
 
     let append_start = next.len() > presented.frame.len()
       && diff.changed.first == presented.frame.len();
