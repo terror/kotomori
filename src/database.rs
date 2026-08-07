@@ -124,15 +124,22 @@ impl Database {
   }
 
   pub(crate) fn new() -> Result<Self> {
+    #[cfg(test)]
+    return Self::try_from(Connection::open_in_memory()?);
+
+    #[cfg(not(test))]
     let root = Self::root()?;
 
+    #[cfg(not(test))]
     fs::create_dir_all(&root).with_context(|| {
       format!("failed to create state directory {}", root.display())
     })?;
 
+    #[cfg(not(test))]
     Self::try_from(root.join("sessions.db").as_path())
   }
 
+  #[cfg(not(test))]
   fn root() -> Result<PathBuf> {
     if let Some(path) = env::var_os("KOTOMORI_HOME") {
       Ok(PathBuf::from(path))
