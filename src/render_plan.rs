@@ -16,11 +16,7 @@ impl RenderPlan {
       return Self::Full { clear: false };
     };
 
-    if presented.frame.dimensions.width != next.dimensions.width {
-      return Self::Full { clear: true };
-    }
-
-    if presented.frame.dimensions.height != next.dimensions.height {
+    if presented.frame.dimensions != next.dimensions {
       return Self::Full { clear: true };
     }
 
