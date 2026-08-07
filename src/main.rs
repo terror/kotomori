@@ -26,7 +26,6 @@ use {
       EndSynchronizedUpdate, enable_raw_mode,
     },
   },
-  cursor::Cursor,
   diff::Diff,
   dimensions::Dimensions,
   directory_display::DirectoryDisplay,
@@ -78,7 +77,7 @@ use {
   state::State,
   std::{
     backtrace::BacktraceStatus,
-    cmp::{Ordering, Reverse},
+    cmp::Reverse,
     env,
     ffi::OsStr,
     fmt::{self, Debug, Display, Formatter},
@@ -139,7 +138,6 @@ mod command;
 mod component;
 mod composer;
 mod config;
-mod cursor;
 mod diff;
 mod dimensions;
 mod directory_display;
