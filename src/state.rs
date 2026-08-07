@@ -103,10 +103,15 @@ impl State {
         self.transcript.finish_agent_activity();
         self.save_session();
       }
-      Event::AgentDelta(delta) => self.transcript.push_agent_delta(&delta),
-      Event::AgentReasoningDelta(delta) => {
+      Event::AgentDelta(delta) if self.transcript.is_agent_active() => {
+        self.transcript.push_agent_delta(&delta);
+      }
+      Event::AgentReasoningDelta(delta)
+        if self.transcript.is_agent_active() =>
+      {
         self.transcript.push_agent_reasoning_delta(&delta);
       }
+      Event::AgentDelta(_) | Event::AgentReasoningDelta(_) => {}
       Event::AgentToolCall(tool_call) => {
         self.transcript.push_tool_call(tool_call);
         self.save_session();
