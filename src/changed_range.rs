@@ -7,12 +7,15 @@ pub(crate) struct ChangedRange {
 }
 
 impl ChangedRange {
-  pub(crate) fn between(previous: &[String], next: &[String]) -> Option<Self> {
+  pub(crate) fn between(
+    previous: &[impl AsRef<str>],
+    next: &[impl AsRef<str>],
+  ) -> Option<Self> {
     let len = previous.len().max(next.len());
 
     let changed = |index| {
-      previous.get(index).map(String::as_str)
-        != next.get(index).map(String::as_str)
+      previous.get(index).map(AsRef::as_ref)
+        != next.get(index).map(AsRef::as_ref)
     };
 
     Some(Self {
@@ -26,14 +29,10 @@ impl ChangedRange {
 mod tests {
   use super::*;
 
-  fn lines(lines: &[&str]) -> Vec<String> {
-    lines.iter().map(|line| (*line).into()).collect()
-  }
-
   #[test]
   fn between_detects_added_blank_tail() {
     assert_eq!(
-      ChangedRange::between(&lines(&["foo"]), &lines(&["foo", ""])),
+      ChangedRange::between(&["foo"], &["foo", ""]),
       Some(ChangedRange { first: 1, last: 1 }),
     );
   }
@@ -41,10 +40,7 @@ mod tests {
   #[test]
   fn between_detects_added_tail() {
     assert_eq!(
-      ChangedRange::between(
-        &lines(&["foo", "bar"]),
-        &lines(&["foo", "bar", "baz"])
-      ),
+      ChangedRange::between(&["foo", "bar"], &["foo", "bar", "baz"]),
       Some(ChangedRange { first: 2, last: 2 }),
     );
   }
@@ -53,8 +49,8 @@ mod tests {
   fn between_detects_changed_middle_span() {
     assert_eq!(
       ChangedRange::between(
-        &lines(&["foo", "bar", "baz", "qux"]),
-        &lines(&["foo", "bob", "rob", "qux"]),
+        &["foo", "bar", "baz", "qux"],
+        &["foo", "bob", "rob", "qux"],
       ),
       Some(ChangedRange { first: 1, last: 2 }),
     );
@@ -63,10 +59,7 @@ mod tests {
   #[test]
   fn between_detects_changed_prefix() {
     assert_eq!(
-      ChangedRange::between(
-        &lines(&["foo", "bar", "baz"]),
-        &lines(&["qux", "bar", "baz"])
-      ),
+      ChangedRange::between(&["foo", "bar", "baz"], &["qux", "bar", "baz"]),
       Some(ChangedRange { first: 0, last: 0 }),
     );
   }
@@ -74,10 +67,7 @@ mod tests {
   #[test]
   fn between_detects_changed_suffix() {
     assert_eq!(
-      ChangedRange::between(
-        &lines(&["foo", "bar", "baz"]),
-        &lines(&["foo", "bar", "qux"])
-      ),
+      ChangedRange::between(&["foo", "bar", "baz"], &["foo", "bar", "qux"]),
       Some(ChangedRange { first: 2, last: 2 }),
     );
   }
@@ -86,8 +76,8 @@ mod tests {
   fn between_detects_disjoint_changes_as_one_span() {
     assert_eq!(
       ChangedRange::between(
-        &lines(&["foo", "bar", "baz", "qux"]),
-        &lines(&["bob", "bar", "baz", "rob"]),
+        &["foo", "bar", "baz", "qux"],
+        &["bob", "bar", "baz", "rob"],
       ),
       Some(ChangedRange { first: 0, last: 3 }),
     );
@@ -96,7 +86,7 @@ mod tests {
   #[test]
   fn between_detects_empty_string_changed_to_non_empty_string() {
     assert_eq!(
-      ChangedRange::between(&lines(&[""]), &lines(&["foo"])),
+      ChangedRange::between(&[""], &["foo"]),
       Some(ChangedRange { first: 0, last: 0 }),
     );
   }
@@ -104,7 +94,7 @@ mod tests {
   #[test]
   fn between_detects_non_empty_string_changed_to_empty_string() {
     assert_eq!(
-      ChangedRange::between(&lines(&["foo"]), &lines(&[""])),
+      ChangedRange::between(&["foo"], &[""]),
       Some(ChangedRange { first: 0, last: 0 }),
     );
   }
@@ -112,7 +102,7 @@ mod tests {
   #[test]
   fn between_detects_removed_blank_tail() {
     assert_eq!(
-      ChangedRange::between(&lines(&["foo", ""]), &lines(&["foo"])),
+      ChangedRange::between(&["foo", ""], &["foo"]),
       Some(ChangedRange { first: 1, last: 1 }),
     );
   }
@@ -120,26 +110,20 @@ mod tests {
   #[test]
   fn between_detects_removed_tail() {
     assert_eq!(
-      ChangedRange::between(
-        &lines(&["foo", "bar", "baz"]),
-        &lines(&["foo", "bar"])
-      ),
+      ChangedRange::between(&["foo", "bar", "baz"], &["foo", "bar"]),
       Some(ChangedRange { first: 2, last: 2 }),
     );
   }
 
   #[test]
   fn between_returns_none_for_empty_inputs() {
-    assert_eq!(ChangedRange::between(&lines(&[]), &lines(&[])), None);
+    assert_eq!(ChangedRange::between(&[] as &[&str], &[] as &[&str]), None);
   }
 
   #[test]
   fn between_returns_none_for_identical_inputs() {
     assert_eq!(
-      ChangedRange::between(
-        &lines(&["foo", "bar", "baz"]),
-        &lines(&["foo", "bar", "baz"])
-      ),
+      ChangedRange::between(&["foo", "bar", "baz"], &["foo", "bar", "baz"]),
       None,
     );
   }
