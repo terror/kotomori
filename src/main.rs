@@ -37,7 +37,7 @@ use {
   frame::Frame,
   futures_util::StreamExt,
   home::home_dir,
-  indoc::indoc,
+  indoc::{formatdoc, indoc},
   input_mode::InputMode,
   lexiclean::Lexiclean,
   loader::Loader,
