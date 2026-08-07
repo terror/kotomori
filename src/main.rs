@@ -26,7 +26,6 @@ use {
       EndSynchronizedUpdate, enable_raw_mode,
     },
   },
-  diff::Diff,
   dimensions::Dimensions,
   directory_display::DirectoryDisplay,
   duration_ext::DurationExt,
@@ -137,7 +136,6 @@ mod command;
 mod component;
 mod composer;
 mod config;
-mod diff;
 mod dimensions;
 mod directory_display;
 mod duration_ext;

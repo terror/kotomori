@@ -4,7 +4,7 @@ use super::*;
 pub(crate) enum RenderPlan {
   Full { clear: bool },
   NoOperation,
-  Patch { diff: Diff },
+  Patch { changed: ChangedRange },
 }
 
 impl RenderPlan {
@@ -20,24 +20,25 @@ impl RenderPlan {
       return Self::Full { clear: true };
     }
 
-    let Some(diff) = Diff::between(&presented.frame, next) else {
+    let Some(changed) =
+      ChangedRange::between(&presented.frame.lines, &next.lines)
+    else {
       return Self::NoOperation;
     };
 
-    if diff.changed.first < presented.viewport_top {
+    if changed.first < presented.viewport_top {
       return Self::Full { clear: true };
     }
 
-    if diff.changed.first >= next.len()
-      && next.last_row() < presented.viewport_top
+    if changed.first >= next.len() && next.last_row() < presented.viewport_top {
+      return Self::Full { clear: true };
+    }
+
+    if presented.frame.len().saturating_sub(next.len()) > next.dimensions.height
     {
       return Self::Full { clear: true };
     }
 
-    if diff.deleted_tail_len() > next.dimensions.height {
-      return Self::Full { clear: true };
-    }
-
-    Self::Patch { diff }
+    Self::Patch { changed }
   }
 }
