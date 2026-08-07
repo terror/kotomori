@@ -101,6 +101,13 @@ impl<W: Write> Renderer<W> {
     Ok(())
   }
 
+  fn move_to_row(&mut self, current: usize, target: usize) -> Result {
+    self.stdout.move_up(current.saturating_sub(target))?;
+    self.stdout.move_down(target.saturating_sub(current))?;
+
+    Ok(())
+  }
+
   fn patch_render(
     &mut self,
     next: &Frame,
@@ -143,13 +150,7 @@ impl<W: Write> Renderer<W> {
       }
     }
 
-    self
-      .stdout
-      .move_up(cursor_row.saturating_sub(move_target_row))?;
-
-    self
-      .stdout
-      .move_down(move_target_row.saturating_sub(cursor_row))?;
+    self.move_to_row(cursor_row, move_target_row)?;
 
     cursor_row = move_target_row;
 
@@ -177,8 +178,7 @@ impl<W: Write> Renderer<W> {
 
     let last_row = next.last_row();
 
-    self.stdout.move_up(cursor_row.saturating_sub(last_row))?;
-    self.stdout.move_down(last_row.saturating_sub(cursor_row))?;
+    self.move_to_row(cursor_row, last_row)?;
 
     Ok(viewport_top)
   }
