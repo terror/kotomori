@@ -53,7 +53,7 @@ impl Database {
     Ok(())
   }
 
-  pub(crate) fn get_sessions(&self) -> Result<Vec<SessionSummary>> {
+  pub(crate) fn get_sessions(&self) -> Result<Vec<Session>> {
     let cwd = env::current_dir().context("failed to read current directory")?;
 
     let cwd = cwd
@@ -61,20 +61,31 @@ impl Database {
       .context("current directory is not valid UTF-8")?;
 
     let mut statement = self.connection.prepare(
-      "SELECT id, updated_at, cwd, model, title
+      "SELECT id, created_at, updated_at, cwd, model, title, entries
        FROM sessions
        WHERE cwd = ?1
        ORDER BY updated_at DESC, id DESC",
     )?;
 
     let rows = statement.query_map([cwd], |row| {
-      Ok(SessionSummary::new(
-        row.get::<_, String>(2)?.into(),
-        row.get(0)?,
-        row.get(3)?,
-        row.get(4)?,
-        row.get_u64(1)?,
-      ))
+      Ok(Session {
+        created_at: row.get_u64(1)?,
+        cwd: row.get::<_, String>(3)?.into(),
+        entries: serde_json::from_str(&row.get::<_, String>(6)?).map_err(
+          |error| {
+            rusqlite::Error::FromSqlConversionFailure(
+              6,
+              rusqlite::types::Type::Text,
+              Box::new(error),
+            )
+          },
+        )?,
+        id: row.get(0)?,
+        model: row.get(4)?,
+        persisted: true,
+        title: row.get(5)?,
+        updated_at: row.get_u64(2)?,
+      })
     })?;
 
     rows.collect::<rusqlite::Result<_>>().map_err(Into::into)

@@ -4,7 +4,7 @@ use super::*;
 pub(crate) struct ResumePicker {
   pub(crate) query: String,
   pub(crate) selected: usize,
-  sessions: Vec<SessionSummary>,
+  sessions: Vec<Session>,
 }
 
 impl ResumePicker {
@@ -18,7 +18,7 @@ impl ResumePicker {
     };
   }
 
-  pub(crate) fn filtered(&self) -> Vec<&SessionSummary> {
+  pub(crate) fn filtered(&self) -> Vec<&Session> {
     self
       .sessions
       .iter()
@@ -88,7 +88,7 @@ impl ResumePicker {
     None
   }
 
-  pub(crate) fn new(sessions: Vec<SessionSummary>) -> Self {
+  pub(crate) fn new(sessions: Vec<Session>) -> Self {
     Self {
       query: String::new(),
       selected: 0,
@@ -111,20 +111,24 @@ mod tests {
   #[test]
   fn filters_sessions() {
     let mut picker = ResumePicker::new(vec![
-      SessionSummary {
+      Session {
+        created_at: 0,
         cwd: "foo".into(),
+        entries: Vec::new(),
         id: "foo".into(),
         model: "mock:local".into(),
-        search: "foo".into(),
-        title: "foo".into(),
+        persisted: true,
+        title: Some("foo".into()),
         updated_at: 0,
       },
-      SessionSummary {
+      Session {
+        created_at: 0,
         cwd: "bar".into(),
+        entries: Vec::new(),
         id: "bar".into(),
         model: "mock:local".into(),
-        search: "bar".into(),
-        title: "bar".into(),
+        persisted: true,
+        title: Some("bar".into()),
         updated_at: 0,
       },
     ]);
