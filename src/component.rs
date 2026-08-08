@@ -3,7 +3,7 @@ use super::*;
 mod approval_prompt;
 mod composer;
 mod footer;
-mod framed_lines;
+mod guttered_lines;
 mod header;
 mod hint;
 mod line;
@@ -15,7 +15,7 @@ mod view;
 
 pub(crate) use {
   approval_prompt::ApprovalPromptComponent, composer::ComposerComponent,
-  footer::FooterComponent, framed_lines::FramedLinesComponent,
+  footer::FooterComponent, guttered_lines::GutteredLinesComponent,
   header::HeaderComponent, hint::HintComponent, line::LineComponent,
   resume_picker::ResumePickerComponent, transcript::TranscriptComponent,
   transcript_error::TranscriptErrorComponent,

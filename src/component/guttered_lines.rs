@@ -1,11 +1,11 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-pub(crate) struct FramedLinesComponent {
+pub(crate) struct GutteredLinesComponent {
   lines: Vec<LineComponent>,
 }
 
-impl FramedLinesComponent {
+impl GutteredLinesComponent {
   pub(crate) fn new(lines: impl IntoIterator<Item = LineComponent>) -> Self {
     Self {
       lines: lines.into_iter().collect(),
@@ -17,7 +17,7 @@ impl FramedLinesComponent {
   }
 }
 
-impl Component for FramedLinesComponent {
+impl Component for GutteredLinesComponent {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     let content_width = width.saturating_sub(2).max(1);
 
@@ -41,7 +41,7 @@ mod tests {
   #[test]
   fn render_wraps_lines_with_an_accent_gutter() {
     assert_eq!(
-      FramedLinesComponent::raw(["foobar"]).render(5),
+      GutteredLinesComponent::raw(["foobar"]).render(5),
       [
         LineComponent::from([
           Span::styled("│ ", Style::Accent),

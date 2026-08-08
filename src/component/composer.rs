@@ -17,7 +17,7 @@ impl Component for ComposerComponent<'_> {
 
     let selected = self.composer.selected_command_index();
 
-    let mut lines = FramedLinesComponent::new(
+    let mut lines = GutteredLinesComponent::new(
       self.composer.lines().iter().enumerate().map(|(row, line)| {
         if cursor.0 != row {
           return LineComponent::raw(line);

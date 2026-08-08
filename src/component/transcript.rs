@@ -106,7 +106,7 @@ impl<'a> TranscriptComponent<'a> {
         }
         TranscriptEntry::User(content) => {
           lines.extend(
-            FramedLinesComponent::raw(content.split('\n')).render(width),
+            GutteredLinesComponent::raw(content.split('\n')).render(width),
           );
         }
       }
