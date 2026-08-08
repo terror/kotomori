@@ -39,6 +39,7 @@ impl Component for ViewComponent<'_> {
             ComposerComponent::new(&state.composer).render(width)
           }
         })
+        .chain(once(LineComponent::blank()))
         .chain(
           FooterComponent::new(&state.model, &state.directory).render(width),
         )
@@ -106,7 +107,9 @@ mod tests {
       .position(|line| line.to_string().contains("mock · local ·"))
       .unwrap();
 
-    assert!(footer > approval);
+    assert!(lines[footer - 1].is_blank());
+
+    assert_eq!(footer, approval + 2);
   }
 
   #[test]
@@ -131,6 +134,7 @@ mod tests {
       .position(|line| line.to_string().contains("mock · local ·"))
       .unwrap();
 
-    assert!(footer > command);
+    assert!(footer > command + 1);
+    assert!(lines[footer - 1].is_blank());
   }
 }
