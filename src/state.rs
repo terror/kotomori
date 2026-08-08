@@ -1063,79 +1063,6 @@ mod tests {
     );
   }
 
-  #[tokio::test]
-  async fn stale_agent_events_do_not_mutate_new_run() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("old".into()),
-      yolo: false,
-    })
-    .unwrap();
-
-    state.handle_event(Event::Action(Action::Submit));
-    state.handle_event(Event::Action(Action::Interrupt));
-
-    for c in "new".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    assert!(matches!(
-      state.handle_event(Event::Action(Action::Submit)).as_slice(),
-      [Effect::RunAgent { run_id: 1, .. }]
-    ));
-
-    let invocation = ToolInvocation {
-      id: "stale".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        arguments: Vec::new(),
-        cwd: None,
-        program: "echo".into(),
-      }),
-    };
-
-    let (request, response_receiver) = ApprovalRequest::new(invocation.clone());
-
-    for event in [
-      AgentEvent::Delta("stale".into()),
-      AgentEvent::ReasoningDelta("stale".into()),
-      AgentEvent::ToolCall(invocation),
-      AgentEvent::ToolResult {
-        id: "stale".into(),
-        result: ToolResult::content("stale"),
-      },
-      AgentEvent::ToolApprovalRequest(request),
-      AgentEvent::Error("stale".into()),
-      AgentEvent::Done,
-    ] {
-      state.handle_event(Event::Agent { event, run_id: 0 });
-    }
-
-    assert!(response_receiver.await.is_err());
-    assert!(matches!(state.input_mode, InputMode::Compose));
-    assert!(state.transcript.is_agent_active());
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Delta("current".into()),
-      run_id: 1,
-    });
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
-      run_id: 1,
-    });
-
-    assert_eq!(
-      state.transcript.messages(),
-      [
-        Message::User(vec![UserMessageContent::Text("old".into())]),
-        Message::User(vec![UserMessageContent::Text("new".into())]),
-        Message::Agent(vec![AgentMessageContent::Text("current".into())]),
-      ]
-    );
-  }
-
   #[test]
   fn multiline_input() {
     let mut state = State::new(&Settings {
@@ -1314,6 +1241,81 @@ mod tests {
     );
 
     assert_eq!(state.composer.input_text(), "");
+  }
+
+  #[tokio::test]
+  async fn stale_agent_events_do_not_mutate_new_run() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("old".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_event(Event::Action(Action::Interrupt));
+
+    for c in "new".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    assert!(matches!(
+      state.handle_event(Event::Action(Action::Submit)).as_slice(),
+      [Effect::RunAgent { run_id: 1, .. }]
+    ));
+
+    let invocation = ToolInvocation {
+      id: "stale".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "echo".into(),
+      }),
+    };
+
+    let (request, response_receiver) = ApprovalRequest::new(invocation.clone());
+
+    for event in [
+      AgentEvent::Delta("stale".into()),
+      AgentEvent::ReasoningDelta("stale".into()),
+      AgentEvent::ToolCall(invocation),
+      AgentEvent::ToolResult {
+        id: "stale".into(),
+        result: ToolResult::content("stale"),
+      },
+      AgentEvent::ToolApprovalRequest(request),
+      AgentEvent::Error("stale".into()),
+      AgentEvent::Done,
+    ] {
+      state.handle_event(Event::Agent { event, run_id: 0 });
+    }
+
+    let error = response_receiver.await.unwrap_err();
+
+    assert_eq!(error.to_string(), "channel closed");
+    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert!(state.transcript.is_agent_active());
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Delta("current".into()),
+      run_id: 1,
+    });
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 1,
+    });
+
+    assert_eq!(
+      state.transcript.messages(),
+      [
+        Message::User(vec![UserMessageContent::Text("old".into())]),
+        Message::User(vec![UserMessageContent::Text("new".into())]),
+        Message::Agent(vec![AgentMessageContent::Text("current".into())]),
+      ]
+    );
   }
 
   #[test]
