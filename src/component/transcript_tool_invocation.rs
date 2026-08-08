@@ -7,7 +7,7 @@ pub(crate) struct TranscriptToolInvocationComponent<'a> {
 }
 
 impl<'a> TranscriptToolInvocationComponent<'a> {
-  const GUTTER: &'static str = "   │ ";
+  const GUTTER: &'static str = "  │ ";
   const OUTPUT_LIMIT: usize = 3;
 
   fn details(&self) -> Vec<(&'static str, String)> {
@@ -71,7 +71,6 @@ impl Component for TranscriptToolInvocationComponent<'_> {
     };
 
     lines.push(LineComponent::from([
-      Span::raw(" "),
       Span::styled(symbol, symbol_style),
       Span::raw(" "),
       Span::raw(title),
@@ -86,7 +85,7 @@ impl Component for TranscriptToolInvocationComponent<'_> {
     }));
 
     if let Some(output) = self.result.and_then(ToolResult::output) {
-      let output_width = usize::from(width.saturating_sub(5).max(8));
+      let output_width = usize::from(width.saturating_sub(4).max(8));
 
       let output_lines = output
         .lines()

@@ -626,7 +626,7 @@ fn multiline_input() -> Result {
     .ctrl_j()
     .type_text("bar")
     .enter()
-    .expect_screen_contains("queued for mock:local: foo\n bar")
+    .expect_screen_contains("queued for mock:local: foo\n  bar")
     .run()
 }
 
