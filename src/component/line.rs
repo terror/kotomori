@@ -122,7 +122,7 @@ mod tests {
     assert_eq!(
       LineComponent::from([
         Span::raw("a"),
-        Span::styled("b", Style::CyanBold),
+        Span::styled("b", Style::Accent),
         Span::raw("c"),
       ])
       .to_string(),
@@ -138,7 +138,7 @@ mod tests {
   #[test]
   fn displays_styled_text() {
     assert_eq!(
-      LineComponent::from([Span::styled("foo", Style::CyanBold)]).to_string(),
+      LineComponent::from([Span::styled("foo", Style::Accent)]).to_string(),
       "\x1b[36;1mfoo\x1b[0m",
     );
   }
@@ -179,14 +179,11 @@ mod tests {
   fn rendering_merges_adjacent_spans_with_same_style() {
     assert_eq!(
       LineComponent::from([
-        Span::styled("foo", Style::CyanBold),
-        Span::styled("bar", Style::CyanBold),
+        Span::styled("foo", Style::Accent),
+        Span::styled("bar", Style::Accent),
       ])
       .render(6),
-      [LineComponent::from([Span::styled(
-        "foobar",
-        Style::CyanBold
-      )])],
+      [LineComponent::from([Span::styled("foobar", Style::Accent)])],
     );
   }
 
@@ -194,7 +191,7 @@ mod tests {
   fn rendering_preserves_plain_text_content() {
     let line = LineComponent::from([
       Span::raw("foo"),
-      Span::styled("bar", Style::CyanBold),
+      Span::styled("bar", Style::Accent),
       Span::raw("baz"),
     ]);
 
@@ -212,13 +209,13 @@ mod tests {
   fn rendering_preserves_style_boundaries() {
     assert_eq!(
       LineComponent::from([
-        Span::styled("foo", Style::CyanBold),
-        Span::styled("bar", Style::DarkGray),
+        Span::styled("foo", Style::Accent),
+        Span::styled("bar", Style::Muted),
       ])
       .render(6),
       [LineComponent::from([
-        Span::styled("foo", Style::CyanBold),
-        Span::styled("bar", Style::DarkGray),
+        Span::styled("foo", Style::Accent),
+        Span::styled("bar", Style::Muted),
       ])],
     );
   }
@@ -227,16 +224,16 @@ mod tests {
   fn renders_across_style_boundaries() {
     assert_eq!(
       LineComponent::from([
-        Span::styled("foo", Style::CyanBold),
-        Span::styled("bar", Style::DarkGray),
+        Span::styled("foo", Style::Accent),
+        Span::styled("bar", Style::Muted),
       ])
       .render(4),
       [
         LineComponent::from([
-          Span::styled("foo", Style::CyanBold),
-          Span::styled("b", Style::DarkGray),
+          Span::styled("foo", Style::Accent),
+          Span::styled("b", Style::Muted),
         ]),
-        LineComponent::from([Span::styled("ar", Style::DarkGray)]),
+        LineComponent::from([Span::styled("ar", Style::Muted)]),
       ],
     );
   }
@@ -269,10 +266,10 @@ mod tests {
   #[test]
   fn renders_styled_text_at_width() {
     assert_eq!(
-      LineComponent::from([Span::styled("foobar", Style::CyanBold)]).render(3),
+      LineComponent::from([Span::styled("foobar", Style::Accent)]).render(3),
       [
-        LineComponent::from([Span::styled("foo", Style::CyanBold)]),
-        LineComponent::from([Span::styled("bar", Style::CyanBold)]),
+        LineComponent::from([Span::styled("foo", Style::Accent)]),
+        LineComponent::from([Span::styled("bar", Style::Accent)]),
       ],
     );
   }
@@ -280,8 +277,8 @@ mod tests {
   #[test]
   fn renders_styled_text_that_exactly_fits_width() {
     assert_eq!(
-      LineComponent::from([Span::styled("foo", Style::CyanBold)]).render(3),
-      [LineComponent::from([Span::styled("foo", Style::CyanBold)])],
+      LineComponent::from([Span::styled("foo", Style::Accent)]).render(3),
+      [LineComponent::from([Span::styled("foo", Style::Accent)])],
     );
   }
 }

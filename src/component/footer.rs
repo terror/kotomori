@@ -21,7 +21,7 @@ impl Component for FooterComponent<'_> {
         "{} · {} · {directory}",
         self.model.provider, self.model.name
       ),
-      Style::DarkGray,
+      Style::Muted,
     )])]
   }
 }
@@ -40,7 +40,7 @@ mod tests {
       .render(80),
       [LineComponent::from([Span::styled(
         "foo · bar · baz",
-        Style::DarkGray
+        Style::Muted
       )])]
     );
   }

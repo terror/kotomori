@@ -17,7 +17,7 @@ impl Component for TranscriptErrorComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     let mut lines = vec![LineComponent::from([
       Span::raw(" "),
-      Span::styled("●", Style::RedBold),
+      Span::styled("●", Style::Danger),
       Span::raw(" "),
       Span::raw("Error"),
     ])];
@@ -26,7 +26,7 @@ impl Component for TranscriptErrorComponent<'_> {
 
     for detail in self.error.lines() {
       for line in LineComponent::raw(detail).render(detail_width) {
-        let mut spans = vec![Span::styled(Self::GUTTER, Style::DarkGray)];
+        let mut spans = vec![Span::styled(Self::GUTTER, Style::Muted)];
         spans.extend(Vec::<Span>::from(line));
         lines.push(LineComponent::from(spans));
       }
@@ -47,16 +47,16 @@ mod tests {
       [
         LineComponent::from([
           Span::raw(" "),
-          Span::styled("●", Style::RedBold),
+          Span::styled("●", Style::Danger),
           Span::raw(" "),
           Span::raw("Error"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("   │ ", Style::Muted),
           Span::raw("foo"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("   │ ", Style::Muted),
           Span::raw("bar"),
         ]),
       ]
@@ -70,16 +70,16 @@ mod tests {
       [
         LineComponent::from([
           Span::raw(" "),
-          Span::styled("●", Style::RedBold),
+          Span::styled("●", Style::Danger),
           Span::raw(" "),
           Span::raw("Error"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("   │ ", Style::Muted),
           Span::raw("foo"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::DarkGray),
+          Span::styled("   │ ", Style::Muted),
           Span::raw("bar"),
         ]),
       ]
