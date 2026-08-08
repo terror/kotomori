@@ -152,7 +152,10 @@ impl Agent {
           },
         };
 
-        messages.push(result.message(tool_call.id.clone()));
+        messages.push(Message::User(vec![UserMessageContent::ToolResult {
+          id: tool_call.id.clone(),
+          result: result.clone(),
+        }]));
 
         self.event_sender.send(Event::Agent {
           event: AgentEvent::ToolResult {
@@ -389,7 +392,10 @@ mod tests {
               cwd: None,
             }),
           })]),
-          tool_result.message("foo"),
+          Message::User(vec![UserMessageContent::ToolResult {
+            id: "foo".into(),
+            result: tool_result.clone(),
+          }]),
         ],
       ],
     );
@@ -479,7 +485,10 @@ mod tests {
               cwd: None,
             }),
           })]),
-          tool_result.message("foo"),
+          Message::User(vec![UserMessageContent::ToolResult {
+            id: "foo".into(),
+            result: tool_result.clone(),
+          }]),
         ],
       ],
     );
@@ -566,7 +575,10 @@ mod tests {
             }),
             AgentMessageContent::Text("baz".into()),
           ]),
-          tool_result.message("foo"),
+          Message::User(vec![UserMessageContent::ToolResult {
+            id: "foo".into(),
+            result: tool_result,
+          }]),
         ],
       ],
     );
@@ -615,7 +627,10 @@ mod tests {
               }),
             }),
           ]),
-          tool_result.message("foo"),
+          Message::User(vec![UserMessageContent::ToolResult {
+            id: "foo".into(),
+            result: tool_result,
+          }]),
         ],
       ],
     );

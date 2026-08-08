@@ -341,7 +341,10 @@ mod tests {
           AgentMessageContent::Text("baz".into()),
           AgentMessageContent::ToolCall(invocation),
         ]),
-        result.message("foo"),
+        Message::User(vec![UserMessageContent::ToolResult {
+          id: "foo".into(),
+          result,
+        }]),
       ],
     );
   }

@@ -146,7 +146,11 @@ mod tests {
       ..Default::default()
     };
 
-    let tool_result = RigMessage::from(&result.message("foo"));
+    let tool_result =
+      RigMessage::from(&Message::User(vec![UserMessageContent::ToolResult {
+        id: "foo".into(),
+        result: result.clone(),
+      }]));
 
     assert_eq!(
       tool_result,

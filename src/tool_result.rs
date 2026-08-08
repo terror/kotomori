@@ -13,13 +13,6 @@ impl ToolResult {
     self.exit_status.is_none_or(|status| status != 0)
   }
 
-  pub(crate) fn message(&self, id: impl Into<String>) -> Message {
-    Message::User(vec![UserMessageContent::ToolResult {
-      id: id.into(),
-      result: self.clone(),
-    }])
-  }
-
   pub(crate) fn message_content(&self) -> String {
     serde_json::to_string(self).expect("failed to serialize tool result")
   }
