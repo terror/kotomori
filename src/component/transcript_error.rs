@@ -32,8 +32,6 @@ impl Component for TranscriptErrorComponent<'_> {
       }
     }
 
-    lines.push(LineComponent::blank());
-
     lines
   }
 }
@@ -61,7 +59,6 @@ mod tests {
           Span::styled("   │ ", Style::DarkGray),
           Span::raw("bar"),
         ]),
-        LineComponent::blank(),
       ]
     );
   }
@@ -85,7 +82,6 @@ mod tests {
           Span::styled("   │ ", Style::DarkGray),
           Span::raw("bar"),
         ]),
-        LineComponent::blank(),
       ]
     );
   }
