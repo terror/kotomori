@@ -119,10 +119,12 @@ impl Agent {
       }
 
       for tool_call in tool_calls {
-        let result = tool_call
-          .kind
-          .execute(&self.executor, self.approval(run_id, &tool_call).await?)
-          .await;
+        let result = match self.approval(run_id, &tool_call).await? {
+          ToolApproval::Approved => {
+            tool_call.kind.execute(&self.executor).await
+          }
+          ToolApproval::Denied => ToolResult::error("permission denied"),
+        };
 
         messages.push(result.message(tool_call.id.clone()));
 
