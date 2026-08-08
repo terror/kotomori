@@ -217,6 +217,8 @@ mod tests {
     super::*, serde_json::json, std::collections::VecDeque, tempfile::TempDir,
   };
 
+  const COMMAND_OUTPUT: &str = if cfg!(windows) { "bar\r\n" } else { "bar\n" };
+
   #[derive(Debug)]
   enum Output {
     Delta(&'static str),
@@ -452,7 +454,7 @@ mod tests {
 
     let requests = test_agent.requests.lock().unwrap();
 
-    let tool_result = ToolResult::command(Some(0), "bar\n", "");
+    let tool_result = ToolResult::command(Some(0), COMMAND_OUTPUT, "");
 
     assert_eq!(
       *requests,
@@ -531,7 +533,7 @@ mod tests {
 
     let requests = test_agent.requests.lock().unwrap();
 
-    let tool_result = ToolResult::command(Some(0), "bar\n", "");
+    let tool_result = ToolResult::command(Some(0), COMMAND_OUTPUT, "");
 
     assert_eq!(
       *requests,
@@ -577,7 +579,7 @@ mod tests {
 
     let requests = test_agent.requests.lock().unwrap();
 
-    let tool_result = ToolResult::command(Some(0), "bar\n", "");
+    let tool_result = ToolResult::command(Some(0), COMMAND_OUTPUT, "");
 
     assert_eq!(
       *requests,
