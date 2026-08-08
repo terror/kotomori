@@ -19,16 +19,17 @@ impl FramedLinesComponent {
 
 impl Component for FramedLinesComponent {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    let width = width.max(1);
+    let content_width = width.saturating_sub(2).max(1);
 
-    let border = "─".repeat(usize::from(width));
-
-    let border_line =
-      || LineComponent::from([Span::styled(border.clone(), Style::Muted)]);
-
-    once(border_line())
-      .chain(self.lines.iter().flat_map(|line| line.render(width)))
-      .chain(once(border_line()))
+    self
+      .lines
+      .iter()
+      .flat_map(|line| line.render(content_width))
+      .map(|line| {
+        let mut spans = Vec::<Span>::from(line);
+        spans.insert(0, Span::styled("│ ", Style::Accent));
+        LineComponent::from(spans)
+      })
       .collect()
   }
 }
@@ -38,14 +39,18 @@ mod tests {
   use super::*;
 
   #[test]
-  fn render_wraps_lines_between_borders() {
+  fn render_wraps_lines_with_an_accent_gutter() {
     assert_eq!(
-      FramedLinesComponent::raw(["foobar"]).render(3),
+      FramedLinesComponent::raw(["foobar"]).render(5),
       [
-        LineComponent::from([Span::styled("───", Style::Muted)]),
-        LineComponent::raw("foo"),
-        LineComponent::raw("bar"),
-        LineComponent::from([Span::styled("───", Style::Muted)]),
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("foo"),
+        ]),
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("bar"),
+        ]),
       ]
     );
   }
