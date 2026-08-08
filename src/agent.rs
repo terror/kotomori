@@ -12,6 +12,9 @@ pub(crate) struct Agent {
 }
 
 impl Agent {
+  const MAX_TOOL_CALLS: usize = 128;
+  const MAX_TOOL_ROUNDS: usize = 32;
+
   async fn approval(
     &self,
     run_id: u64,
@@ -80,6 +83,8 @@ impl Agent {
   async fn stream(&self, run_id: u64, mut messages: Vec<Message>) -> Result {
     let system = self.system_prompt()?;
 
+    let (mut tool_call_count, mut tool_round_count) = (0, 0);
+
     loop {
       let mut sink = ProviderSink::new(
         self.event_sender.clone(),
@@ -116,6 +121,24 @@ impl Agent {
 
       if tool_calls.is_empty() {
         break;
+      }
+
+      tool_round_count += 1;
+
+      if tool_round_count > Self::MAX_TOOL_ROUNDS {
+        bail!(
+          "maximum tool round limit of {} exceeded",
+          Self::MAX_TOOL_ROUNDS
+        );
+      }
+
+      tool_call_count += tool_calls.len();
+
+      if tool_call_count > Self::MAX_TOOL_CALLS {
+        bail!(
+          "maximum tool call limit of {} exceeded",
+          Self::MAX_TOOL_CALLS
+        );
       }
 
       for tool_call in tool_calls {
@@ -364,6 +387,53 @@ mod tests {
           tool_result.message("foo"),
         ],
       ],
+    );
+  }
+
+  #[tokio::test]
+  async fn errors_when_tool_call_limit_is_exceeded() {
+    let tool_calls = vec![
+      (0..=Agent::MAX_TOOL_CALLS)
+        .map(|_| Output::ToolCall)
+        .collect(),
+    ];
+
+    let test_agent = TestAgent::new(tool_calls, true);
+
+    let error = test_agent
+      .agent
+      .stream(
+        0,
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+      )
+      .await
+      .unwrap_err();
+
+    assert_eq!(error.to_string(), "maximum tool call limit of 128 exceeded");
+  }
+
+  #[tokio::test]
+  async fn errors_when_tool_round_limit_is_exceeded() {
+    let tool_calls = (0..=Agent::MAX_TOOL_ROUNDS)
+      .map(|_| vec![Output::ToolCall])
+      .collect::<Vec<Vec<Output>>>();
+
+    let test_agent = TestAgent::new(tool_calls, true);
+
+    let error = test_agent
+      .agent
+      .stream(
+        0,
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+      )
+      .await
+      .unwrap_err();
+
+    assert_eq!(error.to_string(), "maximum tool round limit of 32 exceeded");
+
+    assert_eq!(
+      test_agent.requests.lock().unwrap().len(),
+      Agent::MAX_TOOL_ROUNDS + 1
     );
   }
 
