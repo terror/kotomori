@@ -9,13 +9,6 @@ pub(crate) struct Tool {
 }
 
 impl Tool {
-  pub(crate) fn invocation(
-    &self,
-    call: RawToolCall,
-  ) -> Result<ToolInvocationKind> {
-    (self.invocation)(call)
-  }
-
   pub(crate) fn new<T>() -> Self
   where
     T: ToolSpec,

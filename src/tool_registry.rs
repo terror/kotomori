@@ -17,7 +17,7 @@ impl ToolRegistry {
 
     Ok(ToolInvocation {
       id: call.id.clone(),
-      kind: tool.invocation(call)?,
+      kind: (tool.invocation)(call)?,
     })
   }
 
