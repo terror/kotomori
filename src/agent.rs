@@ -11,16 +11,21 @@ pub(crate) struct Agent {
 }
 
 impl Agent {
-  async fn approval(&self, tool_call: &ToolInvocation) -> Result<ToolApproval> {
+  async fn approval(
+    &self,
+    run_id: u64,
+    tool_call: &ToolInvocation,
+  ) -> Result<ToolApproval> {
     if self.settings.yolo || !tool_call.kind.requires_approval() {
       return Ok(ToolApproval::Approved);
     }
 
     let (request, response_receiver) = ApprovalRequest::new(tool_call.clone());
 
-    self
-      .event_sender
-      .send(Event::ToolApprovalRequest(request))?;
+    self.event_sender.send(Event::Agent {
+      event: AgentEvent::ToolApprovalRequest(request),
+      run_id,
+    })?;
 
     Ok(response_receiver.await.unwrap_or(ToolApproval::Denied))
   }
@@ -47,7 +52,7 @@ impl Agent {
     })
   }
 
-  pub(crate) fn spawn(&mut self, messages: Vec<Message>) {
+  pub(crate) fn spawn(&mut self, run_id: u64, messages: Vec<Message>) {
     self.interrupt();
 
     let agent = Self {
@@ -60,18 +65,22 @@ impl Agent {
     };
 
     self.task = Some(tokio::spawn(async move {
-      if let Err(error) = agent.stream(messages).await {
-        let _ = agent.event_sender.send(Event::Error(error.to_string()));
+      if let Err(error) = agent.stream(run_id, messages).await {
+        let _ = agent.event_sender.send(Event::Agent {
+          event: AgentEvent::Error(error.to_string()),
+          run_id,
+        });
       }
     }));
   }
 
-  async fn stream(&self, mut messages: Vec<Message>) -> Result {
+  async fn stream(&self, run_id: u64, mut messages: Vec<Message>) -> Result {
     let system = self.system_prompt()?;
 
     loop {
       let mut sink = ProviderSink::new(
         self.event_sender.clone(),
+        run_id,
         self.tool_registry.clone(),
       );
 
@@ -109,19 +118,25 @@ impl Agent {
       for tool_call in tool_calls {
         let result = tool_call
           .kind
-          .execute(self.approval(&tool_call).await?)
+          .execute(self.approval(run_id, &tool_call).await?)
           .await;
 
         messages.push(result.message(tool_call.id.clone()));
 
-        self.event_sender.send(Event::AgentToolResult {
-          id: tool_call.id,
-          result,
+        self.event_sender.send(Event::Agent {
+          event: AgentEvent::ToolResult {
+            id: tool_call.id,
+            result,
+          },
+          run_id,
         })?;
       }
     }
 
-    self.event_sender.send(Event::AgentDone)?;
+    self.event_sender.send(Event::Agent {
+      event: AgentEvent::Done,
+      run_id,
+    })?;
 
     Ok(())
   }
@@ -276,27 +291,34 @@ mod tests {
 
     let task = tokio::spawn(async move {
       agent
-        .stream(vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into(),
-        )])])
+        .stream(
+          0,
+          vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+        )
         .await
         .unwrap();
     });
 
     assert_eq!(
       events.recv().await.unwrap(),
-      Event::AgentToolCall(ToolInvocation {
-        id: "foo".into(),
-        kind: ToolInvocationKind::Command(CommandTool {
-          arguments: vec!["bar".into()],
-          cwd: None,
-          program: "echo".into(),
+      Event::Agent {
+        event: AgentEvent::ToolCall(ToolInvocation {
+          id: "foo".into(),
+          kind: ToolInvocationKind::Command(CommandTool {
+            arguments: vec!["bar".into()],
+            cwd: None,
+            program: "echo".into(),
+          }),
         }),
-      })
+        run_id: 0,
+      }
     );
 
     let request = match events.recv().await.unwrap() {
-      Event::ToolApprovalRequest(request) => request,
+      Event::Agent {
+        event: AgentEvent::ToolApprovalRequest(request),
+        run_id: 0,
+      } => request,
       event => panic!("expected approval request, got {event:?}"),
     };
 
@@ -308,9 +330,12 @@ mod tests {
 
     assert_eq!(
       events.recv().await.unwrap(),
-      Event::AgentToolResult {
-        id: "foo".into(),
-        result: tool_result.clone(),
+      Event::Agent {
+        event: AgentEvent::ToolResult {
+          id: "foo".into(),
+          result: tool_result.clone(),
+        },
+        run_id: 0,
       },
     );
 
@@ -345,9 +370,10 @@ mod tests {
 
     test_agent
       .agent
-      .stream(vec![Message::User(vec![UserMessageContent::Text(
-        "foo".into(),
-      )])])
+      .stream(
+        0,
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+      )
       .await
       .unwrap();
 
@@ -383,20 +409,32 @@ mod tests {
     assert_eq!(
       events,
       [
-        Event::AgentToolCall(ToolInvocation {
-          id: "foo".into(),
-          kind: ToolInvocationKind::Command(CommandTool {
-            arguments: vec!["bar".into()],
-            cwd: None,
-            program: "echo".into(),
+        Event::Agent {
+          event: AgentEvent::ToolCall(ToolInvocation {
+            id: "foo".into(),
+            kind: ToolInvocationKind::Command(CommandTool {
+              arguments: vec!["bar".into()],
+              cwd: None,
+              program: "echo".into(),
+            }),
           }),
-        }),
-        Event::AgentToolResult {
-          id: "foo".into(),
-          result: tool_result,
+          run_id: 0,
         },
-        Event::AgentDelta("done".into()),
-        Event::AgentDone,
+        Event::Agent {
+          event: AgentEvent::ToolResult {
+            id: "foo".into(),
+            result: tool_result,
+          },
+          run_id: 0,
+        },
+        Event::Agent {
+          event: AgentEvent::Delta("done".into()),
+          run_id: 0,
+        },
+        Event::Agent {
+          event: AgentEvent::Done,
+          run_id: 0,
+        },
       ],
     );
   }
@@ -413,9 +451,10 @@ mod tests {
 
     test_agent
       .agent
-      .stream(vec![Message::User(vec![UserMessageContent::Text(
-        "foo".into(),
-      )])])
+      .stream(
+        0,
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+      )
       .await
       .unwrap();
 
@@ -459,9 +498,10 @@ mod tests {
 
     test_agent
       .agent
-      .stream(vec![Message::User(vec![UserMessageContent::Text(
-        "foo".into(),
-      )])])
+      .stream(
+        0,
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+      )
       .await
       .unwrap();
 
@@ -505,9 +545,10 @@ mod tests {
 
     test_agent
       .agent
-      .stream(vec![Message::User(vec![UserMessageContent::Text(
-        "baz".into(),
-      )])])
+      .stream(
+        0,
+        vec![Message::User(vec![UserMessageContent::Text("baz".into())])],
+      )
       .await
       .unwrap();
 
@@ -520,9 +561,18 @@ mod tests {
     assert_eq!(
       events,
       [
-        Event::AgentReasoningDelta("foo".into()),
-        Event::AgentDelta("bar".into()),
-        Event::AgentDone,
+        Event::Agent {
+          event: AgentEvent::ReasoningDelta("foo".into()),
+          run_id: 0,
+        },
+        Event::Agent {
+          event: AgentEvent::Delta("bar".into()),
+          run_id: 0,
+        },
+        Event::Agent {
+          event: AgentEvent::Done,
+          run_id: 0,
+        },
       ],
     );
   }

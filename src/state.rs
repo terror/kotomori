@@ -2,11 +2,13 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct State {
+  active_run_id: Option<u64>,
   pub(crate) composer: Composer,
   database: Database,
   pub(crate) directory: PathBuf,
   pub(crate) input_mode: InputMode,
   pub(crate) model: Model,
+  next_run_id: u64,
   session: Session,
   pub(crate) should_quit: bool,
   pub(crate) transcript: Transcript,
@@ -21,6 +23,44 @@ impl State {
     match &self.input_mode {
       InputMode::Approval(_) => self.handle_approval_action(action),
       InputMode::Compose => self.handle_composer_action(action),
+    }
+  }
+
+  fn handle_agent_event(&mut self, event: AgentEvent) {
+    match event {
+      AgentEvent::Done => {
+        self.active_run_id = None;
+        self.input_mode.clear_approval();
+        self.transcript.finish_agent_activity();
+        self.save_session();
+      }
+      AgentEvent::Delta(delta) if self.transcript.is_agent_active() => {
+        self.transcript.push_agent_delta(&delta);
+      }
+      AgentEvent::ReasoningDelta(delta)
+        if self.transcript.is_agent_active() =>
+      {
+        self.transcript.push_agent_reasoning_delta(&delta);
+      }
+      AgentEvent::Delta(_) | AgentEvent::ReasoningDelta(_) => {}
+      AgentEvent::ToolCall(tool_call) => {
+        self.transcript.push_tool_call(tool_call);
+        self.save_session();
+      }
+      AgentEvent::ToolResult { id, result } => {
+        self.input_mode.clear_approval();
+        self.transcript.push_tool_result(&id, result);
+        self.save_session();
+      }
+      AgentEvent::Error(error) => {
+        self.active_run_id = None;
+        self.input_mode.clear_approval();
+        self.transcript.error(error);
+        self.save_session();
+      }
+      AgentEvent::ToolApprovalRequest(request) => {
+        self.input_mode = InputMode::Approval(request);
+      }
     }
   }
 
@@ -99,38 +139,16 @@ impl State {
   pub(crate) fn handle_event(&mut self, event: Event) -> Vec<Effect> {
     match event {
       Event::Action(action) => return self.handle_action(action),
-      Event::AgentDone => {
-        self.input_mode.clear_approval();
-        self.transcript.finish_agent_activity();
-        self.save_session();
+      Event::Agent { event, run_id } if self.active_run_id == Some(run_id) => {
+        self.handle_agent_event(event);
       }
-      Event::AgentDelta(delta) if self.transcript.is_agent_active() => {
-        self.transcript.push_agent_delta(&delta);
-      }
-      Event::AgentReasoningDelta(delta)
-        if self.transcript.is_agent_active() =>
-      {
-        self.transcript.push_agent_reasoning_delta(&delta);
-      }
-      Event::AgentDelta(_) | Event::AgentReasoningDelta(_) => {}
-      Event::AgentToolCall(tool_call) => {
-        self.transcript.push_tool_call(tool_call);
-        self.save_session();
-      }
-      Event::AgentToolResult { id, result } => {
-        self.input_mode.clear_approval();
-        self.transcript.push_tool_result(&id, result);
-        self.save_session();
-      }
+      Event::Agent { .. } => {}
       Event::Error(error) => {
         self.input_mode.clear_approval();
         self.transcript.error(error);
         self.save_session();
       }
       Event::Tick(elapsed) => self.transcript.tick(elapsed),
-      Event::ToolApprovalRequest(request) => {
-        self.input_mode = InputMode::Approval(request);
-      }
     }
 
     Vec::new()
@@ -142,6 +160,7 @@ impl State {
     }
 
     self.input_mode.clear_approval();
+    self.active_run_id = None;
     self.transcript.interrupt();
 
     self.save_session();
@@ -226,9 +245,18 @@ impl State {
 
     let messages = self.transcript.messages();
 
+    let run_id = self.next_run_id;
+
+    self.next_run_id = self
+      .next_run_id
+      .checked_add(1)
+      .expect("agent run ID overflow");
+
+    self.active_run_id = Some(run_id);
+
     self.reset_input();
 
-    vec![Effect::RunAgent { messages }]
+    vec![Effect::RunAgent { messages, run_id }]
   }
 
   pub(crate) fn with_session(
@@ -241,11 +269,13 @@ impl State {
     session.set_model(&settings.model);
 
     Ok(Self {
+      active_run_id: None,
       composer: Composer::new(settings.prompt.as_deref().unwrap_or_default()),
       database,
       directory: env::current_dir()?,
       input_mode: InputMode::Compose,
       model: settings.model.clone(),
+      next_run_id: 0,
       session,
       should_quit: false,
       transcript,
@@ -269,14 +299,15 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
+        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
         )])]
       }]
     );
 
-    state.handle_event(Event::AgentReasoningDelta("bar".into()));
-    state.handle_event(Event::AgentDelta("baz".into()));
+    state.handle_agent_event(AgentEvent::ReasoningDelta("bar".into()));
+    state.handle_agent_event(AgentEvent::Delta("baz".into()));
 
     let invocation = ToolInvocation {
       id: "foo".into(),
@@ -287,16 +318,16 @@ mod tests {
       }),
     };
 
-    state.handle_event(Event::AgentToolCall(invocation.clone()));
+    state.handle_agent_event(AgentEvent::ToolCall(invocation.clone()));
 
     let result = ToolResult::command(Some(0), "qux", "");
 
-    state.handle_event(Event::AgentToolResult {
+    state.handle_agent_event(AgentEvent::ToolResult {
       id: "foo".into(),
       result: result.clone(),
     });
 
-    state.handle_event(Event::AgentDone);
+    state.handle_agent_event(AgentEvent::Done);
 
     assert_eq!(
       state.transcript.messages(),
@@ -330,7 +361,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
@@ -365,7 +396,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
@@ -400,7 +431,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::CompleteCommand)),
@@ -428,7 +459,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
@@ -460,7 +491,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
@@ -495,7 +526,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
@@ -524,7 +555,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
@@ -559,7 +590,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -590,7 +621,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::SelectNext)),
@@ -618,7 +649,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::SelectPrevious)),
@@ -646,7 +677,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
@@ -674,8 +705,8 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
-    state.handle_event(Event::AgentDone);
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::Done);
 
     assert!(matches!(state.input_mode, InputMode::Compose));
     assert!(response_receiver.await.is_err());
@@ -699,9 +730,9 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
-    state.handle_event(Event::AgentToolResult {
+    state.handle_agent_event(AgentEvent::ToolResult {
       id: "foo".into(),
       result: ToolResult::content("bar"),
     });
@@ -728,8 +759,8 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
-    state.handle_event(Event::Error("bar".into()));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::Error("bar".into()));
 
     assert!(matches!(state.input_mode, InputMode::Compose));
     assert!(response_receiver.await.is_err());
@@ -814,14 +845,15 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
+        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
         )])]
       }]
     );
 
-    state.handle_event(Event::AgentDelta("bar".into()));
-    state.handle_event(Event::AgentDone);
+    state.handle_agent_event(AgentEvent::Delta("bar".into()));
+    state.handle_agent_event(AgentEvent::Done);
 
     state.handle_event(Event::Action(Action::Edit(Input {
       key: Key::Char('/'),
@@ -850,14 +882,15 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
+        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
         )])]
       }]
     );
 
-    state.handle_event(Event::AgentDelta("bar".into()));
-    state.handle_event(Event::AgentDone);
+    state.handle_agent_event(AgentEvent::Delta("bar".into()));
+    state.handle_agent_event(AgentEvent::Done);
 
     for c in "/clear".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -888,14 +921,15 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
+        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
         )])]
       }]
     );
 
-    state.handle_event(Event::AgentDelta("bar".into()));
-    state.handle_event(Event::AgentDone);
+    state.handle_agent_event(AgentEvent::Delta("bar".into()));
+    state.handle_agent_event(AgentEvent::Done);
 
     for c in "/c".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -964,13 +998,14 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
+        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
         )])]
       }]
     );
 
-    state.handle_event(Event::Error("bar".into()));
+    state.handle_agent_event(AgentEvent::Error("bar".into()));
 
     assert_eq!(
       state.transcript.messages(),
@@ -987,6 +1022,7 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
+        run_id: 1,
         messages: vec![
           Message::User(vec![UserMessageContent::Text("foo".into())]),
           Message::User(vec![UserMessageContent::Text("baz".into())]),
@@ -1007,6 +1043,7 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
+        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
         )])]
@@ -1057,6 +1094,7 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
+        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo\nbar".into()
         )])]
@@ -1088,6 +1126,7 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
+        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
         )])]
@@ -1127,7 +1166,7 @@ mod tests {
       }),
     });
 
-    state.handle_event(Event::ToolApprovalRequest(request));
+    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
     assert!(matches!(state.input_mode, InputMode::Approval(_)));
 
@@ -1155,6 +1194,7 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
+        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
         )])]
@@ -1193,6 +1233,7 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
+        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
         )])]
@@ -1200,6 +1241,85 @@ mod tests {
     );
 
     assert_eq!(state.composer.input_text(), "");
+  }
+
+  #[tokio::test]
+  async fn stale_agent_events_do_not_mutate_new_run() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("old".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_event(Event::Action(Action::Interrupt));
+
+    for c in "new".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    assert!(matches!(
+      state.handle_event(Event::Action(Action::Submit)).as_slice(),
+      [Effect::RunAgent { run_id: 1, .. }]
+    ));
+
+    let invocation = ToolInvocation {
+      id: "stale".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        arguments: Vec::new(),
+        cwd: None,
+        program: "echo".into(),
+      }),
+    };
+
+    let (request, response_receiver) = ApprovalRequest::new(invocation.clone());
+
+    for event in [
+      AgentEvent::Delta("stale".into()),
+      AgentEvent::ReasoningDelta("stale".into()),
+      AgentEvent::ToolCall(invocation),
+      AgentEvent::ToolResult {
+        id: "stale".into(),
+        result: ToolResult::content("stale"),
+      },
+      AgentEvent::ToolApprovalRequest(request),
+      AgentEvent::Error("stale".into()),
+      AgentEvent::Done,
+    ] {
+      state.handle_event(Event::Agent { event, run_id: 0 });
+    }
+
+    assert_eq!(
+      response_receiver.await.unwrap_err().to_string(),
+      "channel closed"
+    );
+
+    assert!(matches!(state.input_mode, InputMode::Compose));
+
+    assert!(state.transcript.is_agent_active());
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Delta("current".into()),
+      run_id: 1,
+    });
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 1,
+    });
+
+    assert_eq!(
+      state.transcript.messages(),
+      [
+        Message::User(vec![UserMessageContent::Text("old".into())]),
+        Message::User(vec![UserMessageContent::Text("new".into())]),
+        Message::Agent(vec![AgentMessageContent::Text("current".into())]),
+      ]
+    );
   }
 
   #[test]

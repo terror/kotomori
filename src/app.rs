@@ -28,8 +28,8 @@ impl App {
       Effect::InterruptAgent => {
         agent.interrupt();
       }
-      Effect::RunAgent { messages } => {
-        agent.spawn(messages);
+      Effect::RunAgent { messages, run_id } => {
+        agent.spawn(run_id, messages);
       }
     }
   }
@@ -49,13 +49,7 @@ impl App {
           }
         }
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
-        Event::AgentDelta(_)
-        | Event::AgentDone
-        | Event::AgentReasoningDelta(_)
-        | Event::AgentToolCall(_)
-        | Event::AgentToolResult { .. }
-        | Event::Tick(_)
-        | Event::ToolApprovalRequest(_) => {}
+        Event::Agent { .. } | Event::Tick(_) => {}
       },
       Screen::Session(state) => {
         let effects = state.handle_event(event);

@@ -3,12 +3,7 @@ use super::*;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Event {
   Action(Action),
-  AgentDelta(String),
-  AgentDone,
-  AgentReasoningDelta(String),
-  AgentToolCall(ToolInvocation),
-  AgentToolResult { id: String, result: ToolResult },
+  Agent { event: AgentEvent, run_id: u64 },
   Error(String),
   Tick(Duration),
-  ToolApprovalRequest(ApprovalRequest),
 }

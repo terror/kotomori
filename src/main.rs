@@ -2,6 +2,7 @@ use {
   action::Action,
   agent::Agent,
   agent_activity::AgentActivity,
+  agent_event::AgentEvent,
   agent_message_content::AgentMessageContent,
   anyhow::{Context, Error, bail},
   app::App,
@@ -127,6 +128,7 @@ use std::os::unix::fs::PermissionsExt;
 mod action;
 mod agent;
 mod agent_activity;
+mod agent_event;
 mod agent_message_content;
 mod app;
 mod approval_request;
