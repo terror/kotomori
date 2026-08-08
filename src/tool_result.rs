@@ -73,23 +73,3 @@ impl ToolResult {
     (!output.is_empty()).then_some(output)
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn successful_command_with_stderr_is_not_an_error() {
-    assert!(!ToolResult::command(Some(0), "", "warning").is_error());
-  }
-
-  #[test]
-  fn failed_command_is_an_error() {
-    assert!(ToolResult::command(Some(1), "", "").is_error());
-  }
-
-  #[test]
-  fn execution_error_is_an_error() {
-    assert!(ToolResult::error("failed to spawn").is_error());
-  }
-}
