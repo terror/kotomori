@@ -30,7 +30,7 @@ impl<'a> TranscriptComponent<'a> {
         Span::styled(" Working...", Style::Secondary),
         Span::styled(
           format!(
-            " ({} • esc to interrupt)",
+            " ({} • Esc to interrupt)",
             self.state.active_elapsed.format()
           ),
           Style::Muted,
@@ -157,7 +157,7 @@ mod tests {
         LineComponent::from([
           Span::styled("✧", Style::Accent),
           Span::styled(" Working...", Style::Secondary),
-          Span::styled(" (1m 1s • esc to interrupt)", Style::Muted),
+          Span::styled(" (1m 1s • Esc to interrupt)", Style::Muted),
         ]),
         LineComponent::blank(),
       ]
@@ -198,7 +198,7 @@ mod tests {
         LineComponent::from([
           Span::styled("✶", Style::Accent),
           Span::styled(" Working...", Style::Secondary),
-          Span::styled(" (1m 51s • esc to interrupt)", Style::Muted),
+          Span::styled(" (1m 51s • Esc to interrupt)", Style::Muted),
         ]),
         LineComponent::blank(),
       ]
