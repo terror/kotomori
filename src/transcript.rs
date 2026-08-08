@@ -85,7 +85,12 @@ impl Transcript {
           agent_content.push(AgentMessageContent::ToolCall(invocation.clone()));
 
           if let Some(result) = result {
-            tool_results.push(result.message(invocation.id.clone()));
+            tool_results.push(Message::User(vec![
+              UserMessageContent::ToolResult {
+                id: invocation.id.clone(),
+                result: result.clone(),
+              },
+            ]));
           }
 
           if !next_is_tool {
@@ -443,7 +448,10 @@ mod tests {
       transcript.messages(),
       vec![
         Message::Agent(vec![AgentMessageContent::ToolCall(invocation)]),
-        result.message("foo"),
+        Message::User(vec![UserMessageContent::ToolResult {
+          id: "foo".into(),
+          result,
+        }]),
         Message::User(vec![UserMessageContent::Text("baz".into())]),
       ]
     );
@@ -547,7 +555,10 @@ mod tests {
       transcript.messages(),
       vec![
         Message::Agent(vec![AgentMessageContent::ToolCall(invocation)]),
-        result.message("foo"),
+        Message::User(vec![UserMessageContent::ToolResult {
+          id: "foo".into(),
+          result,
+        }]),
       ]
     );
   }
@@ -609,8 +620,14 @@ mod tests {
           AgentMessageContent::ToolCall(foo),
           AgentMessageContent::ToolCall(bar),
         ]),
-        foo_result.message("foo"),
-        bar_result.message("bar"),
+        Message::User(vec![UserMessageContent::ToolResult {
+          id: "foo".into(),
+          result: foo_result,
+        }]),
+        Message::User(vec![UserMessageContent::ToolResult {
+          id: "bar".into(),
+          result: bar_result,
+        }]),
       ]
     );
   }
@@ -880,7 +897,10 @@ mod tests {
       transcript.messages(),
       vec![
         Message::Agent(vec![AgentMessageContent::ToolCall(invocation)]),
-        result.message("foo"),
+        Message::User(vec![UserMessageContent::ToolResult {
+          id: "foo".into(),
+          result,
+        }]),
       ]
     );
   }
