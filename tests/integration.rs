@@ -484,6 +484,7 @@ fn approval_prompt_approves_command() -> Result {
     .type_text("foo")
     .enter()
     .expect_screen_contains("Approve echo bar?")
+    .expect_screen_contains("y approve · n/esc deny")
     .type_text("y")
     .expect_screen_contains("Ran echo bar")
     .expect_screen_contains("bar")
