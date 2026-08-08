@@ -1293,16 +1293,20 @@ mod tests {
       state.handle_event(Event::Agent { event, run_id: 0 });
     }
 
-    let error = response_receiver.await.unwrap_err();
+    assert_eq!(
+      response_receiver.await.unwrap_err().to_string(),
+      "channel closed"
+    );
 
-    assert_eq!(error.to_string(), "channel closed");
     assert!(matches!(state.input_mode, InputMode::Compose));
+
     assert!(state.transcript.is_agent_active());
 
     state.handle_event(Event::Agent {
       event: AgentEvent::Delta("current".into()),
       run_id: 1,
     });
+
     state.handle_event(Event::Agent {
       event: AgentEvent::Done,
       run_id: 1,
