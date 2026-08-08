@@ -319,7 +319,11 @@ mod tests {
 
     state.handle_agent_event(AgentEvent::ToolCall(invocation.clone()));
 
-    let result = ToolResult::command(Some(0), "qux", "");
+    let result = ToolResult {
+      exit_status: Some(0),
+      stdout: Some("qux".into()),
+      ..Default::default()
+    };
 
     state.handle_agent_event(AgentEvent::ToolResult {
       id: "foo".into(),
@@ -720,7 +724,10 @@ mod tests {
 
     state.handle_agent_event(AgentEvent::ToolResult {
       id: "foo".into(),
-      result: ToolResult::content("bar"),
+      result: ToolResult {
+        content: Some("bar".into()),
+        ..Default::default()
+      },
     });
 
     assert_matches!(state.input_mode, InputMode::Compose);
@@ -1267,7 +1274,10 @@ mod tests {
       AgentEvent::ToolCall(invocation),
       AgentEvent::ToolResult {
         id: "stale".into(),
-        result: ToolResult::content("stale"),
+        result: ToolResult {
+          content: Some("stale".into()),
+          ..Default::default()
+        },
       },
       AgentEvent::ToolApprovalRequest(request),
       AgentEvent::Error("stale".into()),

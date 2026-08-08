@@ -431,7 +431,10 @@ mod tests {
 
     transcript.push_tool_call(invocation.clone());
 
-    let result = ToolResult::content("bar");
+    let result = ToolResult {
+      content: Some("bar".into()),
+      ..Default::default()
+    };
 
     transcript.push_tool_result("foo", result.clone());
     transcript.send("baz".into());
@@ -532,7 +535,11 @@ mod tests {
 
     transcript.push_tool_call(invocation.clone());
 
-    let result = ToolResult::command(Some(0), "bar\n", "");
+    let result = ToolResult {
+      exit_status: Some(0),
+      stdout: Some("bar\n".into()),
+      ..Default::default()
+    };
 
     transcript.push_tool_result("foo", result.clone());
 
@@ -581,8 +588,15 @@ mod tests {
     transcript.push_tool_call(foo.clone());
     transcript.push_tool_call(bar.clone());
 
-    let foo_result = ToolResult::content("bar");
-    let bar_result = ToolResult::content("baz");
+    let foo_result = ToolResult {
+      content: Some("bar".into()),
+      ..Default::default()
+    };
+
+    let bar_result = ToolResult {
+      content: Some("baz".into()),
+      ..Default::default()
+    };
 
     transcript.push_tool_result("foo", foo_result.clone());
     transcript.push_tool_result("bar", bar_result.clone());
@@ -783,7 +797,13 @@ mod tests {
     };
 
     transcript.push_tool_call(invocation);
-    transcript.push_tool_result("bar", ToolResult::content("baz"));
+    transcript.push_tool_result(
+      "bar",
+      ToolResult {
+        content: Some("baz".into()),
+        ..Default::default()
+      },
+    );
 
     assert_matches!(
       &transcript.entries[..],
@@ -816,7 +836,10 @@ mod tests {
     transcript.push_tool_call(foo);
     transcript.push_tool_call(bar);
 
-    let result = ToolResult::content("qux");
+    let result = ToolResult {
+      content: Some("qux".into()),
+      ..Default::default()
+    };
 
     transcript.push_tool_result("foo", result.clone());
 
@@ -846,7 +869,10 @@ mod tests {
 
     transcript.push_tool_call(invocation.clone());
 
-    let result = ToolResult::content("bar");
+    let result = ToolResult {
+      content: Some("bar".into()),
+      ..Default::default()
+    };
 
     transcript.push_tool_result("foo", result.clone());
 

@@ -1,48 +1,14 @@
 use super::*;
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct ToolResult {
-  content: Option<String>,
+  pub(crate) content: Option<String>,
   pub(crate) exit_status: Option<i32>,
-  stderr: Option<String>,
-  stdout: Option<String>,
+  pub(crate) stderr: Option<String>,
+  pub(crate) stdout: Option<String>,
 }
 
 impl ToolResult {
-  pub(crate) fn command(
-    exit_status: Option<i32>,
-    stdout: impl Into<String>,
-    stderr: impl Into<String>,
-  ) -> Self {
-    let (stdout, stderr) = (stdout.into(), stderr.into());
-
-    Self {
-      content: None,
-      exit_status,
-      stderr: (!stderr.is_empty()).then_some(stderr),
-      stdout: (!stdout.is_empty()).then_some(stdout),
-    }
-  }
-
-  #[cfg(test)]
-  pub(crate) fn content(content: impl Into<String>) -> Self {
-    Self {
-      content: Some(content.into()),
-      exit_status: None,
-      stderr: None,
-      stdout: None,
-    }
-  }
-
-  pub(crate) fn error(error: impl Display) -> Self {
-    Self {
-      content: None,
-      exit_status: None,
-      stderr: Some(error.to_string()),
-      stdout: None,
-    }
-  }
-
   pub(crate) fn is_error(&self) -> bool {
     self.exit_status.is_none_or(|status| status != 0)
   }
