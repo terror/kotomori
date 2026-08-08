@@ -22,10 +22,8 @@ impl Component for ApprovalPromptComponent<'_> {
       ]),
       LineComponent::from([
         Span::styled("y", Style::Success),
-        Span::styled(" approve  ", Style::Muted),
-        Span::styled("n", Style::Danger),
-        Span::styled(" deny  ", Style::Muted),
-        Span::styled("esc", Style::Danger),
+        Span::styled(" approve · ", Style::Muted),
+        Span::styled("n/esc", Style::Danger),
         Span::styled(" deny", Style::Muted),
       ]),
     ]
