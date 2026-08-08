@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Agent {
   event_sender: UnboundedSender<Event>,
+  executor: Executor,
   loader: Loader,
   provider: Arc<dyn Provider>,
   settings: Settings,
@@ -44,6 +45,7 @@ impl Agent {
 
     Ok(Self {
       event_sender,
+      executor: Executor::default(),
       loader: Loader::new()?,
       provider,
       settings: settings.clone(),
@@ -57,6 +59,7 @@ impl Agent {
 
     let agent = Self {
       event_sender: self.event_sender.clone(),
+      executor: self.executor,
       loader: self.loader.clone(),
       provider: self.provider.clone(),
       settings: self.settings.clone(),
@@ -118,7 +121,7 @@ impl Agent {
       for tool_call in tool_calls {
         let result = tool_call
           .kind
-          .execute(self.approval(run_id, &tool_call).await?)
+          .execute(&self.executor, self.approval(run_id, &tool_call).await?)
           .await;
 
         messages.push(result.message(tool_call.id.clone()));
@@ -254,6 +257,7 @@ mod tests {
 
       let agent = Agent {
         event_sender,
+        executor: Executor::default(),
         loader: Loader::with_cwd(directory.path()),
         provider: Arc::new(TestProvider {
           outputs: Mutex::new(outputs.into()),
