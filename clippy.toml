@@ -1,2 +1,3 @@
+check-inconsistent-struct-field-initializers = true
 cognitive-complexity-threshold = 1337
 source-item-ordering = ['enum', 'struct', 'trait', 'impl']
