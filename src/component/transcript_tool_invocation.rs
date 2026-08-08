@@ -116,8 +116,6 @@ impl Component for TranscriptToolInvocationComponent<'_> {
       }
     }
 
-    lines.push(LineComponent::blank());
-
     lines
   }
 }

@@ -48,11 +48,7 @@ impl<'a> TranscriptComponent<'a> {
           )])
         }));
 
-        lines.extend([
-          LineComponent::blank(),
-          working(),
-          LineComponent::blank(),
-        ]);
+        lines.extend([LineComponent::blank(), working()]);
       }
       AgentActivity::Streaming(message) => {
         lines.extend(
@@ -60,11 +56,9 @@ impl<'a> TranscriptComponent<'a> {
             .lines()
             .map(|line| LineComponent::raw(format!(" {line}"))),
         );
-
-        lines.push(LineComponent::blank());
       }
       AgentActivity::Waiting => {
-        lines.extend([working(), LineComponent::blank()]);
+        lines.push(working());
       }
     }
 
@@ -75,48 +69,38 @@ impl<'a> TranscriptComponent<'a> {
     let mut lines = Vec::new();
 
     for entry in &self.state.entries {
+      let separated = !matches!(entry, TranscriptEntry::User(_));
+
+      if separated {
+        Self::ensure_trailing_blank_line(&mut lines);
+      }
+
       match entry {
         TranscriptEntry::Agent(content) => {
-          Self::ensure_trailing_blank_line(&mut lines);
-
           lines.extend(
             content
               .lines()
               .map(|line| LineComponent::raw(format!(" {line}"))),
           );
-
-          lines.push(LineComponent::blank());
         }
         TranscriptEntry::Error(error) => {
-          Self::ensure_trailing_blank_line(&mut lines);
-
           lines.extend(TranscriptErrorComponent::new(error).render(width));
         }
         TranscriptEntry::Interrupted => {
-          lines.extend([
-            LineComponent::blank(),
-            LineComponent::from([Span::styled(
-              "■ Conversation interrupted, tell the model what to do differently.",
-              Style::RedBold,
-            )]),
-            LineComponent::blank(),
-          ]);
+          lines.push(LineComponent::from([Span::styled(
+            "■ Conversation interrupted, tell the model what to do differently.",
+            Style::RedBold,
+          )]));
         }
         TranscriptEntry::Reasoning(reasoning) => {
-          Self::ensure_trailing_blank_line(&mut lines);
-
           lines.extend(reasoning.lines().map(|line| {
             LineComponent::from([Span::styled(
               format!(" {line}"),
               Style::DarkGray,
             )])
           }));
-
-          lines.push(LineComponent::blank());
         }
         TranscriptEntry::Tool { invocation, result } => {
-          Self::ensure_trailing_blank_line(&mut lines);
-
           lines.extend(
             TranscriptToolInvocationComponent::new(invocation, result.as_ref())
               .render(width),
@@ -128,6 +112,10 @@ impl<'a> TranscriptComponent<'a> {
           );
         }
       }
+
+      if separated {
+        Self::ensure_trailing_blank_line(&mut lines);
+      }
     }
 
     lines
@@ -136,11 +124,16 @@ impl<'a> TranscriptComponent<'a> {
 
 impl Component for TranscriptComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    self
-      .render_entries(width)
-      .into_iter()
-      .chain(self.render_agent_activity())
-      .collect()
+    let mut lines = self.render_entries(width);
+
+    let activity = self.render_agent_activity();
+
+    if !activity.is_empty() {
+      lines.extend(activity);
+      Self::ensure_trailing_blank_line(&mut lines);
+    }
+
+    lines
   }
 }
 
@@ -254,6 +247,28 @@ mod tests {
         LineComponent::from([Span::styled(" bar", Style::DarkGray)]),
         LineComponent::blank(),
         LineComponent::raw(" baz"),
+        LineComponent::blank(),
+      ]
+    );
+  }
+
+  #[test]
+  fn render_adjacent_non_user_entries_have_single_blank_line() {
+    let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::Agent("foo".into()),
+      TranscriptEntry::Interrupted,
+    ]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        LineComponent::blank(),
+        LineComponent::raw(" foo"),
+        LineComponent::blank(),
+        LineComponent::from([Span::styled(
+          "■ Conversation interrupted, tell the model what to do differently.",
+          Style::RedBold,
+        )]),
         LineComponent::blank(),
       ]
     );
