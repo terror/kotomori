@@ -7,6 +7,7 @@ mod framed_lines;
 mod header;
 mod hint;
 mod line;
+mod resume_picker;
 mod transcript;
 mod transcript_error;
 mod transcript_tool_invocation;
@@ -16,7 +17,8 @@ pub(crate) use {
   approval_prompt::ApprovalPromptComponent, composer::ComposerComponent,
   footer::FooterComponent, framed_lines::FramedLinesComponent,
   header::HeaderComponent, hint::HintComponent, line::LineComponent,
-  transcript::TranscriptComponent, transcript_error::TranscriptErrorComponent,
+  resume_picker::ResumePickerComponent, transcript::TranscriptComponent,
+  transcript_error::TranscriptErrorComponent,
   transcript_tool_invocation::TranscriptToolInvocationComponent,
   view::ViewComponent,
 };
