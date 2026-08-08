@@ -71,8 +71,7 @@ impl Component for ViewComponent<'_> {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use unicode_width::UnicodeWidthStr;
+  use {super::*, unicode_width::UnicodeWidthStr};
 
   #[test]
   fn composer_renders_while_agent_is_active() {
@@ -111,13 +110,15 @@ mod tests {
 
     for line in lines.into_iter().filter(|line| !line.is_blank()) {
       let spans = Vec::<Span>::from(line);
+
       let width = spans
         .iter()
         .map(|span| UnicodeWidthStr::width(span.text.as_str()))
         .sum::<usize>();
 
-      assert_eq!(spans.first().unwrap().text, "  ");
       assert!(width <= 18);
+
+      assert_eq!(spans.first().unwrap().text, "  ");
     }
   }
 
