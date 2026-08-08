@@ -41,8 +41,8 @@ where
           sink.reasoning_delta(id, reasoning)?;
         }
         StreamedAssistantContent::ToolCall {
-          tool_call,
           internal_call_id,
+          tool_call,
         } => {
           let id = if tool_call.id.is_empty() {
             internal_call_id

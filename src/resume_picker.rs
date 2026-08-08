@@ -48,9 +48,9 @@ impl ResumePicker {
         self.clamp_selection();
       }
       Action::Edit(Input {
-        key: Key::Char(c),
-        ctrl: false,
         alt: false,
+        ctrl: false,
+        key: Key::Char(c),
         ..
       }) => {
         self.query.push(c);

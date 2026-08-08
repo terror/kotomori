@@ -299,10 +299,10 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
-        )])]
+        )])],
+        run_id: 0,
       }]
     );
 
@@ -845,10 +845,10 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
-        )])]
+        )])],
+        run_id: 0,
       }]
     );
 
@@ -882,10 +882,10 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
-        )])]
+        )])],
+        run_id: 0,
       }]
     );
 
@@ -921,10 +921,10 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
-        )])]
+        )])],
+        run_id: 0,
       }]
     );
 
@@ -998,10 +998,10 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
-        )])]
+        )])],
+        run_id: 0,
       }]
     );
 
@@ -1022,11 +1022,11 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        run_id: 1,
         messages: vec![
           Message::User(vec![UserMessageContent::Text("foo".into())]),
           Message::User(vec![UserMessageContent::Text("baz".into())]),
-        ]
+        ],
+        run_id: 1,
       }]
     );
   }
@@ -1043,10 +1043,10 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
-        )])]
+        )])],
+        run_id: 0,
       }]
     );
 
@@ -1094,10 +1094,10 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo\nbar".into()
-        )])]
+        )])],
+        run_id: 0,
       }]
     );
   }
@@ -1126,10 +1126,10 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
-        )])]
+        )])],
+        run_id: 0,
       }]
     );
 
@@ -1194,10 +1194,10 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
-        )])]
+        )])],
+        run_id: 0,
       }]
     );
 
@@ -1233,10 +1233,10 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       vec![Effect::RunAgent {
-        run_id: 0,
         messages: vec![Message::User(vec![UserMessageContent::Text(
           "foo".into()
-        )])]
+        )])],
+        run_id: 0,
       }]
     );
 
