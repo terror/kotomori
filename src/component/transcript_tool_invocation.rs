@@ -64,10 +64,10 @@ impl Component for TranscriptToolInvocationComponent<'_> {
 
     let (symbol, symbol_style, title) = match self.result {
       Some(result) if result.is_error() => {
-        ("●", Style::RedBold, self.invocation.failed_tense())
+        ("●", Style::Danger, self.invocation.failed_tense())
       }
-      Some(_) => ("●", Style::GreenBold, self.invocation.completed_tense()),
-      None => ("●", Style::CyanBold, self.invocation.progressive_tense()),
+      Some(_) => ("●", Style::Success, self.invocation.completed_tense()),
+      None => ("●", Style::Accent, self.invocation.progressive_tense()),
     };
 
     lines.push(LineComponent::from([
@@ -79,8 +79,8 @@ impl Component for TranscriptToolInvocationComponent<'_> {
 
     lines.extend(self.details().into_iter().map(|(label, value)| {
       LineComponent::from([
-        Span::styled(Self::GUTTER, Style::DarkGray),
-        Span::styled(format!("{label} "), Style::DarkGray),
+        Span::styled(Self::GUTTER, Style::Muted),
+        Span::styled(format!("{label} "), Style::Muted),
         Span::raw(value),
       ])
     }));
@@ -95,8 +95,8 @@ impl Component for TranscriptToolInvocationComponent<'_> {
 
       lines.extend(output_lines.iter().take(Self::OUTPUT_LIMIT).map(|line| {
         LineComponent::from([
-          Span::styled(Self::GUTTER, Style::DarkGray),
-          Span::styled(Self::preview(line, output_width), Style::DarkGray),
+          Span::styled(Self::GUTTER, Style::Muted),
+          Span::raw(Self::preview(line, output_width)),
         ])
       }));
 
@@ -104,13 +104,13 @@ impl Component for TranscriptToolInvocationComponent<'_> {
 
       if omitted > 0 {
         lines.push(LineComponent::from([
-          Span::styled(Self::GUTTER, Style::DarkGray),
+          Span::styled(Self::GUTTER, Style::Muted),
           Span::styled(
             format!(
               "... {omitted} more {}",
               if omitted == 1 { "line" } else { "lines" }
             ),
-            Style::DarkGray,
+            Style::Muted,
           ),
         ]));
       }

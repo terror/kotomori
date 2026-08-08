@@ -31,7 +31,7 @@ impl Component for ComposerComponent<'_> {
 
         LineComponent::from([
           Span::raw(before),
-          Span::styled(under_cursor.to_string(), Style::Reverse),
+          Span::styled(under_cursor.to_string(), Style::Selection),
           Span::raw(after),
         ])
       }),
@@ -41,14 +41,14 @@ impl Component for ComposerComponent<'_> {
     lines.extend(self.composer.commands().enumerate().map(
       |(index, command)| {
         let input_style = match selected {
-          Some(selected) if selected == index => Style::CyanBold,
-          _ => Style::Gray,
+          Some(selected) if selected == index => Style::Accent,
+          _ => Style::Secondary,
         };
 
         LineComponent::from([
           Span::styled(command.input(), input_style),
-          Span::styled("  ", Style::DarkGray),
-          Span::styled(command.description(), Style::DarkGray),
+          Span::styled("  ", Style::Muted),
+          Span::styled(command.description(), Style::Muted),
         ])
       },
     ));
@@ -70,18 +70,18 @@ mod tests {
     assert_eq!(
       lines[3],
       LineComponent::from([
-        Span::styled("/clear", Style::CyanBold),
-        Span::styled("  ", Style::DarkGray),
-        Span::styled("Clear the transcript", Style::DarkGray),
+        Span::styled("/clear", Style::Accent),
+        Span::styled("  ", Style::Muted),
+        Span::styled("Clear the transcript", Style::Muted),
       ])
     );
 
     assert_eq!(
       lines[4],
       LineComponent::from([
-        Span::styled("/quit", Style::Gray),
-        Span::styled("  ", Style::DarkGray),
-        Span::styled("Quit kotomori", Style::DarkGray),
+        Span::styled("/quit", Style::Secondary),
+        Span::styled("  ", Style::Muted),
+        Span::styled("Quit kotomori", Style::Muted),
       ])
     );
   }

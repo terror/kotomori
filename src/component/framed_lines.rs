@@ -24,7 +24,7 @@ impl Component for FramedLinesComponent {
     let border = "─".repeat(usize::from(width));
 
     let border_line =
-      || LineComponent::from([Span::styled(border.clone(), Style::DarkGray)]);
+      || LineComponent::from([Span::styled(border.clone(), Style::Muted)]);
 
     once(border_line())
       .chain(self.lines.iter().flat_map(|line| line.render(width)))
@@ -42,10 +42,10 @@ mod tests {
     assert_eq!(
       FramedLinesComponent::raw(["foobar"]).render(3),
       [
-        LineComponent::from([Span::styled("───", Style::DarkGray)]),
+        LineComponent::from([Span::styled("───", Style::Muted)]),
         LineComponent::raw("foo"),
         LineComponent::raw("bar"),
-        LineComponent::from([Span::styled("───", Style::DarkGray)]),
+        LineComponent::from([Span::styled("───", Style::Muted)]),
       ]
     );
   }

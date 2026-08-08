@@ -15,18 +15,18 @@ impl Component for ApprovalPromptComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     [
       LineComponent::from([
-        Span::styled("?", Style::CyanBold),
+        Span::styled("?", Style::Accent),
         Span::raw(" Approve "),
         Span::raw(self.request.invocation.to_string()),
         Span::raw("?"),
       ]),
       LineComponent::from([
-        Span::styled("y", Style::GreenBold),
-        Span::styled(" approve  ", Style::DarkGray),
-        Span::styled("n", Style::RedBold),
-        Span::styled(" deny  ", Style::DarkGray),
-        Span::styled("esc", Style::RedBold),
-        Span::styled(" deny", Style::DarkGray),
+        Span::styled("y", Style::Success),
+        Span::styled(" approve  ", Style::Muted),
+        Span::styled("n", Style::Danger),
+        Span::styled(" deny  ", Style::Muted),
+        Span::styled("esc", Style::Danger),
+        Span::styled(" deny", Style::Muted),
       ]),
     ]
     .into_iter()

@@ -16,17 +16,17 @@ impl HeaderComponent {
 impl Component for HeaderComponent {
   fn render(&self, _width: u16) -> Vec<LineComponent> {
     let mut spans = vec![
-      Span::styled(env!("CARGO_PKG_NAME"), Style::CyanBold),
+      Span::styled(env!("CARGO_PKG_NAME"), Style::Accent),
       Span::raw("  "),
-      Span::styled(env!("CARGO_PKG_VERSION"), Style::DarkGray),
+      Span::styled(env!("CARGO_PKG_VERSION"), Style::Muted),
     ];
 
     if let Some(duration) = self.first_draw_duration {
       spans.extend([
-        Span::styled(" · ", Style::DarkGray),
+        Span::styled(" · ", Style::Muted),
         Span::styled(
           format!("first draw {}ms", duration.as_millis()),
-          Style::DarkGray,
+          Style::Muted,
         ),
       ]);
     }
@@ -44,11 +44,11 @@ mod tests {
     assert_eq!(
       HeaderComponent::new(Some(Duration::from_millis(42))).render(80),
       [LineComponent::from([
-        Span::styled(env!("CARGO_PKG_NAME"), Style::CyanBold),
+        Span::styled(env!("CARGO_PKG_NAME"), Style::Accent),
         Span::raw("  "),
-        Span::styled(env!("CARGO_PKG_VERSION"), Style::DarkGray),
-        Span::styled(" · ", Style::DarkGray),
-        Span::styled("first draw 42ms", Style::DarkGray),
+        Span::styled(env!("CARGO_PKG_VERSION"), Style::Muted),
+        Span::styled(" · ", Style::Muted),
+        Span::styled("first draw 42ms", Style::Muted),
       ])],
     );
   }
