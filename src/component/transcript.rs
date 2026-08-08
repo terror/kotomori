@@ -41,20 +41,12 @@ impl<'a> TranscriptComponent<'a> {
     match &self.state.active_agent_activity {
       AgentActivity::Idle => {}
       AgentActivity::Reasoning(reasoning) => {
-        lines.extend(
-          reasoning
-            .lines()
-            .map(|line| LineComponent::raw(format!(" {line}"))),
-        );
+        lines.extend(reasoning.lines().map(LineComponent::raw));
 
         lines.extend([LineComponent::blank(), working()]);
       }
       AgentActivity::Streaming(message) => {
-        lines.extend(
-          message
-            .lines()
-            .map(|line| LineComponent::raw(format!(" {line}"))),
-        );
+        lines.extend(message.lines().map(LineComponent::raw));
       }
       AgentActivity::Waiting => {
         lines.push(working());
@@ -76,11 +68,7 @@ impl<'a> TranscriptComponent<'a> {
 
       match entry {
         TranscriptEntry::Agent(content) => {
-          lines.extend(
-            content
-              .lines()
-              .map(|line| LineComponent::raw(format!(" {line}"))),
-          );
+          lines.extend(content.lines().map(LineComponent::raw));
         }
         TranscriptEntry::Error(error) => {
           lines.extend(TranscriptErrorComponent::new(error).render(width));
@@ -92,11 +80,7 @@ impl<'a> TranscriptComponent<'a> {
           )]));
         }
         TranscriptEntry::Reasoning(reasoning) => {
-          lines.extend(
-            reasoning
-              .lines()
-              .map(|line| LineComponent::raw(format!(" {line}"))),
-          );
+          lines.extend(reasoning.lines().map(LineComponent::raw));
         }
         TranscriptEntry::Tool { invocation, result } => {
           lines.extend(
@@ -151,8 +135,8 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::raw(" foo"),
-        LineComponent::raw(" bar"),
+        LineComponent::raw("foo"),
+        LineComponent::raw("bar"),
         LineComponent::blank(),
         LineComponent::from([
           Span::styled("✧", Style::Accent),
@@ -176,8 +160,8 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::raw(" foo"),
-        LineComponent::raw(" bar"),
+        LineComponent::raw("foo"),
+        LineComponent::raw("bar"),
         LineComponent::blank()
       ]
     );
@@ -214,8 +198,8 @@ mod tests {
       TranscriptComponent::new(&transcript).render(80),
       [
         LineComponent::blank(),
-        LineComponent::raw(" foo"),
-        LineComponent::raw(" bar"),
+        LineComponent::raw("foo"),
+        LineComponent::raw("bar"),
         LineComponent::blank(),
       ]
     );
@@ -240,11 +224,11 @@ mod tests {
       TranscriptComponent::new(&transcript).render(80),
       [
         LineComponent::blank(),
-        LineComponent::raw(" foo"),
+        LineComponent::raw("foo"),
         LineComponent::blank(),
-        LineComponent::raw(" bar"),
+        LineComponent::raw("bar"),
         LineComponent::blank(),
-        LineComponent::raw(" baz"),
+        LineComponent::raw("baz"),
         LineComponent::blank(),
       ]
     );
@@ -261,7 +245,7 @@ mod tests {
       TranscriptComponent::new(&transcript).render(80),
       [
         LineComponent::blank(),
-        LineComponent::raw(" foo"),
+        LineComponent::raw("foo"),
         LineComponent::blank(),
         LineComponent::from([Span::styled(
           "■ Conversation interrupted, tell the model what to do differently.",
@@ -282,13 +266,12 @@ mod tests {
       [
         LineComponent::blank(),
         LineComponent::from([
-          Span::raw(" "),
           Span::styled("●", Style::Danger),
           Span::raw(" "),
           Span::raw("Error"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::Muted),
+          Span::styled("  │ ", Style::Muted),
           Span::raw("foo"),
         ]),
         LineComponent::blank(),
@@ -325,8 +308,8 @@ mod tests {
       TranscriptComponent::new(&transcript).render(80),
       [
         LineComponent::blank(),
-        LineComponent::raw(" foo"),
-        LineComponent::raw(" bar"),
+        LineComponent::raw("foo"),
+        LineComponent::raw("bar"),
         LineComponent::blank(),
       ]
     );
@@ -358,16 +341,15 @@ mod tests {
       TranscriptComponent::new(&transcript).render(80),
       [
         LineComponent::blank(),
-        LineComponent::raw(" foo"),
+        LineComponent::raw("foo"),
         LineComponent::blank(),
         LineComponent::from([
-          Span::raw(" "),
           Span::styled("●", Style::Success),
           Span::raw(" "),
           Span::raw("Ran rg --files"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::Muted),
+          Span::styled("  │ ", Style::Muted),
           Span::raw("baz"),
         ]),
         LineComponent::blank(),
@@ -402,7 +384,6 @@ mod tests {
         ]),
         LineComponent::blank(),
         LineComponent::from([
-          Span::raw(" "),
           Span::styled("●", Style::Accent),
           Span::raw(" "),
           Span::raw("Running rg --files"),
@@ -437,27 +418,26 @@ mod tests {
       [
         LineComponent::blank(),
         LineComponent::from([
-          Span::raw(" "),
           Span::styled("●", Style::Danger),
           Span::raw(" "),
           Span::raw("Failed running foo bar"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::Muted),
+          Span::styled("  │ ", Style::Muted),
           Span::styled("cwd ", Style::Muted),
           Span::raw("baz"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::Muted),
+          Span::styled("  │ ", Style::Muted),
           Span::styled("exit ", Style::Muted),
           Span::raw("1"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::Muted),
+          Span::styled("  │ ", Style::Muted),
           Span::raw("qux"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::Muted),
+          Span::styled("  │ ", Style::Muted),
           Span::raw("quux"),
         ]),
         LineComponent::blank(),
@@ -489,25 +469,24 @@ mod tests {
       [
         LineComponent::blank(),
         LineComponent::from([
-          Span::raw(" "),
           Span::styled("●", Style::Success),
           Span::raw(" "),
           Span::raw("Ran rg --files"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::Muted),
+          Span::styled("  │ ", Style::Muted),
           Span::raw("fooba..."),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::Muted),
+          Span::styled("  │ ", Style::Muted),
           Span::raw("bar"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::Muted),
+          Span::styled("  │ ", Style::Muted),
           Span::raw("baz"),
         ]),
         LineComponent::from([
-          Span::styled("   │ ", Style::Muted),
+          Span::styled("  │ ", Style::Muted),
           Span::styled("... 1 more line", Style::Muted),
         ]),
         LineComponent::blank(),
@@ -535,7 +514,6 @@ mod tests {
       [
         LineComponent::blank(),
         LineComponent::from([
-          Span::raw(" "),
           Span::styled("●", Style::Accent),
           Span::raw(" "),
           Span::raw("Running rg --files"),
