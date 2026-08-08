@@ -424,9 +424,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
+        command: "baz bar".into(),
         cwd: None,
-        program: "baz".into(),
       }),
     };
 
@@ -489,9 +488,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
+        command: "baz bar".into(),
         cwd: None,
-        program: "baz".into(),
       }),
     };
 
@@ -527,9 +525,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
+        command: "baz bar".into(),
         cwd: None,
-        program: "baz".into(),
       }),
     };
 
@@ -567,18 +564,16 @@ mod tests {
     let foo = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
+        command: "baz bar".into(),
         cwd: None,
-        program: "baz".into(),
       }),
     };
 
     let bar = ToolInvocation {
       id: "bar".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["baz".into()],
+        command: "qux baz".into(),
         cwd: None,
-        program: "qux".into(),
       }),
     };
 
@@ -613,9 +608,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
+        command: "baz bar".into(),
         cwd: None,
-        program: "baz".into(),
       }),
     };
 
@@ -758,9 +752,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: Vec::new(),
+        command: "bar".into(),
         cwd: None,
-        program: "bar".into(),
       }),
     };
 
@@ -784,9 +777,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: Vec::new(),
+        command: "bar".into(),
         cwd: None,
-        program: "bar".into(),
       }),
     };
 
@@ -808,18 +800,16 @@ mod tests {
     let foo = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: Vec::new(),
+        command: "bar".into(),
         cwd: None,
-        program: "bar".into(),
       }),
     };
 
     let bar = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: Vec::new(),
+        command: "baz".into(),
         cwd: None,
-        program: "baz".into(),
       }),
     };
 
@@ -849,9 +839,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: Vec::new(),
+        command: "bar".into(),
         cwd: None,
-        program: "bar".into(),
       }),
     };
 

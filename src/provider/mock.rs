@@ -21,9 +21,8 @@ impl Provider for Mock {
         } else {
           sink.tool_call(RawToolCall {
             arguments: serde_json::json!({
-              "arguments": ["bar"],
+              "command": "echo bar",
               "cwd": null,
-              "program": "echo",
             }),
             id: "foo".into(),
             name: "command".into(),

@@ -83,9 +83,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
+        command: "echo bar".into(),
         cwd: None,
-        program: "echo".into(),
       }),
     };
 
@@ -105,7 +104,7 @@ mod tests {
           AssistantContent::tool_call(
             "foo",
             "command",
-            json!({"arguments": ["bar"], "program": "echo"})
+            json!({"command": "echo bar"})
           ),
           AssistantContent::text("baz"),
         ])
@@ -120,9 +119,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
+        command: "echo bar".into(),
         cwd: None,
-        program: "echo".into(),
       }),
     };
 
@@ -137,7 +135,7 @@ mod tests {
         content: OneOrMany::one(AssistantContent::tool_call(
           "foo",
           "command",
-          json!({"arguments": ["bar"], "program": "echo"}),
+          json!({"command": "echo bar"}),
         ),),
         id: None,
       },

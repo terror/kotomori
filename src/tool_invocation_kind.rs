@@ -84,16 +84,14 @@ mod tests {
   #[test]
   fn arguments_serializes_the_wrapped_invocation() {
     let invocation = ToolInvocationKind::Command(CommandTool {
-      arguments: vec!["hello".into()],
+      command: "echo hello".into(),
       cwd: None,
-      program: "echo".into(),
     });
 
     assert_eq!(
       invocation.arguments(),
       serde_json::json!({
-        "arguments": ["hello"],
-        "program": "echo",
+        "command": "echo hello",
       })
     );
   }
@@ -101,9 +99,8 @@ mod tests {
   #[test]
   fn command_requires_approval() {
     let invocation = ToolInvocationKind::Command(CommandTool {
-      arguments: Vec::new(),
+      command: "foo".into(),
       cwd: None,
-      program: "foo".into(),
     });
 
     assert!(invocation.requires_approval());
@@ -112,9 +109,8 @@ mod tests {
   #[test]
   fn metadata_methods_delegate_to_the_wrapped_tool() {
     let tool = CommandTool {
-      arguments: vec!["bar".into()],
+      command: "foo bar".into(),
       cwd: None,
-      program: "foo".into(),
     };
 
     let invocation = ToolInvocationKind::Command(tool.clone());

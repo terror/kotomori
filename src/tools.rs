@@ -23,26 +23,20 @@ macro_rules! impl_from_tools {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct CommandTool {
-  pub(crate) arguments: Vec<String>,
+  pub(crate) command: String,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub(crate) cwd: Option<PathBuf>,
-  pub(crate) program: String,
 }
 
 impl Display for CommandTool {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-    if self.arguments.is_empty() {
-      write!(f, "{}", self.program)
-    } else {
-      write!(f, "{} {}", self.program, self.arguments.join(" "))
-    }
+    write!(f, "{}", self.command)
   }
 }
 
 #[async_trait]
 impl ToolSpec for CommandTool {
-  const DESCRIPTION: &'static str =
-    "Run a command and capture stdout, stderr, and exit status.";
+  const DESCRIPTION: &'static str = "Run a command using the system shell and capture stdout, stderr, and exit status. Pipes, redirects, glob expansion, and command chaining are supported.";
 
   const NAME: &'static str = "command";
 
@@ -68,9 +62,19 @@ impl ToolSpec for CommandTool {
   }
 
   async fn execute(&self, executor: &Executor) -> ToolResult {
-    let mut command = AsyncCommand::new(&self.program);
+    #[cfg(unix)]
+    let mut command = {
+      let mut command = AsyncCommand::new("/bin/sh");
+      command.arg("-c").arg(&self.command);
+      command
+    };
 
-    command.args(&self.arguments);
+    #[cfg(windows)]
+    let mut command = {
+      let mut command = AsyncCommand::new("cmd.exe");
+      command.arg("/C").arg(&self.command);
+      command
+    };
 
     if let Some(cwd) = &self.cwd {
       command.current_dir(cwd);
@@ -103,16 +107,25 @@ mod tests {
       json!({
         "type": "object",
         "properties": {
-          "arguments": {
-            "type": "array",
-            "items": {"type": "string"},
-          },
+          "command": {"type": "string"},
           "cwd": {"type": ["string", "null"]},
-          "program": {"type": "string"},
         },
-        "required": ["arguments", "program"],
+        "required": ["command"],
         "additionalProperties": false,
       }),
     );
+  }
+
+  #[cfg(unix)]
+  #[tokio::test]
+  async fn executes_shell_syntax() {
+    let result = CommandTool {
+      command: "printf foo | tr o a".into(),
+      cwd: None,
+    }
+    .execute(&Executor::default())
+    .await;
+
+    assert_eq!(result, ToolResult::command(Some(0), "faa", ""));
   }
 }
