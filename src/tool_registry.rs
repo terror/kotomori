@@ -66,7 +66,7 @@ mod tests {
   #[test]
   fn empty_registry_does_not_decode_default_tools() {
     let result = ToolRegistry::new(Vec::new()).invocation(RawToolCall {
-      arguments: json!({"program": "bar", "arguments": []}),
+      arguments: json!({"command": "bar"}),
       id: "foo".into(),
       name: "command".into(),
     });

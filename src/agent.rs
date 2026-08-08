@@ -176,7 +176,7 @@ impl Agent {
       "
       Current working directory: {}
 
-      When using tools, omit `cwd` to use the current working directory. Do not invent absolute paths.
+      The command tool runs commands using the platform's system shell. Omit `cwd` to use the current working directory. Do not invent absolute paths.
       ",
       self.loader.cwd.display(),
     }
@@ -217,6 +217,8 @@ mod tests {
     super::*, serde_json::json, std::collections::VecDeque, tempfile::TempDir,
   };
 
+  const COMMAND_OUTPUT: &str = if cfg!(windows) { "bar\r\n" } else { "bar\n" };
+
   #[derive(Debug)]
   enum Output {
     Delta(&'static str),
@@ -251,9 +253,8 @@ mod tests {
           }
           Output::ToolCall => sink.tool_call(RawToolCall {
             arguments: json!({
-              "arguments": ["bar"],
+              "command": "echo bar",
               "cwd": null,
-              "program": "echo",
             }),
             id: "foo".into(),
             name: "command".into(),
@@ -334,9 +335,8 @@ mod tests {
         event: AgentEvent::ToolCall(ToolInvocation {
           id: "foo".into(),
           kind: ToolInvocationKind::Command(CommandTool {
-            arguments: vec!["bar".into()],
+            command: "echo bar".into(),
             cwd: None,
-            program: "echo".into(),
           }),
         }),
         run_id: 0,
@@ -379,9 +379,8 @@ mod tests {
           Message::Agent(vec![AgentMessageContent::ToolCall(ToolInvocation {
             id: "foo".into(),
             kind: ToolInvocationKind::Command(CommandTool {
-              arguments: vec!["bar".into()],
+              command: "echo bar".into(),
               cwd: None,
-              program: "echo".into(),
             }),
           })]),
           tool_result.message("foo"),
@@ -455,7 +454,7 @@ mod tests {
 
     let requests = test_agent.requests.lock().unwrap();
 
-    let tool_result = ToolResult::command(Some(0), "bar\n", "");
+    let tool_result = ToolResult::command(Some(0), COMMAND_OUTPUT, "");
 
     assert_eq!(
       *requests,
@@ -466,9 +465,8 @@ mod tests {
           Message::Agent(vec![AgentMessageContent::ToolCall(ToolInvocation {
             id: "foo".into(),
             kind: ToolInvocationKind::Command(CommandTool {
-              arguments: vec!["bar".into()],
+              command: "echo bar".into(),
               cwd: None,
-              program: "echo".into(),
             }),
           })]),
           tool_result.message("foo"),
@@ -489,9 +487,8 @@ mod tests {
           event: AgentEvent::ToolCall(ToolInvocation {
             id: "foo".into(),
             kind: ToolInvocationKind::Command(CommandTool {
-              arguments: vec!["bar".into()],
+              command: "echo bar".into(),
               cwd: None,
-              program: "echo".into(),
             }),
           }),
           run_id: 0,
@@ -536,7 +533,7 @@ mod tests {
 
     let requests = test_agent.requests.lock().unwrap();
 
-    let tool_result = ToolResult::command(Some(0), "bar\n", "");
+    let tool_result = ToolResult::command(Some(0), COMMAND_OUTPUT, "");
 
     assert_eq!(
       *requests,
@@ -549,9 +546,8 @@ mod tests {
             AgentMessageContent::ToolCall(ToolInvocation {
               id: "foo".into(),
               kind: ToolInvocationKind::Command(CommandTool {
-                arguments: vec!["bar".into()],
+                command: "echo bar".into(),
                 cwd: None,
-                program: "echo".into(),
               }),
             }),
             AgentMessageContent::Text("baz".into()),
@@ -583,7 +579,7 @@ mod tests {
 
     let requests = test_agent.requests.lock().unwrap();
 
-    let tool_result = ToolResult::command(Some(0), "bar\n", "");
+    let tool_result = ToolResult::command(Some(0), COMMAND_OUTPUT, "");
 
     assert_eq!(
       *requests,
@@ -596,9 +592,8 @@ mod tests {
             AgentMessageContent::ToolCall(ToolInvocation {
               id: "foo".into(),
               kind: ToolInvocationKind::Command(CommandTool {
-                arguments: vec!["bar".into()],
+                command: "echo bar".into(),
                 cwd: None,
-                program: "echo".into(),
               }),
             }),
           ]),
@@ -660,7 +655,7 @@ mod tests {
         "
         Current working directory: {}
 
-        When using tools, omit `cwd` to use the current working directory. Do not invent absolute paths.
+        The command tool runs commands using the platform's system shell. Omit `cwd` to use the current working directory. Do not invent absolute paths.
         ",
         directory.display(),
       }

@@ -57,19 +57,16 @@ mod tests {
 
   #[test]
   fn parses_command_tool_call() {
-    let invocation = invocation(
-      "command",
-      json!({"program": "bar", "arguments": ["baz"], "cwd": null}),
-    );
+    let invocation =
+      invocation("command", json!({"command": "bar baz", "cwd": null}));
 
     assert_eq!(
       invocation,
       ToolInvocation {
         id: "foo".into(),
         kind: ToolInvocationKind::Command(CommandTool {
-          arguments: vec!["baz".into()],
+          command: "bar baz".into(),
           cwd: None,
-          program: "bar".into(),
         }),
       },
     );
@@ -80,16 +77,12 @@ mod tests {
     let invocation = ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
+        command: "baz bar".into(),
         cwd: None,
-        program: "baz".into(),
       }),
     };
 
-    assert_eq!(
-      invocation.kind.arguments(),
-      json!({"arguments": ["bar"], "program": "baz"}),
-    );
+    assert_eq!(invocation.kind.arguments(), json!({"command": "baz bar"}),);
   }
 
   #[test]

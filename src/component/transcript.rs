@@ -339,9 +339,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "bar".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["--files".into()],
+        command: "rg --files".into(),
         cwd: None,
-        program: "rg".into(),
       }),
     };
 
@@ -379,9 +378,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "bar".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["--files".into()],
+        command: "rg --files".into(),
         cwd: None,
-        program: "rg".into(),
       }),
     };
 
@@ -416,9 +414,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "bar".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["bar".into()],
+        command: "foo bar".into(),
         cwd: Some("baz".into()),
-        program: "foo".into(),
       }),
     };
 
@@ -465,9 +462,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "bar".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["--files".into()],
+        command: "rg --files".into(),
         cwd: None,
-        program: "rg".into(),
       }),
     };
 
@@ -516,9 +512,8 @@ mod tests {
     let invocation = ToolInvocation {
       id: "bar".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: vec!["--files".into()],
+        command: "rg --files".into(),
         cwd: None,
-        program: "rg".into(),
       }),
     };
 

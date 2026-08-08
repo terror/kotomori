@@ -86,9 +86,8 @@ mod tests {
     let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
       id: "foo".into(),
       kind: ToolInvocationKind::Command(CommandTool {
-        arguments: Vec::new(),
+        command: "bar".into(),
         cwd: None,
-        program: "bar".into(),
       }),
     });
 
