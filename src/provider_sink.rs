@@ -5,6 +5,7 @@ pub(crate) struct ProviderSink {
   content: Vec<AgentMessageContent>,
   event_sender: UnboundedSender<Event>,
   reasoning_buffer: ReasoningBuffer,
+  run_id: u64,
   tool_registry: ToolRegistry,
 }
 
@@ -24,7 +25,10 @@ impl ProviderSink {
       }
     }
 
-    Ok(self.event_sender.send(Event::AgentDelta(delta))?)
+    Ok(self.event_sender.send(Event::Agent {
+      event: AgentEvent::Delta(delta),
+      run_id: self.run_id,
+    })?)
   }
 
   pub(crate) fn finish(self) -> Vec<AgentMessageContent> {
@@ -33,12 +37,14 @@ impl ProviderSink {
 
   pub(crate) fn new(
     event_sender: UnboundedSender<Event>,
+    run_id: u64,
     tool_registry: ToolRegistry,
   ) -> Self {
     Self {
       content: Vec::new(),
       event_sender,
       reasoning_buffer: ReasoningBuffer::default(),
+      run_id,
       tool_registry,
     }
   }
@@ -64,7 +70,10 @@ impl ProviderSink {
   pub(crate) fn reasoning(&mut self, reasoning: Reasoning) -> Result {
     if let Some(delta) = self.reasoning_buffer.push_reasoning(reasoning) {
       self.push_reasoning_delta(&delta);
-      self.event_sender.send(Event::AgentReasoningDelta(delta))?;
+      self.event_sender.send(Event::Agent {
+        event: AgentEvent::ReasoningDelta(delta),
+        run_id: self.run_id,
+      })?;
     }
 
     Ok(())
@@ -77,7 +86,10 @@ impl ProviderSink {
   ) -> Result {
     if let Some(delta) = self.reasoning_buffer.push_delta(id, delta) {
       self.push_reasoning_delta(&delta);
-      self.event_sender.send(Event::AgentReasoningDelta(delta))?;
+      self.event_sender.send(Event::Agent {
+        event: AgentEvent::ReasoningDelta(delta),
+        run_id: self.run_id,
+      })?;
     }
 
     Ok(())
@@ -90,6 +102,9 @@ impl ProviderSink {
       .content
       .push(AgentMessageContent::ToolCall(tool_call.clone()));
 
-    Ok(self.event_sender.send(Event::AgentToolCall(tool_call))?)
+    Ok(self.event_sender.send(Event::Agent {
+      event: AgentEvent::ToolCall(tool_call),
+      run_id: self.run_id,
+    })?)
   }
 }
