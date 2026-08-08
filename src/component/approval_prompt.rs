@@ -23,7 +23,7 @@ impl Component for ApprovalPromptComponent<'_> {
       LineComponent::from([
         Span::styled("y", Style::Success),
         Span::styled(" approve · ", Style::Muted),
-        Span::styled("n/esc", Style::Danger),
+        Span::styled("n/Esc", Style::Danger),
         Span::styled(" deny", Style::Muted),
       ]),
     ]
