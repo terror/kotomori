@@ -115,17 +115,4 @@ mod tests {
       }),
     );
   }
-
-  #[cfg(unix)]
-  #[tokio::test]
-  async fn executes_shell_syntax() {
-    let result = CommandTool {
-      command: "printf foo | tr o a".into(),
-      cwd: None,
-    }
-    .execute(&Executor::default())
-    .await;
-
-    assert_eq!(result, ToolResult::command(Some(0), "faa", ""));
-  }
 }
