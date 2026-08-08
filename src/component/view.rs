@@ -23,57 +23,7 @@ impl Component for ViewComponent<'_> {
     match self.screen {
       Screen::Quit => Vec::new(),
       Screen::Resume(picker) => {
-        let mut lines = once(LineComponent::blank())
-          .chain(HeaderComponent::new(self.first_draw_duration).render(width))
-          .chain(once(LineComponent::blank()))
-          .chain(once(LineComponent::from([
-            Span::styled("Search previous sessions. Press ", Style::DarkGray),
-            Span::styled("Enter", Style::Gray),
-            Span::styled(" to resume, ", Style::DarkGray),
-            Span::styled("Esc", Style::Gray),
-            Span::styled(" to cancel.", Style::DarkGray),
-          ])))
-          .chain(once(LineComponent::blank()))
-          .chain(once(LineComponent::from([
-            Span::styled("Search: ", Style::DarkGray),
-            Span::raw(&picker.query),
-            Span::styled(" ", Style::Reverse),
-          ])))
-          .chain(once(LineComponent::blank()))
-          .collect::<Vec<_>>();
-
-        let filtered = picker.filtered();
-
-        if filtered.is_empty() {
-          lines.push(LineComponent::from([Span::styled(
-            "No matching sessions.",
-            Style::DarkGray,
-          )]));
-
-          return lines;
-        }
-
-        for (index, session) in filtered.into_iter().enumerate() {
-          let style = if index == picker.selected {
-            Style::CyanBold
-          } else {
-            Style::Gray
-          };
-
-          let marker = if index == picker.selected { "> " } else { "  " };
-
-          lines.push(LineComponent::from([
-            Span::styled(marker, style),
-            Span::styled(
-              session.title.as_deref().unwrap_or("Untitled session"),
-              style,
-            ),
-            Span::styled("  ", Style::DarkGray),
-            Span::styled(session.detail(), Style::DarkGray),
-          ]));
-        }
-
-        lines
+        ResumePickerComponent::new(picker).render(width)
       }
       Screen::Session(state) => once(LineComponent::blank())
         .chain(HeaderComponent::new(self.first_draw_duration).render(width))
