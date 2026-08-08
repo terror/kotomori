@@ -141,15 +141,16 @@ mod tests {
       },
     );
 
-    let tool_result =
-      RigMessage::from(&ToolResult::content("bar").message("foo"));
+    let result = ToolResult {
+      content: Some("bar".into()),
+      ..Default::default()
+    };
+
+    let tool_result = RigMessage::from(&result.message("foo"));
 
     assert_eq!(
       tool_result,
-      RigMessage::tool_result(
-        "foo",
-        serde_json::to_string(&ToolResult::content("bar")).unwrap()
-      )
+      RigMessage::tool_result("foo", serde_json::to_string(&result).unwrap())
     );
   }
 }

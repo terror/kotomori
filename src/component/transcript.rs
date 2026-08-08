@@ -348,7 +348,11 @@ mod tests {
       TranscriptEntry::Agent("foo".into()),
       TranscriptEntry::Tool {
         invocation,
-        result: Some(ToolResult::command(Some(0), "baz\n", "")),
+        result: Some(ToolResult {
+          exit_status: Some(0),
+          stdout: Some("baz\n".into()),
+          ..Default::default()
+        }),
       },
     ]);
 
@@ -421,7 +425,12 @@ mod tests {
 
     let transcript = Transcript::with_entries(vec![TranscriptEntry::Tool {
       invocation,
-      result: Some(ToolResult::command(Some(1), "qux\n", "quux")),
+      result: Some(ToolResult {
+        exit_status: Some(1),
+        stderr: Some("quux".into()),
+        stdout: Some("qux\n".into()),
+        ..Default::default()
+      }),
     }]);
 
     assert_eq!(
@@ -469,11 +478,11 @@ mod tests {
 
     let transcript = Transcript::with_entries(vec![TranscriptEntry::Tool {
       invocation,
-      result: Some(ToolResult::command(
-        Some(0),
-        "foobarbaz\n\nbar\nbaz\nqux\n",
-        "",
-      )),
+      result: Some(ToolResult {
+        exit_status: Some(0),
+        stdout: Some("foobarbaz\n\nbar\nbaz\nqux\n".into()),
+        ..Default::default()
+      }),
     }]);
 
     assert_eq!(

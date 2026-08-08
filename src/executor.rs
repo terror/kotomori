@@ -14,7 +14,12 @@ impl Executor {
 
     let mut child = match command.spawn() {
       Ok(child) => child,
-      Err(error) => return ToolResult::error(error),
+      Err(error) => {
+        return ToolResult {
+          stderr: Some(error.to_string()),
+          ..Default::default()
+        };
+      }
     };
 
     let stdout = child.stdout.take().expect("stdout is piped");
@@ -27,23 +32,53 @@ impl Executor {
 
     let status = match status {
       Ok(Ok(status)) => status,
-      Ok(Err(error)) => return ToolResult::error(error),
+      Ok(Err(error)) => {
+        return ToolResult {
+          stderr: Some(error.to_string()),
+          ..Default::default()
+        };
+      }
       Err(_) => return self.timeout_result(child, stdout, stderr).await,
     };
 
     let stdout = match stdout.await {
       Ok(Ok(stdout)) => stdout,
-      Ok(Err(error)) => return ToolResult::error(error),
-      Err(error) => return ToolResult::error(error),
+      Ok(Err(error)) => {
+        return ToolResult {
+          stderr: Some(error.to_string()),
+          ..Default::default()
+        };
+      }
+      Err(error) => {
+        return ToolResult {
+          stderr: Some(error.to_string()),
+          ..Default::default()
+        };
+      }
     };
 
     let stderr = match stderr.await {
       Ok(Ok(stderr)) => stderr,
-      Ok(Err(error)) => return ToolResult::error(error),
-      Err(error) => return ToolResult::error(error),
+      Ok(Err(error)) => {
+        return ToolResult {
+          stderr: Some(error.to_string()),
+          ..Default::default()
+        };
+      }
+      Err(error) => {
+        return ToolResult {
+          stderr: Some(error.to_string()),
+          ..Default::default()
+        };
+      }
     };
 
-    ToolResult::command(status.code(), stdout, stderr)
+    ToolResult {
+      exit_status: status.code(),
+      stderr: (!stderr.is_empty()).then_some(stderr),
+      stdout: (!stdout.is_empty()).then_some(stdout),
+      ..Default::default()
+    }
   }
 
   async fn read_pipe<R>(self, mut reader: R) -> io::Result<String>
@@ -128,7 +163,11 @@ impl Executor {
       }
     }
 
-    ToolResult::command(None, stdout, stderr)
+    ToolResult {
+      stderr: Some(stderr),
+      stdout: (!stdout.is_empty()).then_some(stdout),
+      ..Default::default()
+    }
   }
 }
 

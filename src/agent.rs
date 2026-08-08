@@ -146,7 +146,10 @@ impl Agent {
           ToolApproval::Approved => {
             tool_call.kind.execute(&self.executor).await
           }
-          ToolApproval::Denied => ToolResult::error("permission denied"),
+          ToolApproval::Denied => ToolResult {
+            stderr: Some("permission denied".into()),
+            ..Default::default()
+          },
         };
 
         messages.push(result.message(tool_call.id.clone()));
@@ -355,7 +358,10 @@ mod tests {
 
     task.await.unwrap();
 
-    let tool_result = ToolResult::error("permission denied");
+    let tool_result = ToolResult {
+      stderr: Some("permission denied".into()),
+      ..Default::default()
+    };
 
     assert_eq!(
       events.recv().await.unwrap(),
@@ -454,7 +460,11 @@ mod tests {
 
     let requests = test_agent.requests.lock().unwrap();
 
-    let tool_result = ToolResult::command(Some(0), COMMAND_OUTPUT, "");
+    let tool_result = ToolResult {
+      exit_status: Some(0),
+      stdout: Some(COMMAND_OUTPUT.into()),
+      ..Default::default()
+    };
 
     assert_eq!(
       *requests,
@@ -533,7 +543,11 @@ mod tests {
 
     let requests = test_agent.requests.lock().unwrap();
 
-    let tool_result = ToolResult::command(Some(0), COMMAND_OUTPUT, "");
+    let tool_result = ToolResult {
+      exit_status: Some(0),
+      stdout: Some(COMMAND_OUTPUT.into()),
+      ..Default::default()
+    };
 
     assert_eq!(
       *requests,
@@ -579,7 +593,11 @@ mod tests {
 
     let requests = test_agent.requests.lock().unwrap();
 
-    let tool_result = ToolResult::command(Some(0), COMMAND_OUTPUT, "");
+    let tool_result = ToolResult {
+      exit_status: Some(0),
+      stdout: Some(COMMAND_OUTPUT.into()),
+      ..Default::default()
+    };
 
     assert_eq!(
       *requests,
