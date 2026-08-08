@@ -23,8 +23,7 @@ impl Component for ViewComponent<'_> {
     match self.screen {
       Screen::Quit => Vec::new(),
       Screen::Resume(picker) => {
-        ResumePickerComponent::new(picker, self.first_draw_duration)
-          .render(width)
+        ResumePickerComponent::new(picker).render(width)
       }
       Screen::Session(state) => once(LineComponent::blank())
         .chain(HeaderComponent::new(self.first_draw_duration).render(width))

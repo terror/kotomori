@@ -2,26 +2,19 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ResumePickerComponent<'a> {
-  first_draw_duration: Option<Duration>,
   picker: &'a ResumePicker,
 }
 
 impl<'a> ResumePickerComponent<'a> {
-  pub(crate) fn new(
-    picker: &'a ResumePicker,
-    first_draw_duration: Option<Duration>,
-  ) -> Self {
-    Self {
-      first_draw_duration,
-      picker,
-    }
+  pub(crate) fn new(picker: &'a ResumePicker) -> Self {
+    Self { picker }
   }
 }
 
 impl Component for ResumePickerComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     let mut lines = once(LineComponent::blank())
-      .chain(HeaderComponent::new(self.first_draw_duration).render(width))
+      .chain(HeaderComponent::new(None).render(width))
       .chain(once(LineComponent::blank()))
       .chain(once(LineComponent::from([
         Span::styled("Search previous sessions. Press ", Style::DarkGray),
