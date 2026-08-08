@@ -3,8 +3,8 @@ use super::*;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct ToolResult {
   content: Option<String>,
-  error: Option<String>,
   pub(crate) exit_status: Option<i32>,
+  stderr: Option<String>,
   stdout: Option<String>,
 }
 
@@ -18,8 +18,8 @@ impl ToolResult {
 
     Self {
       content: None,
-      error: (!stderr.is_empty()).then_some(stderr),
       exit_status,
+      stderr: (!stderr.is_empty()).then_some(stderr),
       stdout: (!stdout.is_empty()).then_some(stdout),
     }
   }
@@ -28,8 +28,8 @@ impl ToolResult {
   pub(crate) fn content(content: impl Into<String>) -> Self {
     Self {
       content: Some(content.into()),
-      error: None,
       exit_status: None,
+      stderr: None,
       stdout: None,
     }
   }
@@ -37,14 +37,14 @@ impl ToolResult {
   pub(crate) fn error(error: impl Display) -> Self {
     Self {
       content: None,
-      error: Some(error.to_string()),
       exit_status: None,
+      stderr: Some(error.to_string()),
       stdout: None,
     }
   }
 
   pub(crate) fn is_error(&self) -> bool {
-    self.error.is_some() || self.exit_status.is_some_and(|status| status != 0)
+    self.exit_status.is_none_or(|status| status != 0)
   }
 
   pub(crate) fn message(&self, id: impl Into<String>) -> Message {
@@ -62,7 +62,7 @@ impl ToolResult {
     let output = [
       self.stdout.as_deref(),
       self.content.as_deref(),
-      self.error.as_deref(),
+      self.stderr.as_deref(),
     ]
     .into_iter()
     .flatten()
