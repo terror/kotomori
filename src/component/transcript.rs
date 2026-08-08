@@ -106,7 +106,7 @@ impl<'a> TranscriptComponent<'a> {
         }
         TranscriptEntry::User(content) => {
           lines.extend(
-            FramedLinesComponent::raw(content.split('\n')).render(width),
+            GutteredLinesComponent::raw(content.split('\n')).render(width),
           );
         }
       }
@@ -396,9 +396,10 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::from([Span::styled("─".repeat(80), Style::Muted)]),
-        LineComponent::raw("foo"),
-        LineComponent::from([Span::styled("─".repeat(80), Style::Muted)]),
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("foo"),
+        ]),
         LineComponent::blank(),
         LineComponent::from([
           Span::raw(" "),
@@ -551,13 +552,20 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(3),
+      TranscriptComponent::new(&transcript).render(5),
       [
-        LineComponent::from([Span::styled("───", Style::Muted)]),
-        LineComponent::raw("foo"),
-        LineComponent::raw("bar"),
-        LineComponent::raw("baz"),
-        LineComponent::from([Span::styled("───", Style::Muted)]),
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("foo"),
+        ]),
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("bar"),
+        ]),
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("baz"),
+        ]),
       ]
     );
   }

@@ -17,7 +17,7 @@ impl Component for ComposerComponent<'_> {
 
     let selected = self.composer.selected_command_index();
 
-    let mut lines = FramedLinesComponent::new(
+    let mut lines = GutteredLinesComponent::new(
       self.composer.lines().iter().enumerate().map(|(row, line)| {
         if cursor.0 != row {
           return LineComponent::raw(line);
@@ -68,7 +68,7 @@ mod tests {
     let lines = ComposerComponent::new(&composer).render(80);
 
     assert_eq!(
-      lines[3],
+      lines[1],
       LineComponent::from([
         Span::styled("/clear", Style::Accent),
         Span::styled("  ", Style::Muted),
@@ -77,7 +77,7 @@ mod tests {
     );
 
     assert_eq!(
-      lines[4],
+      lines[2],
       LineComponent::from([
         Span::styled("/quit", Style::Secondary),
         Span::styled("  ", Style::Muted),
