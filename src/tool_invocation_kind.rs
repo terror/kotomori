@@ -42,17 +42,16 @@ macro_rules! define_tool_invocation_kind {
 
       pub(crate) async fn execute(
         &self,
+        executor: &Executor,
         approval: ToolApproval,
       ) -> ToolResult {
         if self.requires_approval() && approval == ToolApproval::Denied {
           return ToolResult::error("permission denied");
         }
 
-        let executor = Executor::default();
-
         match self {
           $(
-            Self::$variant(tool) => tool.execute(&executor).await,
+            Self::$variant(tool) => tool.execute(executor).await,
           )*
         }
       }
@@ -126,7 +125,9 @@ mod tests {
       program: "this-command-should-never-run".into(),
     });
 
-    let result = invocation.execute(ToolApproval::Denied).await;
+    let result = invocation
+      .execute(&Executor::default(), ToolApproval::Denied)
+      .await;
 
     assert_eq!(result, ToolResult::error("permission denied"));
   }
