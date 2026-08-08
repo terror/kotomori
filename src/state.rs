@@ -363,7 +363,7 @@ mod tests {
 
     state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -375,7 +375,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
 
-    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert_matches!(state.input_mode, InputMode::Compose);
   }
 
   #[tokio::test]
@@ -398,7 +398,7 @@ mod tests {
 
     state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -410,7 +410,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
 
-    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert_matches!(state.input_mode, InputMode::Compose);
   }
 
   #[test]
@@ -438,7 +438,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
   }
 
   #[tokio::test]
@@ -461,7 +461,7 @@ mod tests {
 
     state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Interrupt)),
@@ -470,7 +470,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert_matches!(state.input_mode, InputMode::Compose);
   }
 
   #[tokio::test]
@@ -493,7 +493,7 @@ mod tests {
 
     state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -505,7 +505,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert_matches!(state.input_mode, InputMode::Compose);
   }
 
   #[tokio::test]
@@ -528,12 +528,12 @@ mod tests {
 
     state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
 
     assert_eq!(state.handle_event(Event::Action(Action::Quit)), Vec::new());
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert_matches!(state.input_mode, InputMode::Compose);
     assert!(state.should_quit);
   }
 
@@ -557,7 +557,7 @@ mod tests {
 
     state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -569,7 +569,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert_matches!(state.input_mode, InputMode::Compose);
   }
 
   #[test]
@@ -600,7 +600,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
   }
 
   #[test]
@@ -628,7 +628,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
   }
 
   #[test]
@@ -656,7 +656,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
   }
 
   #[test]
@@ -684,7 +684,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
   }
 
   #[tokio::test]
@@ -708,7 +708,7 @@ mod tests {
     state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
     state.handle_agent_event(AgentEvent::Done);
 
-    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert_matches!(state.input_mode, InputMode::Compose);
     assert!(response_receiver.await.is_err());
   }
 
@@ -737,7 +737,7 @@ mod tests {
       result: ToolResult::content("bar"),
     });
 
-    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert_matches!(state.input_mode, InputMode::Compose);
     assert!(response_receiver.await.is_err());
   }
 
@@ -762,7 +762,7 @@ mod tests {
     state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
     state.handle_agent_event(AgentEvent::Error("bar".into()));
 
-    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert_matches!(state.input_mode, InputMode::Compose);
     assert!(response_receiver.await.is_err());
   }
 
@@ -1168,7 +1168,7 @@ mod tests {
 
     state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
 
-    assert!(matches!(state.input_mode, InputMode::Approval(_)));
+    assert_matches!(state.input_mode, InputMode::Approval(_));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Quit)),
@@ -1178,7 +1178,7 @@ mod tests {
     assert!(!state.should_quit);
     assert!(!state.transcript.is_agent_active());
 
-    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert_matches!(state.input_mode, InputMode::Compose);
     assert!(response_receiver.await.is_err());
   }
 
@@ -1262,10 +1262,10 @@ mod tests {
       })));
     }
 
-    assert!(matches!(
+    assert_matches!(
       state.handle_event(Event::Action(Action::Submit)).as_slice(),
       [Effect::RunAgent { run_id: 1, .. }]
-    ));
+    );
 
     let invocation = ToolInvocation {
       id: "stale".into(),
@@ -1298,7 +1298,7 @@ mod tests {
       "channel closed"
     );
 
-    assert!(matches!(state.input_mode, InputMode::Compose));
+    assert_matches!(state.input_mode, InputMode::Compose);
 
     assert!(state.transcript.is_agent_active());
 

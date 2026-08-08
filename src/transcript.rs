@@ -234,10 +234,7 @@ mod tests {
 
     assert_eq!(transcript.active_elapsed, Duration::ZERO);
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Idle
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Idle);
   }
 
   #[test]
@@ -253,10 +250,10 @@ mod tests {
 
     assert!(transcript.messages().is_empty());
 
-    assert!(matches!(
+    assert_matches!(
       &transcript.entries[..],
       [TranscriptEntry::Error(error)] if error == "bar"
-    ));
+    );
   }
 
   #[test]
@@ -270,10 +267,7 @@ mod tests {
 
     assert!(transcript.entries.is_empty());
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Idle
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Idle);
   }
 
   #[test]
@@ -287,10 +281,7 @@ mod tests {
 
     assert!(transcript.entries.is_empty());
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Idle
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Idle);
   }
 
   #[test]
@@ -301,10 +292,7 @@ mod tests {
 
     assert!(transcript.entries.is_empty());
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Idle
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Idle);
   }
 
   #[test]
@@ -318,10 +306,7 @@ mod tests {
 
     assert!(transcript.entries.is_empty());
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Idle
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Idle);
   }
 
   #[test]
@@ -331,15 +316,12 @@ mod tests {
     transcript.push_agent_reasoning_delta("foo");
     transcript.finish_agent_activity();
 
-    assert!(matches!(
+    assert_matches!(
       &transcript.entries[..],
       [TranscriptEntry::Reasoning(reasoning)] if reasoning == "foo"
-    ));
+    );
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Idle
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Idle);
   }
 
   #[test]
@@ -349,15 +331,12 @@ mod tests {
     transcript.push_agent_delta("foo");
     transcript.finish_agent_activity();
 
-    assert!(matches!(
+    assert_matches!(
       &transcript.entries[..],
       [TranscriptEntry::Agent(message)] if message == "foo"
-    ));
+    );
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Idle
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Idle);
   }
 
   #[test]
@@ -385,11 +364,11 @@ mod tests {
 
     assert!(!transcript.is_agent_active());
 
-    assert!(matches!(
+    assert_matches!(
       &transcript.entries[..],
       [TranscriptEntry::Agent(message), TranscriptEntry::Interrupted]
         if message == "foo"
-    ));
+    );
   }
 
   #[test]
@@ -676,10 +655,7 @@ mod tests {
 
     assert!(transcript.is_agent_active());
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Waiting
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Waiting);
   }
 
   #[test]
@@ -706,15 +682,12 @@ mod tests {
     transcript.push_agent_reasoning_delta("foo");
     transcript.push_agent_delta("");
 
-    assert!(matches!(
+    assert_matches!(
       &transcript.entries[..],
       [TranscriptEntry::Reasoning(reasoning)] if reasoning == "foo"
-    ));
+    );
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Waiting
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Waiting);
   }
 
   #[test]
@@ -741,10 +714,7 @@ mod tests {
 
     assert!(transcript.is_agent_active());
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Waiting
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Waiting);
   }
 
   #[test]
@@ -771,15 +741,12 @@ mod tests {
     transcript.push_agent_delta("foo");
     transcript.push_agent_reasoning_delta("");
 
-    assert!(matches!(
+    assert_matches!(
       &transcript.entries[..],
       [TranscriptEntry::Agent(message)] if message == "foo"
-    ));
+    );
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Waiting
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Waiting);
   }
 
   #[test]
@@ -807,10 +774,7 @@ mod tests {
       ])]
     );
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Waiting
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Waiting);
   }
 
   #[test]
@@ -829,15 +793,12 @@ mod tests {
     transcript.push_tool_call(invocation);
     transcript.push_tool_result("bar", ToolResult::content("baz"));
 
-    assert!(matches!(
+    assert_matches!(
       &transcript.entries[..],
       [TranscriptEntry::Tool { result: None, .. }]
-    ));
+    );
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Waiting
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Waiting);
   }
 
   #[test]
@@ -869,7 +830,7 @@ mod tests {
 
     transcript.push_tool_result("foo", result.clone());
 
-    assert!(matches!(
+    assert_matches!(
       &transcript.entries[..],
       [
         TranscriptEntry::Tool { result: None, .. },
@@ -878,7 +839,7 @@ mod tests {
           ..
         },
       ] if entry_result == &result
-    ));
+    );
   }
 
   #[test]
@@ -921,10 +882,7 @@ mod tests {
 
     assert_eq!(transcript.active_frame, 0);
 
-    assert!(matches!(
-      &transcript.active_agent_activity,
-      AgentActivity::Waiting
-    ));
+    assert_matches!(&transcript.active_agent_activity, AgentActivity::Waiting);
 
     assert_eq!(
       transcript.messages(),

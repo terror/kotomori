@@ -125,6 +125,10 @@ use {
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+#[cfg(test)]
+#[macro_use]
+mod testing;
+
 mod action;
 mod agent;
 mod agent_activity;
