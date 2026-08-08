@@ -111,7 +111,12 @@ impl Component for TranscriptComponent<'_> {
     let activity = self.render_agent_activity();
 
     if !activity.is_empty() {
+      if !lines.is_empty() {
+        Self::ensure_trailing_blank_line(&mut lines);
+      }
+
       lines.extend(activity);
+
       Self::ensure_trailing_blank_line(&mut lines);
     }
 
@@ -183,6 +188,33 @@ mod tests {
           Span::styled("✶", Style::Accent),
           Span::styled(" Working...", Style::Secondary),
           Span::styled(" (1m 51s • Esc to interrupt)", Style::Muted),
+        ]),
+        LineComponent::blank(),
+      ]
+    );
+  }
+
+  #[test]
+  fn render_active_activity_is_separated_from_user_entry() {
+    let transcript = Transcript {
+      active_agent_activity: AgentActivity::Waiting,
+      active_elapsed: Duration::ZERO,
+      active_frame: 0,
+      entries: vec![TranscriptEntry::User("hello".into())],
+    };
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("hello"),
+        ]),
+        LineComponent::blank(),
+        LineComponent::from([
+          Span::styled("✦", Style::Accent),
+          Span::styled(" Working...", Style::Secondary),
+          Span::styled(" (0s • Esc to interrupt)", Style::Muted),
         ]),
         LineComponent::blank(),
       ]
