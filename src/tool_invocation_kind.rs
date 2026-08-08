@@ -40,15 +40,7 @@ macro_rules! define_tool_invocation_kind {
         }
       }
 
-      pub(crate) async fn execute(
-        &self,
-        executor: &Executor,
-        approval: ToolApproval,
-      ) -> ToolResult {
-        if self.requires_approval() && approval == ToolApproval::Denied {
-          return ToolResult::error("permission denied");
-        }
-
+      pub(crate) async fn execute(&self, executor: &Executor) -> ToolResult {
         match self {
           $(
             Self::$variant(tool) => tool.execute(executor).await,
@@ -115,21 +107,6 @@ mod tests {
     });
 
     assert!(invocation.requires_approval());
-  }
-
-  #[tokio::test]
-  async fn denied_approval_short_circuits_approval_required_tools() {
-    let invocation = ToolInvocationKind::Command(CommandTool {
-      arguments: Vec::new(),
-      cwd: None,
-      program: "this-command-should-never-run".into(),
-    });
-
-    let result = invocation
-      .execute(&Executor::default(), ToolApproval::Denied)
-      .await;
-
-    assert_eq!(result, ToolResult::error("permission denied"));
   }
 
   #[test]
