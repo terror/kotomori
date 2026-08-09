@@ -86,11 +86,12 @@ impl Agent {
     let (mut tool_call_count, mut tool_round_count) = (0, 0);
 
     loop {
-      let mut sink = ProviderSink::new(
-        self.event_sender.clone(),
+      let mut sink = ProviderSink {
+        event_sender: self.event_sender.clone(),
         run_id,
-        self.tool_registry.clone(),
-      );
+        tool_registry: self.tool_registry.clone(),
+        ..Default::default()
+      };
 
       let request = Request::with_system(
         self.settings.model.clone(),
