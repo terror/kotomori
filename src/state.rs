@@ -216,7 +216,7 @@ impl State {
       if let Some(command) = command {
         self.run_command(command);
       } else if input.len() > 1 {
-        self.transcript.push_agent(format!(
+        self.transcript.notice(format!(
           "Unrecognized command '{input}'. Type \"/\" for a list of supported commands."
         ));
 
@@ -1559,12 +1559,14 @@ mod tests {
 
     state.handle_event(Event::Action(Action::Submit));
 
-    assert_eq!(
-      state.transcript.messages(),
-      vec![Message::Agent(vec![AgentMessageContent::Text(
-        "Unrecognized command '/foobar'. Type \"/\" for a list of supported commands.".into()
-      )])]
+    assert_matches!(
+      &state.transcript.entries[..],
+      [TranscriptEntry::Notice(notice)]
+        if notice
+          == "Unrecognized command '/foobar'. Type \"/\" for a list of supported commands."
     );
+
+    assert_eq!(state.transcript.messages(), Vec::new());
 
     assert_eq!(state.composer.input_text(), "");
   }

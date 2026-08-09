@@ -79,6 +79,9 @@ impl<'a> TranscriptComponent<'a> {
             Style::Danger,
           )]));
         }
+        TranscriptEntry::Notice(notice) => {
+          lines.extend(notice.lines().map(LineComponent::raw));
+        }
         TranscriptEntry::Reasoning(reasoning) => {
           lines.extend(reasoning.lines().map(LineComponent::raw));
         }
@@ -324,6 +327,23 @@ mod tests {
           "■ Conversation interrupted, tell the model what to do differently.",
           Style::Danger,
         )]),
+        LineComponent::blank(),
+      ]
+    );
+  }
+
+  #[test]
+  fn render_notice_entry_handles_multiline_content() {
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::Notice(
+      "foo\nbar".into(),
+    )]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        LineComponent::blank(),
+        LineComponent::raw("foo"),
+        LineComponent::raw("bar"),
         LineComponent::blank(),
       ]
     );
