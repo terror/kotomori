@@ -1,3 +1,28 @@
+## [0.2.0](https://github.com/terror/kotomori/releases/tag/0.2.0) - 2026-08-09
+
+### Added
+
+- Add composer prompt history (#184)
+
+### Fixed
+
+- Avoid leading transcript blank lines (#188)
+- Keep unknown commands out of model context (#187)
+- Fix clear racing active agent (#186)
+
+### Misc
+
+- Move `assert_matches` into crate root (#194)
+- Refactor tool invocation architecture (#193)
+- Tag persisted tool calls (#192)
+- Move output decoding into executor (#191)
+- Collapse presented frame into frame (#190)
+- Separate composer from command menu (#189)
+- Move selection handling into composer (#183)
+- Inline request construction (#182)
+- Use `Default` for provider sink (#181)
+- Inline tool invocation helper (#180)
+
 # Changelog
 
 ## [0.1.1](https://github.com/terror/kotomori/releases/tag/0.1.1) - 2026-08-08
