@@ -554,6 +554,7 @@ mod tests {
 
     let result = ToolResult {
       exit_status: Some(0),
+      outcome: ToolOutcome::Success,
       stdout: Some("bar\n".into()),
       ..Default::default()
     };

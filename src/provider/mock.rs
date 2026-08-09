@@ -26,7 +26,7 @@ impl Provider for Mock {
             }),
             id: "foo".into(),
             name: "command".into(),
-          })?;
+          });
         }
       }
       "error" if request.messages.len() == 1 => {
@@ -37,14 +37,14 @@ impl Provider for Mock {
           arguments: serde_json::json!({}),
           id: "foo".into(),
           name: "command".into(),
-        })?;
+        });
       }
       "unknown-tool" if request.messages.len() == 1 => {
         sink.tool_call(RawToolCall {
           arguments: serde_json::json!({}),
           id: "foo".into(),
           name: "unknown".into(),
-        })?;
+        });
       }
       model => {
         let input = request

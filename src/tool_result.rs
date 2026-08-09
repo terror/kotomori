@@ -4,13 +4,14 @@ use super::*;
 pub(crate) struct ToolResult {
   pub(crate) content: Option<String>,
   pub(crate) exit_status: Option<i32>,
+  pub(crate) outcome: ToolOutcome,
   pub(crate) stderr: Option<String>,
   pub(crate) stdout: Option<String>,
 }
 
 impl ToolResult {
   pub(crate) fn is_error(&self) -> bool {
-    self.exit_status.is_none_or(|status| status != 0)
+    self.outcome == ToolOutcome::Failure
   }
 
   pub(crate) fn message_content(&self) -> String {

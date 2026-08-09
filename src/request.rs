@@ -5,7 +5,6 @@ pub(crate) struct Request {
   pub(crate) messages: Vec<Message>,
   pub(crate) model: Model,
   pub(crate) system: Option<String>,
-  pub(crate) tool_registry: ToolRegistry,
 }
 
 impl Request {
@@ -47,14 +46,17 @@ impl From<&Request> for CompletionRequest {
       preamble: None,
       temperature: None,
       tool_choice: None,
-      tools: request.tool_registry.tools.iter().map(Into::into).collect(),
+      tools: ToolInvocationKind::definitions()
+        .iter()
+        .map(Into::into)
+        .collect(),
     }
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use {super::*, serde_json::json};
+  use super::*;
 
   #[test]
   fn completion_request_uses_blank_user_message_for_empty_history() {
@@ -65,7 +67,6 @@ mod tests {
         provider: "mock".into(),
       },
       system: None,
-      tool_registry: ToolRegistry::new(Vec::new()),
     });
 
     assert_eq!(
@@ -86,7 +87,6 @@ mod tests {
         provider: "mock".into(),
       },
       system: Some("baz".into()),
-      tool_registry: ToolRegistry::new(Vec::new()),
     });
 
     assert_eq!(request.model.as_deref(), Some("foo"));
@@ -103,8 +103,6 @@ mod tests {
 
   #[test]
   fn completion_request_uses_tools() {
-    let parameters = json!({"type": "object"});
-
     let request = CompletionRequest::from(&Request {
       messages: Vec::new(),
       model: Model {
@@ -112,21 +110,15 @@ mod tests {
         provider: "mock".into(),
       },
       system: None,
-      tool_registry: ToolRegistry::new(vec![Tool {
-        description: "bar",
-        invocation: |_| unreachable!(),
-        name: "foo",
-        parameters: parameters.clone(),
-      }]),
     });
 
     assert_eq!(
-      request.tools,
-      vec![ToolDefinition {
-        description: "bar".into(),
-        name: "foo".into(),
-        parameters,
-      }],
+      request
+        .tools
+        .iter()
+        .map(|tool| tool.name.as_str())
+        .collect::<Vec<_>>(),
+      ["command"],
     );
   }
 
@@ -151,7 +143,6 @@ mod tests {
         provider: "mock".into(),
       },
       system: None,
-      tool_registry: ToolRegistry::new(Vec::new()),
     };
 
     assert_eq!(request.last_user_message().unwrap(), &last_user_message);
@@ -172,7 +163,6 @@ mod tests {
         provider: "mock".into(),
       },
       system: None,
-      tool_registry: ToolRegistry::new(Vec::new()),
     };
 
     assert_eq!(request.last_user_message(), None);
