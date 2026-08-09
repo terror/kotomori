@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Model {
   pub(crate) name: String,
   pub(crate) provider: String,

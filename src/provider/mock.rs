@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Mock;
 
 #[async_trait]

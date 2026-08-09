@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Args)]
+#[derive(Args, Debug)]
 pub(crate) struct Resume {
   #[arg(long, help = "Resume the most recent session")]
   last: bool,
