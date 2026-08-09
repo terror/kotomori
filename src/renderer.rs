@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct Renderer<W: Write = BufWriter<Stdout>> {
-  presented: Option<PresentedFrame>,
+  current: Option<Frame>,
   stdout: W,
 }
 
@@ -15,7 +15,7 @@ impl Renderer {
     queue!(stdout, Hide).context("failed to hide cursor")?;
 
     Ok(Self {
-      presented: None,
+      current: None,
       stdout,
     })
   }
@@ -46,35 +46,35 @@ impl<W: Write> Renderer<W> {
     Ok(())
   }
 
-  fn draw_frame(&mut self, next: Frame) -> Result {
-    let Some(presented) = self.presented.as_ref() else {
+  fn draw_frame(&mut self, mut next: Frame) -> Result {
+    let Some(current) = self.current.as_ref() else {
       self.stdout.begin_synchronized_update()?;
       self.stdout.write_lines(&next.lines)?;
       self.stdout.end_synchronized_update()?;
 
-      self.presented = Some(next.into());
+      self.current = Some(next);
 
       return Ok(());
     };
 
-    let Some(plan) = RenderPlan::between(presented, &next) else {
+    let Some(plan) = RenderPlan::between(current, &next) else {
       return Ok(());
     };
 
     self.stdout.begin_synchronized_update()?;
 
-    let presented = match plan {
+    let current = match plan {
       RenderPlan::Full => {
         self.stdout.clear_screen()?;
 
         self.stdout.write_lines(&next.lines)?;
 
-        next.into()
+        next
       }
       RenderPlan::Patch(patch) => {
         self
           .stdout
-          .move_to_row(presented.frame.last_row(), patch.move_target_row)?;
+          .move_to_row(current.last_row(), patch.move_target_row)?;
 
         if patch.prepend_line_feed {
           write!(self.stdout, "\r\n")?;
@@ -94,13 +94,14 @@ impl<W: Write> Renderer<W> {
           .stdout
           .move_to_row(patch.changed.last, next.last_row())?;
 
-        PresentedFrame::new(next, patch.viewport_top)
+        next.viewport_top = patch.viewport_top;
+        next
       }
     };
 
     self.stdout.end_synchronized_update()?;
 
-    self.presented = Some(presented);
+    self.current = Some(current);
 
     Ok(())
   }
@@ -109,7 +110,7 @@ impl<W: Write> Renderer<W> {
 impl<W: Default + Write> Default for Renderer<W> {
   fn default() -> Self {
     Self {
-      presented: None,
+      current: None,
       stdout: W::default(),
     }
   }
@@ -152,7 +153,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(frame.into()),
+      current: Some(frame),
       ..Default::default()
     };
 
@@ -171,7 +172,7 @@ mod tests {
       "\x1b[?2026h\r\n\x1b[1G\x1b[2K\x1b[?2026l",
     );
 
-    assert_eq!(renderer.presented.as_ref().unwrap().viewport_top, 1,);
+    assert_eq!(renderer.current.as_ref().unwrap().viewport_top, 1,);
   }
 
   #[test]
@@ -185,7 +186,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(frame.into()),
+      current: Some(frame),
       ..Default::default()
     };
 
@@ -216,7 +217,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(frame.into()),
+      current: Some(frame),
       ..Default::default()
     };
 
@@ -235,7 +236,7 @@ mod tests {
       "\x1b[?2026h\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
     );
 
-    assert_eq!(renderer.presented.as_ref().unwrap().viewport_top, 2,);
+    assert_eq!(renderer.current.as_ref().unwrap().viewport_top, 2,);
   }
 
   #[test]
@@ -249,7 +250,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(frame.into()),
+      current: Some(frame),
       ..Default::default()
     };
 
@@ -269,7 +270,7 @@ mod tests {
     );
 
     assert_eq!(
-      renderer.presented.as_ref().unwrap().frame.lines,
+      renderer.current.as_ref().unwrap().lines,
       Vec::<String>::new(),
     );
   }
@@ -277,16 +278,13 @@ mod tests {
   #[test]
   fn full_render_clears_screen() {
     let mut renderer = TestRenderer {
-      presented: Some(
-        Frame::new(
-          Vec::new(),
-          Dimensions {
-            height: 9,
-            width: 80,
-          },
-        )
-        .into(),
-      ),
+      current: Some(Frame::new(
+        Vec::new(),
+        Dimensions {
+          height: 9,
+          width: 80,
+        },
+      )),
       ..Default::default()
     };
 
@@ -309,16 +307,13 @@ mod tests {
   #[test]
   fn full_render_rebuilds_scrollback_when_clearing() {
     let mut renderer = TestRenderer {
-      presented: Some(
-        Frame::new(
-          Vec::new(),
-          Dimensions {
-            height: 1,
-            width: 80,
-          },
-        )
-        .into(),
-      ),
+      current: Some(Frame::new(
+        Vec::new(),
+        Dimensions {
+          height: 1,
+          width: 80,
+        },
+      )),
       ..Default::default()
     };
 
@@ -375,7 +370,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(frame.into()),
+      current: Some(frame),
       ..Default::default()
     };
 
@@ -394,7 +389,7 @@ mod tests {
       "\x1b[?2026h\x1b[2A\x1b[1G\x1b[2Kbob\r\n\x1b[1G\x1b[2Kqux\r\n\x1b[1G\x1b[2K\x1b[1A\x1b[?2026l",
     );
 
-    assert_eq!(renderer.presented.as_ref().unwrap().viewport_top, 2,);
+    assert_eq!(renderer.current.as_ref().unwrap().viewport_top, 2,);
   }
 
   #[test]
@@ -408,7 +403,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(frame.into()),
+      current: Some(frame),
       ..Default::default()
     };
 
@@ -439,7 +434,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(frame.into()),
+      current: Some(frame),
       ..Default::default()
     };
 
@@ -470,7 +465,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(frame.into()),
+      current: Some(frame),
       ..Default::default()
     };
 
@@ -507,7 +502,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(frame.clone().into()),
+      current: Some(frame.clone()),
       ..Default::default()
     };
 
@@ -526,7 +521,7 @@ mod tests {
       "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\r\n\x1b[1G\x1b[2Kqux\r\n\x1b[1G\x1b[2Kquux\x1b[?2026l",
     );
 
-    assert_eq!(renderer.presented.as_ref().unwrap().viewport_top, 1,);
+    assert_eq!(renderer.current.as_ref().unwrap().viewport_top, 1,);
   }
 
   #[test]
@@ -540,7 +535,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(frame.into()),
+      current: Some(frame),
       ..Default::default()
     };
 
@@ -571,7 +566,7 @@ mod tests {
     );
 
     let mut renderer = TestRenderer {
-      presented: Some(frame.into()),
+      current: Some(frame),
       ..Default::default()
     };
 
