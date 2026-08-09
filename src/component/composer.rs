@@ -63,7 +63,7 @@ mod tests {
 
   #[test]
   fn command_rendering() {
-    let composer = Composer::new("/");
+    let composer = Composer::new("/", Vec::new());
 
     let lines = ComposerComponent::new(&composer).render(80);
 

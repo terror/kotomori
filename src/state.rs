@@ -170,6 +170,7 @@ impl State {
     match command {
       Command::Clear => {
         self.transcript.clear();
+        self.composer.clear_history();
         self.save_session();
       }
       Command::Quit => self.quit(),
@@ -222,7 +223,9 @@ impl State {
 
     let input = input.to_string();
 
+    self.composer.remember(&input);
     self.transcript.send(input.clone());
+
     self.save_session();
 
     let messages = self.transcript.messages();
@@ -247,12 +250,23 @@ impl State {
     mut session: Session,
   ) -> Result<Self> {
     let transcript = Transcript::with_entries(session.entries.clone());
+    let history = transcript
+      .entries
+      .iter()
+      .filter_map(|entry| match entry {
+        TranscriptEntry::User(input) => Some(input.clone()),
+        _ => None,
+      })
+      .collect();
 
     session.set_model(&settings.model);
 
     Ok(Self {
       active_run_id: None,
-      composer: Composer::new(settings.prompt.as_deref().unwrap_or_default()),
+      composer: Composer::new(
+        settings.prompt.as_deref().unwrap_or_default(),
+        history,
+      ),
       database,
       directory: env::current_dir()?,
       input_mode: InputMode::Compose,
@@ -1092,6 +1106,170 @@ mod tests {
   }
 
   #[test]
+  fn prompt_history_edit_detaches_navigation() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("history".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_agent_event(AgentEvent::Done);
+    state.handle_event(Event::Action(Action::SelectPrevious));
+    state.handle_event(Event::Action(Action::Edit(Input {
+      key: Key::Char('!'),
+      ..Default::default()
+    })));
+    state.handle_event(Event::Action(Action::SelectNext));
+
+    assert_eq!(state.composer.input_text(), "history!");
+
+    state.handle_event(Event::Action(Action::SelectPrevious));
+    assert_eq!(state.composer.input_text(), "history");
+
+    state.handle_event(Event::Action(Action::SelectNext));
+    assert_eq!(state.composer.input_text(), "history!");
+  }
+
+  #[test]
+  fn prompt_history_is_cleared_by_clear_command() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("history".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_agent_event(AgentEvent::Done);
+
+    for c in "/clear".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_event(Event::Action(Action::SelectPrevious));
+
+    assert_eq!(state.composer.input_text(), "");
+  }
+
+  #[test]
+  fn prompt_history_loads_session() {
+    let settings = Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("draft".into()),
+      yolo: false,
+    };
+
+    let mut session = Session::new(&settings).unwrap();
+    session.entries = vec![
+      TranscriptEntry::User("foo".into()),
+      TranscriptEntry::Agent("bar".into()),
+      TranscriptEntry::User("baz\nqux".into()),
+    ];
+
+    let mut state =
+      State::with_session(&settings, Database::new().unwrap(), session)
+        .unwrap();
+
+    state.handle_event(Event::Action(Action::SelectPrevious));
+    assert_eq!(state.composer.input_text(), "baz\nqux");
+
+    state.handle_event(Event::Action(Action::SelectPrevious));
+    assert_eq!(state.composer.cursor().0, 0);
+
+    state.handle_event(Event::Action(Action::SelectPrevious));
+    assert_eq!(state.composer.input_text(), "foo");
+  }
+
+  #[test]
+  fn prompt_history_navigates_and_restores_draft() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_agent_event(AgentEvent::Done);
+
+    for c in "bar".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_agent_event(AgentEvent::Done);
+
+    for c in "draft".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    state.handle_event(Event::Action(Action::SelectPrevious));
+    assert_eq!(state.composer.input_text(), "bar");
+
+    state.handle_event(Event::Action(Action::SelectPrevious));
+    assert_eq!(state.composer.input_text(), "foo");
+
+    state.handle_event(Event::Action(Action::SelectNext));
+    assert_eq!(state.composer.input_text(), "bar");
+
+    state.handle_event(Event::Action(Action::SelectNext));
+    assert_eq!(state.composer.input_text(), "draft");
+  }
+
+  #[test]
+  fn prompt_history_preserves_multiline_navigation() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("history".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_agent_event(AgentEvent::Done);
+
+    for input in [
+      Input {
+        key: Key::Char('a'),
+        ..Default::default()
+      },
+      Input {
+        key: Key::Enter,
+        ..Default::default()
+      },
+      Input {
+        key: Key::Char('b'),
+        ..Default::default()
+      },
+    ] {
+      state.handle_event(Event::Action(Action::Edit(input)));
+    }
+
+    state.handle_event(Event::Action(Action::SelectPrevious));
+    assert_eq!(state.composer.input_text(), "a\nb");
+    assert_eq!(state.composer.cursor().0, 0);
+
+    state.handle_event(Event::Action(Action::SelectPrevious));
+    assert_eq!(state.composer.input_text(), "history");
+
+    state.handle_event(Event::Action(Action::SelectNext));
+    assert_eq!(state.composer.input_text(), "a\nb");
+    assert_eq!(state.composer.cursor().0, 1);
+  }
+
+  #[test]
   fn quit_interrupts_active_agent() {
     let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
@@ -1156,67 +1334,6 @@ mod tests {
 
     assert_matches!(state.input_mode, InputMode::Compose);
     assert!(response_receiver.await.is_err());
-  }
-
-  #[test]
-  fn submit_is_ignored_while_agent_active() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
-    .unwrap();
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
-    );
-
-    for c in "bar".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      Vec::new()
-    );
-
-    assert_eq!(state.composer.input_text(), "bar");
-
-    assert_eq!(
-      state.transcript.messages(),
-      vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
-    );
-  }
-
-  #[test]
-  fn submit_trims_input() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("  foo  ".into()),
-      yolo: false,
-    })
-    .unwrap();
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
-    );
-
-    assert_eq!(state.composer.input_text(), "");
   }
 
   #[tokio::test]
@@ -1298,6 +1415,67 @@ mod tests {
         Message::Agent(vec![AgentMessageContent::Text("current".into())]),
       ]
     );
+  }
+
+  #[test]
+  fn submit_is_ignored_while_agent_active() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])],
+        run_id: 0,
+      }]
+    );
+
+    for c in "bar".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Vec::new()
+    );
+
+    assert_eq!(state.composer.input_text(), "bar");
+
+    assert_eq!(
+      state.transcript.messages(),
+      vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
+    );
+  }
+
+  #[test]
+  fn submit_trims_input() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("  foo  ".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])],
+        run_id: 0,
+      }]
+    );
+
+    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]

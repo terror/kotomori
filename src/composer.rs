@@ -3,6 +3,9 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Composer {
   command_index: usize,
+  history: Vec<String>,
+  history_draft: Option<String>,
+  history_index: Option<usize>,
   textarea: TextArea<'static>,
 }
 
@@ -10,6 +13,14 @@ impl Composer {
   pub(crate) fn clear(&mut self) {
     self.textarea = TextArea::default();
     self.command_index = 0;
+    self.history_draft = None;
+    self.history_index = None;
+  }
+
+  pub(crate) fn clear_history(&mut self) {
+    self.history.clear();
+    self.history_draft = None;
+    self.history_index = None;
   }
 
   fn command_input(&self) -> Option<&str> {
@@ -47,6 +58,8 @@ impl Composer {
   pub(crate) fn input(&mut self, input: Input) {
     if self.textarea.input(input) {
       self.command_index = 0;
+      self.history_draft = None;
+      self.history_index = None;
     }
   }
 
@@ -58,16 +71,27 @@ impl Composer {
     self.textarea.lines()
   }
 
-  pub(crate) fn new(input: &str) -> Self {
+  pub(crate) fn new(input: &str, history: Vec<String>) -> Self {
     Self {
       command_index: 0,
+      history,
+      history_draft: None,
+      history_index: None,
       textarea: Self::textarea(input),
     }
+  }
+
+  pub(crate) fn remember(&mut self, input: &str) {
+    self.history.push(input.into());
+    self.history_draft = None;
+    self.history_index = None;
   }
 
   pub(crate) fn select_next(&mut self) {
     if self.selected_command().is_some() {
       self.select_next_command();
+    } else if self.cursor().0 == self.lines().len().saturating_sub(1) {
+      self.select_next_history();
     } else {
       self.input(Input {
         key: Key::Down,
@@ -84,9 +108,28 @@ impl Composer {
     }
   }
 
+  fn select_next_history(&mut self) {
+    let Some(index) = self.history_index else {
+      return;
+    };
+
+    if let Some(input) = self.history.get(index.saturating_add(1)).cloned() {
+      self.history_index = Some(index.saturating_add(1));
+      self.set_input(&input);
+    } else {
+      self.history_index = None;
+
+      let draft = self.history_draft.take().unwrap_or_default();
+
+      self.set_input(&draft);
+    }
+  }
+
   pub(crate) fn select_previous(&mut self) {
     if self.selected_command().is_some() {
       self.select_previous_command();
+    } else if self.cursor().0 == 0 {
+      self.select_previous_history();
     } else {
       self.input(Input {
         key: Key::Up,
@@ -105,6 +148,28 @@ impl Composer {
         self.command_index.saturating_sub(1)
       };
     }
+  }
+
+  fn select_previous_history(&mut self) {
+    let index = if let Some(index) = self.history_index {
+      index.checked_sub(1)
+    } else {
+      self.history.len().checked_sub(1)
+    };
+
+    let Some(index) = index else {
+      return;
+    };
+
+    if self.history_index.is_none() {
+      self.history_draft = Some(self.input_text());
+    }
+
+    self.history_index = Some(index);
+
+    let input = self.history[index].clone();
+
+    self.set_input(&input);
   }
 
   pub(crate) fn selected_command(&self) -> Option<Command> {
