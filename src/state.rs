@@ -110,26 +110,8 @@ impl State {
         return self.interrupt_agent();
       }
       Action::Quit => self.quit(),
-      Action::SelectNext => {
-        if self.composer.selected_command().is_some() {
-          self.composer.select_next_command();
-        } else {
-          self.composer.input(Input {
-            key: Key::Down,
-            ..Default::default()
-          });
-        }
-      }
-      Action::SelectPrevious => {
-        if self.composer.selected_command().is_some() {
-          self.composer.select_previous_command();
-        } else {
-          self.composer.input(Input {
-            key: Key::Up,
-            ..Default::default()
-          });
-        }
-      }
+      Action::SelectNext => self.composer.select_next(),
+      Action::SelectPrevious => self.composer.select_previous(),
       Action::Submit => return self.submit(),
     }
 
