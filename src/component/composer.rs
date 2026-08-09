@@ -38,6 +38,10 @@ impl Component for ComposerComponent<'_> {
     )
     .render(width);
 
+    if selected.is_some() {
+      lines.push(LineComponent::blank());
+    }
+
     lines.extend(self.composer.commands().enumerate().map(
       |(index, command)| {
         let input_style = match selected {
@@ -67,8 +71,10 @@ mod tests {
 
     let lines = ComposerComponent::new(&composer).render(80);
 
+    assert_eq!(lines[1], LineComponent::blank());
+
     assert_eq!(
-      lines[1],
+      lines[2],
       LineComponent::from([
         Span::styled("/clear", Style::Accent),
         Span::styled("  ", Style::Muted),
@@ -77,7 +83,7 @@ mod tests {
     );
 
     assert_eq!(
-      lines[2],
+      lines[3],
       LineComponent::from([
         Span::styled("/quit", Style::Secondary),
         Span::styled("  ", Style::Muted),
