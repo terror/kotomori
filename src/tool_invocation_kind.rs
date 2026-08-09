@@ -3,7 +3,7 @@ use super::*;
 macro_rules! define_tool_invocation_kind {
   ($( $variant:ident($tool:ty), )*) => {
     #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
-    #[serde(untagged)]
+    #[serde(tag = "name", content = "arguments", rename_all = "snake_case")]
     pub(crate) enum ToolInvocationKind {
       $(
         $variant($tool),
@@ -20,8 +20,12 @@ macro_rules! define_tool_invocation_kind {
       }
 
       pub(crate) fn arguments(&self) -> Value {
-        serde_json::to_value(self)
-          .expect("failed to serialize tool arguments")
+        match self {
+          $(
+            Self::$variant(tool) => serde_json::to_value(tool),
+          )*
+        }
+        .expect("failed to serialize tool arguments")
       }
 
       pub(crate) fn details(&self) -> Vec<(&'static str, String)> {
@@ -107,6 +111,23 @@ mod tests {
   }
 
   #[test]
+  fn deserialization_uses_the_tool_name() {
+    assert_eq!(
+      serde_json::from_value::<ToolInvocationKind>(serde_json::json!({
+        "name": "command",
+        "arguments": {
+          "command": "echo hello",
+        },
+      }))
+      .unwrap(),
+      ToolInvocationKind::Command(CommandTool {
+        command: "echo hello".into(),
+        cwd: None,
+      })
+    );
+  }
+
+  #[test]
   fn metadata_methods_delegate_to_the_wrapped_tool() {
     let tool = CommandTool {
       command: "foo bar".into(),
@@ -119,5 +140,23 @@ mod tests {
     assert_eq!(invocation.display(), tool.display());
     assert_eq!(invocation.subject(), tool.subject());
     assert_eq!(invocation.details(), tool.details());
+  }
+
+  #[test]
+  fn serialization_identifies_the_tool() {
+    let invocation = ToolInvocationKind::Command(CommandTool {
+      command: "echo hello".into(),
+      cwd: None,
+    });
+
+    assert_eq!(
+      serde_json::to_value(invocation).unwrap(),
+      serde_json::json!({
+        "name": "command",
+        "arguments": {
+          "command": "echo hello",
+        },
+      })
+    );
   }
 }
