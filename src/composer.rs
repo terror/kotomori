@@ -65,7 +65,18 @@ impl Composer {
     }
   }
 
-  pub(crate) fn select_next_command(&mut self) {
+  pub(crate) fn select_next(&mut self) {
+    if self.selected_command().is_some() {
+      self.select_next_command();
+    } else {
+      self.input(Input {
+        key: Key::Down,
+        ..Default::default()
+      });
+    }
+  }
+
+  fn select_next_command(&mut self) {
     let len = self.commands().count();
 
     if len > 0 {
@@ -73,7 +84,18 @@ impl Composer {
     }
   }
 
-  pub(crate) fn select_previous_command(&mut self) {
+  pub(crate) fn select_previous(&mut self) {
+    if self.selected_command().is_some() {
+      self.select_previous_command();
+    } else {
+      self.input(Input {
+        key: Key::Up,
+        ..Default::default()
+      });
+    }
+  }
+
+  fn select_previous_command(&mut self) {
     let len = self.commands().count();
 
     if len > 0 {
