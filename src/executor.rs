@@ -109,7 +109,24 @@ impl Executor {
       }
     }
 
-    Ok(self.limits.decode(bytes))
+    let truncated = bytes.len() > self.limits.output_limit;
+
+    if truncated {
+      bytes.truncate(
+        self
+          .limits
+          .output_limit
+          .saturating_sub(self.limits.truncated_marker.len()),
+      );
+    }
+
+    let mut output = String::from_utf8_lossy(&bytes).into_owned();
+
+    if truncated {
+      output.push_str(self.limits.truncated_marker);
+    }
+
+    Ok(output)
   }
 
   async fn timeout_result(
