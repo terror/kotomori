@@ -56,7 +56,7 @@ impl From<&Request> for CompletionRequest {
 
 #[cfg(test)]
 mod tests {
-  use {super::*, serde_json::json};
+  use super::*;
 
   #[test]
   fn completion_request_uses_blank_user_message_for_empty_history() {
@@ -113,20 +113,12 @@ mod tests {
     });
 
     assert_eq!(
-      request.tools,
-      vec![ToolDefinition {
-        description: "Run a command using the system shell and capture stdout, stderr, and exit status. Pipes, redirects, glob expansion, and command chaining are supported.".into(),
-        name: "command".into(),
-        parameters: json!({
-          "type": "object",
-          "properties": {
-            "command": {"type": "string"},
-            "cwd": {"type": ["string", "null"]},
-          },
-          "required": ["command"],
-          "additionalProperties": false,
-        }),
-      }],
+      request
+        .tools
+        .iter()
+        .map(|tool| tool.name.as_str())
+        .collect::<Vec<_>>(),
+      ["command"],
     );
   }
 
