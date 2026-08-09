@@ -167,18 +167,31 @@ impl State {
   }
 
   fn run_command(&mut self, command: Command) -> Vec<Effect> {
-    match command {
+    let effects = match command {
       Command::Clear => {
+        let interrupt_agent = self.active_run_id.take().is_some();
+
+        self.input_mode.clear_approval();
         self.transcript.clear();
         self.composer.clear_history();
+
         self.save_session();
+
+        if interrupt_agent {
+          vec![Effect::InterruptAgent]
+        } else {
+          Vec::new()
+        }
       }
-      Command::Quit => self.quit(),
-    }
+      Command::Quit => {
+        self.quit();
+        Vec::new()
+      }
+    };
 
     self.reset_input();
 
-    Vec::new()
+    effects
   }
 
   fn save_session(&mut self) {
@@ -250,6 +263,7 @@ impl State {
     mut session: Session,
   ) -> Result<Self> {
     let transcript = Transcript::with_entries(session.entries.clone());
+
     let history = transcript
       .entries
       .iter()
@@ -898,6 +912,62 @@ mod tests {
     assert!(state.transcript.messages().is_empty());
 
     assert_eq!(state.composer.input_text(), "");
+  }
+
+  #[test]
+  fn command_clear_interrupts_active_agent_and_ignores_late_events() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+
+    for c in "/clear".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::InterruptAgent]
+    );
+
+    assert_eq!(state.active_run_id, None);
+
+    assert!(state.transcript.messages().is_empty());
+
+    let invocation = ToolInvocation {
+      id: "late".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        command: "echo late".into(),
+        cwd: None,
+      }),
+    };
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::ToolCall(invocation),
+      run_id: 0,
+    });
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::ToolResult {
+        id: "late".into(),
+        result: ToolResult::default(),
+      },
+      run_id: 0,
+    });
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
+
+    assert!(state.transcript.messages().is_empty());
   }
 
   #[test]
