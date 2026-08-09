@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct Request {
   pub(crate) messages: Vec<Message>,
   pub(crate) model: Model,

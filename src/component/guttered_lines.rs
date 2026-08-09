@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct GutteredLinesComponent {
   lines: Vec<LineComponent>,
 }

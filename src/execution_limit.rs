@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct ExecutionLimit {
   pub(crate) output_limit: usize,
   pub(crate) timeout: Duration,

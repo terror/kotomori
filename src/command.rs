@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
+#[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq)]
 pub(crate) enum Command {
   Clear,
   Quit,

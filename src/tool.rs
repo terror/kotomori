@@ -36,7 +36,7 @@ impl From<&Tool> for ToolDefinition {
 
 macro_rules! define_tools {
   ($( $variant:ident($tool:ty), )*) => {
-    #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
+    #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
     #[serde(tag = "name", content = "arguments", rename_all = "snake_case")]
     pub(crate) enum ToolInvocationKind {
       $(
