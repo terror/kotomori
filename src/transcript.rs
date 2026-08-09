@@ -72,7 +72,9 @@ impl Transcript {
         TranscriptEntry::Agent(content) => {
           agent_content.push(AgentMessageContent::Text(content.clone()));
         }
-        TranscriptEntry::Error(_) | TranscriptEntry::Interrupted => {}
+        TranscriptEntry::Error(_)
+        | TranscriptEntry::Interrupted
+        | TranscriptEntry::Notice(_) => {}
         TranscriptEntry::Reasoning(reasoning) => {
           agent_content.push(AgentMessageContent::Reasoning(reasoning.clone()));
         }
@@ -124,8 +126,8 @@ impl Transcript {
     messages
   }
 
-  pub(crate) fn push_agent(&mut self, content: impl Into<String>) {
-    self.entries.push(TranscriptEntry::Agent(content.into()));
+  pub(crate) fn notice(&mut self, notice: impl Into<String>) {
+    self.entries.push(TranscriptEntry::Notice(notice.into()));
   }
 
   pub(crate) fn push_agent_delta(&mut self, delta: &str) {
@@ -408,9 +410,9 @@ mod tests {
 
   #[test]
   fn messages_flushes_agent_content_before_user() {
-    let mut transcript = Transcript::default();
+    let mut transcript =
+      Transcript::with_entries(vec![TranscriptEntry::Agent("foo".into())]);
 
-    transcript.push_agent("foo");
     transcript.send("bar".into());
 
     assert_eq!(
@@ -479,10 +481,17 @@ mod tests {
   }
 
   #[test]
-  fn messages_includes_agent_entries() {
-    let mut transcript = Transcript::default();
+  fn messages_ignores_notice_entries() {
+    let transcript =
+      Transcript::with_entries(vec![TranscriptEntry::Notice("foo".into())]);
 
-    transcript.push_agent("foo");
+    assert!(transcript.messages().is_empty());
+  }
+
+  #[test]
+  fn messages_includes_agent_entries() {
+    let transcript =
+      Transcript::with_entries(vec![TranscriptEntry::Agent("foo".into())]);
 
     assert_eq!(
       transcript.messages(),
@@ -653,6 +662,21 @@ mod tests {
         AgentMessageContent::Reasoning("foo".into()),
         AgentMessageContent::ToolCall(invocation),
       ])]
+    );
+  }
+
+  #[test]
+  fn notice_preserves_active_activity() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_delta("foo");
+    transcript.notice("bar");
+
+    assert!(transcript.is_agent_active());
+
+    assert_matches!(
+      &transcript.entries[..],
+      [TranscriptEntry::Notice(notice)] if notice == "bar"
     );
   }
 
