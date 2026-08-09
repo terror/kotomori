@@ -225,6 +225,7 @@ impl State {
 
     self.composer.remember(&input);
     self.transcript.send(input.clone());
+
     self.save_session();
 
     let messages = self.transcript.messages();
