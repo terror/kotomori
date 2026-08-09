@@ -47,7 +47,6 @@ use {
   model::Model,
   options::Options,
   patch::Patch,
-  presented_frame::PresentedFrame,
   provider::Provider,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
@@ -158,7 +157,6 @@ mod message;
 mod model;
 mod options;
 mod patch;
-mod presented_frame;
 mod provider;
 mod provider_sink;
 mod raw_tool_call;

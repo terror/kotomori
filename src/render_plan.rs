@@ -7,31 +7,26 @@ pub(crate) enum RenderPlan {
 }
 
 impl RenderPlan {
-  pub(crate) fn between(
-    presented: &PresentedFrame,
-    next: &Frame,
-  ) -> Option<Self> {
-    if presented.frame.dimensions != next.dimensions {
+  pub(crate) fn between(current: &Frame, next: &Frame) -> Option<Self> {
+    if current.dimensions != next.dimensions {
       return Some(Self::Full);
     }
 
-    let changed = ChangedRange::between(&presented.frame.lines, &next.lines)?;
+    let changed = ChangedRange::between(&current.lines, &next.lines)?;
 
-    if changed.first < presented.viewport_top {
+    if changed.first < current.viewport_top {
       return Some(Self::Full);
     }
 
-    if changed.first >= next.len() && next.last_row() < presented.viewport_top {
+    if changed.first >= next.len() && next.last_row() < current.viewport_top {
       return Some(Self::Full);
     }
 
-    if presented.frame.len().saturating_sub(next.len()) > next.dimensions.height
-    {
+    if current.len().saturating_sub(next.len()) > next.dimensions.height {
       return Some(Self::Full);
     }
 
-    let prepend_line_feed =
-      changed.first > 0 && changed.first == presented.frame.len();
+    let prepend_line_feed = changed.first > 0 && changed.first == current.len();
 
     let move_target_row = if prepend_line_feed {
       changed.first.saturating_sub(1)
@@ -39,13 +34,13 @@ impl RenderPlan {
       changed.first
     };
 
-    let viewport_bottom = presented
+    let viewport_bottom = current
       .viewport_top
       .saturating_add(next.dimensions.height.saturating_sub(1));
 
     debug_assert!(move_target_row <= viewport_bottom);
 
-    let viewport_top = presented.viewport_top.max(
+    let viewport_top = current.viewport_top.max(
       changed
         .last
         .saturating_add(1)
@@ -67,14 +62,13 @@ mod tests {
 
   #[test]
   fn append_past_viewport_advances_viewport() {
-    let presented = Frame::new(
+    let current = Frame::new(
       vec!["foo".into(), "bar".into()],
       Dimensions {
         height: 1,
         width: 80,
       },
-    )
-    .into();
+    );
 
     let next = Frame::new(
       vec!["foo".into(), "bar".into(), "baz".into()],
@@ -85,7 +79,7 @@ mod tests {
     );
 
     assert_eq!(
-      RenderPlan::between(&presented, &next),
+      RenderPlan::between(&current, &next),
       Some(RenderPlan::Patch(Patch {
         changed: ChangedRange { first: 2, last: 2 },
         move_target_row: 1,
@@ -97,14 +91,13 @@ mod tests {
 
   #[test]
   fn append_starts_from_previous_row_and_feeds_line() {
-    let presented = Frame::new(
+    let current = Frame::new(
       vec!["foo".into()],
       Dimensions {
         height: 24,
         width: 80,
       },
-    )
-    .into();
+    );
 
     let next = Frame::new(
       vec!["foo".into(), "bar".into()],
@@ -115,7 +108,7 @@ mod tests {
     );
 
     assert_eq!(
-      RenderPlan::between(&presented, &next),
+      RenderPlan::between(&current, &next),
       Some(RenderPlan::Patch(Patch {
         changed: ChangedRange { first: 1, last: 1 },
         move_target_row: 0,
@@ -127,14 +120,13 @@ mod tests {
 
   #[test]
   fn replacement_starts_from_first_changed_row() {
-    let presented = Frame::new(
+    let current = Frame::new(
       vec!["foo".into(), "bar".into(), "baz".into()],
       Dimensions {
         height: 24,
         width: 80,
       },
-    )
-    .into();
+    );
 
     let next = Frame::new(
       vec!["foo".into(), "qux".into(), "baz".into()],
@@ -145,7 +137,7 @@ mod tests {
     );
 
     assert_eq!(
-      RenderPlan::between(&presented, &next),
+      RenderPlan::between(&current, &next),
       Some(RenderPlan::Patch(Patch {
         changed: ChangedRange { first: 1, last: 1 },
         move_target_row: 1,
