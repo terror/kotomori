@@ -95,6 +95,7 @@ impl<W: Write> Renderer<W> {
           .move_to_row(patch.changed.last, next.last_row())?;
 
         next.viewport_top = patch.viewport_top;
+
         next
       }
     };
