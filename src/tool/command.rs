@@ -1,25 +1,5 @@
 use super::*;
 
-macro_rules! define_tools {
-  ($macro:ident) => {
-    $macro! {
-      Command(CommandTool),
-    }
-  };
-}
-
-macro_rules! impl_from_tools {
-  ($( $variant:ident($tool:ty), )*) => {
-    $(
-      impl From<$tool> for ToolInvocationKind {
-        fn from(tool: $tool) -> Self {
-          Self::$variant(tool)
-        }
-      }
-    )*
-  };
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct CommandTool {
@@ -35,7 +15,7 @@ impl Display for CommandTool {
 }
 
 #[async_trait]
-impl ToolSpec for CommandTool {
+impl ToolCall for CommandTool {
   const DESCRIPTION: &'static str = "Run a command using the system shell and capture stdout, stderr, and exit status. Pipes, redirects, glob expansion, and command chaining are supported.";
 
   const NAME: &'static str = "command";
@@ -48,6 +28,10 @@ impl ToolSpec for CommandTool {
     }
   }
 
+  fn approval(&self) -> ApprovalPolicy {
+    ApprovalPolicy::Required
+  }
+
   fn details(&self) -> Vec<(&'static str, String)> {
     self
       .cwd
@@ -57,11 +41,7 @@ impl ToolSpec for CommandTool {
       .collect()
   }
 
-  fn display(&self) -> String {
-    self.to_string()
-  }
-
-  async fn execute(&self, executor: &Executor) -> ToolResult {
+  async fn execute(&self, context: &ToolContext) -> ToolResult {
     #[cfg(unix)]
     let mut command = {
       let mut command = AsyncCommand::new("/bin/sh");
@@ -80,19 +60,9 @@ impl ToolSpec for CommandTool {
       command.current_dir(cwd);
     }
 
-    executor.execute(command).await
-  }
-
-  fn requires_approval(&self) -> bool {
-    true
-  }
-
-  fn subject(&self) -> String {
-    self.to_string()
+    context.command_executor.execute(command).await
   }
 }
-
-define_tools!(impl_from_tools);
 
 #[cfg(test)]
 mod tests {
@@ -100,7 +70,7 @@ mod tests {
 
   #[test]
   fn tool_parameters_are_derived_from_type() {
-    let tool = Tool::new::<CommandTool>();
+    let tool = ToolInvocationKind::definitions().remove(0);
 
     assert_eq!(
       tool.parameters,

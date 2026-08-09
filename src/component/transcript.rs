@@ -376,6 +376,7 @@ mod tests {
         invocation,
         result: Some(ToolResult {
           exit_status: Some(0),
+          outcome: ToolOutcome::Success,
           stdout: Some("baz\n".into()),
           ..Default::default()
         }),
@@ -502,6 +503,7 @@ mod tests {
       invocation,
       result: Some(ToolResult {
         exit_status: Some(0),
+        outcome: ToolOutcome::Success,
         stdout: Some("foobarbaz\n\nbar\nbaz\nqux\n".into()),
         ..Default::default()
       }),

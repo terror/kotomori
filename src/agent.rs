@@ -3,12 +3,11 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Agent {
   event_sender: UnboundedSender<Event>,
-  executor: Executor,
   loader: Loader,
   provider: Arc<dyn Provider>,
   settings: Settings,
   task: Option<task::JoinHandle<()>>,
-  tool_registry: ToolRegistry,
+  tool_context: ToolContext,
 }
 
 impl Agent {
@@ -20,7 +19,7 @@ impl Agent {
     run_id: u64,
     tool_call: &ToolInvocation,
   ) -> Result<ToolApproval> {
-    if self.settings.yolo || !tool_call.kind.requires_approval() {
+    if self.settings.yolo || tool_call.kind.approval() == ApprovalPolicy::None {
       return Ok(ToolApproval::Approved);
     }
 
@@ -48,12 +47,11 @@ impl Agent {
 
     Ok(Self {
       event_sender,
-      executor: Executor::default(),
       loader: Loader::new()?,
       provider,
       settings: settings.clone(),
       task: None,
-      tool_registry: ToolRegistry::default(),
+      tool_context: ToolContext::default(),
     })
   }
 
@@ -62,12 +60,11 @@ impl Agent {
 
     let agent = Self {
       event_sender: self.event_sender.clone(),
-      executor: self.executor,
       loader: self.loader.clone(),
       provider: self.provider.clone(),
       settings: self.settings.clone(),
       task: None,
-      tool_registry: self.tool_registry.clone(),
+      tool_context: self.tool_context,
     };
 
     self.task = Some(tokio::spawn(async move {
@@ -89,7 +86,6 @@ impl Agent {
       let mut sink = ProviderSink {
         event_sender: self.event_sender.clone(),
         run_id,
-        tool_registry: self.tool_registry.clone(),
         ..Default::default()
       };
 
@@ -97,12 +93,30 @@ impl Agent {
         messages: messages.clone(),
         model: self.settings.model.clone(),
         system: (!system.is_empty()).then(|| system.clone()),
-        tool_registry: self.tool_registry.clone(),
       };
 
       self.provider.stream(request, &mut sink).await?;
 
-      let content = sink.finish();
+      let content = sink
+        .finish()
+        .into_iter()
+        .map(|content| match content {
+          ProviderContent::Reasoning(reasoning) => {
+            Ok(AgentMessageContent::Reasoning(reasoning))
+          }
+          ProviderContent::Text(text) => Ok(AgentMessageContent::Text(text)),
+          ProviderContent::ToolCall(call) => {
+            let invocation = ToolInvocationKind::decode(call)?;
+
+            self.event_sender.send(Event::Agent {
+              event: AgentEvent::ToolCall(invocation.clone()),
+              run_id,
+            })?;
+
+            Ok(AgentMessageContent::ToolCall(invocation))
+          }
+        })
+        .collect::<Result<Vec<_>>>()?;
 
       if content.is_empty() {
         break;
@@ -145,7 +159,7 @@ impl Agent {
       for tool_call in tool_calls {
         let result = match self.approval(run_id, &tool_call).await? {
           ToolApproval::Approved => {
-            tool_call.kind.execute(&self.executor).await
+            tool_call.kind.execute(&self.tool_context).await
           }
           ToolApproval::Denied => ToolResult {
             stderr: Some("permission denied".into()),
@@ -265,7 +279,7 @@ mod tests {
             }),
             id: "foo".into(),
             name: "command".into(),
-          })?,
+          }),
         }
       }
 
@@ -290,7 +304,6 @@ mod tests {
 
       let agent = Agent {
         event_sender,
-        executor: Executor::default(),
         loader: Loader::with_cwd(directory.path()),
         provider: Arc::new(TestProvider {
           outputs: Mutex::new(outputs.into()),
@@ -302,7 +315,7 @@ mod tests {
           yolo,
         },
         task: None,
-        tool_registry: ToolRegistry::default(),
+        tool_context: ToolContext::default(),
       };
 
       Self {
@@ -469,6 +482,7 @@ mod tests {
 
     let tool_result = ToolResult {
       exit_status: Some(0),
+      outcome: ToolOutcome::Success,
       stdout: Some(COMMAND_OUTPUT.into()),
       ..Default::default()
     };
@@ -555,6 +569,7 @@ mod tests {
 
     let tool_result = ToolResult {
       exit_status: Some(0),
+      outcome: ToolOutcome::Success,
       stdout: Some(COMMAND_OUTPUT.into()),
       ..Default::default()
     };
@@ -608,6 +623,7 @@ mod tests {
 
     let tool_result = ToolResult {
       exit_status: Some(0),
+      outcome: ToolOutcome::Success,
       stdout: Some(COMMAND_OUTPUT.into()),
       ..Default::default()
     };

@@ -1,11 +1,11 @@
 use super::*;
 
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct Executor {
+pub(crate) struct CommandExecutor {
   limits: ExecutionLimit,
 }
 
-impl Executor {
+impl CommandExecutor {
   pub(crate) async fn execute(&self, mut command: AsyncCommand) -> ToolResult {
     command.kill_on_drop(true);
 
@@ -75,6 +75,11 @@ impl Executor {
 
     ToolResult {
       exit_status: status.code(),
+      outcome: if status.success() {
+        ToolOutcome::Success
+      } else {
+        ToolOutcome::Failure
+      },
       stderr: (!stderr.is_empty()).then_some(stderr),
       stdout: (!stdout.is_empty()).then_some(stdout),
       ..Default::default()
@@ -194,7 +199,7 @@ mod tests {
 
   #[tokio::test]
   async fn read_pipe_output_is_capped() {
-    let executor = Executor {
+    let executor = CommandExecutor {
       limits: ExecutionLimit {
         output_limit: 8,
         timeout: Duration::from_secs(30),

@@ -2,11 +2,10 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ProviderSink {
-  pub(super) content: Vec<AgentMessageContent>,
+  pub(super) content: Vec<ProviderContent>,
   pub(super) event_sender: UnboundedSender<Event>,
   pub(super) reasoning_buffer: ReasoningBuffer,
   pub(super) run_id: u64,
-  pub(super) tool_registry: ToolRegistry,
 }
 
 impl ProviderSink {
@@ -15,12 +14,10 @@ impl ProviderSink {
 
     if !delta.is_empty() {
       match self.content.last_mut() {
-        Some(AgentMessageContent::Text(text)) => text.push_str(&delta),
-        Some(
-          AgentMessageContent::Reasoning(_) | AgentMessageContent::ToolCall(_),
-        )
+        Some(ProviderContent::Text(text)) => text.push_str(&delta),
+        Some(ProviderContent::Reasoning(_) | ProviderContent::ToolCall(_))
         | None => {
-          self.content.push(AgentMessageContent::Text(delta.clone()));
+          self.content.push(ProviderContent::Text(delta.clone()));
         }
       }
     }
@@ -31,7 +28,7 @@ impl ProviderSink {
     })?)
   }
 
-  pub(crate) fn finish(self) -> Vec<AgentMessageContent> {
+  pub(crate) fn finish(self) -> Vec<ProviderContent> {
     self.content
   }
 
@@ -41,14 +38,13 @@ impl ProviderSink {
     }
 
     match self.content.last_mut() {
-      Some(AgentMessageContent::Reasoning(reasoning)) => {
+      Some(ProviderContent::Reasoning(reasoning)) => {
         reasoning.push_str(delta);
       }
-      Some(AgentMessageContent::Text(_) | AgentMessageContent::ToolCall(_))
-      | None => {
+      Some(ProviderContent::Text(_) | ProviderContent::ToolCall(_)) | None => {
         self
           .content
-          .push(AgentMessageContent::Reasoning(delta.to_owned()));
+          .push(ProviderContent::Reasoning(delta.to_owned()));
       }
     }
   }
@@ -83,17 +79,8 @@ impl ProviderSink {
     Ok(())
   }
 
-  pub(crate) fn tool_call(&mut self, tool_call: RawToolCall) -> Result {
-    let tool_call = self.tool_registry.invocation(tool_call)?;
-
-    self
-      .content
-      .push(AgentMessageContent::ToolCall(tool_call.clone()));
-
-    Ok(self.event_sender.send(Event::Agent {
-      event: AgentEvent::ToolCall(tool_call),
-      run_id: self.run_id,
-    })?)
+  pub(crate) fn tool_call(&mut self, tool_call: RawToolCall) {
+    self.content.push(ProviderContent::ToolCall(tool_call));
   }
 }
 
@@ -106,7 +93,6 @@ impl Default for ProviderSink {
       event_sender: sender,
       reasoning_buffer: ReasoningBuffer::default(),
       run_id: 0,
-      tool_registry: ToolRegistry::default(),
     }
   }
 }

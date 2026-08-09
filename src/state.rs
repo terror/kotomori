@@ -331,6 +331,7 @@ mod tests {
 
     let result = ToolResult {
       exit_status: Some(0),
+      outcome: ToolOutcome::Success,
       stdout: Some("qux".into()),
       ..Default::default()
     };

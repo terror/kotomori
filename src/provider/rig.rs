@@ -54,7 +54,7 @@ where
             arguments: tool_call.function.arguments,
             id,
             name: tool_call.function.name,
-          })?;
+          });
         }
         StreamedAssistantContent::Final(_)
         | StreamedAssistantContent::ReasoningDelta { .. }

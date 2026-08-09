@@ -6,6 +6,7 @@ use {
   agent_message_content::AgentMessageContent,
   anyhow::{Context, Error, bail},
   app::App,
+  approval_policy::ApprovalPolicy,
   approval_request::ApprovalRequest,
   arguments::Arguments,
   async_trait::async_trait,
@@ -13,6 +14,7 @@ use {
   channel::Channel,
   clap::{Args, Parser},
   command::Command,
+  command_executor::CommandExecutor,
   component::{Component, ViewComponent},
   composer::Composer,
   config::Config,
@@ -35,7 +37,6 @@ use {
   effect::Effect,
   event::Event,
   execution_limit::ExecutionLimit,
-  executor::Executor,
   frame::Frame,
   futures_util::StreamExt,
   home::home_dir,
@@ -48,6 +49,7 @@ use {
   options::Options,
   patch::Patch,
   provider::Provider,
+  provider_content::ProviderContent,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
@@ -105,15 +107,14 @@ use {
     task,
     time::{interval, sleep, timeout},
   },
-  tool::Tool,
+  tool::ToolInvocationKind,
   tool_action_tense::ToolActionTense,
   tool_approval::ToolApproval,
+  tool_call::ToolCall,
+  tool_context::ToolContext,
   tool_invocation::ToolInvocation,
-  tool_invocation_kind::ToolInvocationKind,
-  tool_registry::ToolRegistry,
+  tool_outcome::ToolOutcome,
   tool_result::ToolResult,
-  tool_spec::ToolSpec,
-  tools::CommandTool,
   transcript::Transcript,
   transcript_entry::TranscriptEntry,
   unicode_width::UnicodeWidthChar,
@@ -128,17 +129,22 @@ use std::os::unix::fs::PermissionsExt;
 #[macro_use]
 mod testing;
 
+#[cfg(test)]
+use tool::CommandTool;
+
 mod action;
 mod agent;
 mod agent_activity;
 mod agent_event;
 mod agent_message_content;
 mod app;
+mod approval_policy;
 mod approval_request;
 mod arguments;
 mod changed_range;
 mod channel;
 mod command;
+mod command_executor;
 mod component;
 mod composer;
 mod config;
@@ -149,7 +155,6 @@ mod duration_ext;
 mod effect;
 mod event;
 mod execution_limit;
-mod executor;
 mod frame;
 mod input_mode;
 mod loader;
@@ -158,6 +163,7 @@ mod model;
 mod options;
 mod patch;
 mod provider;
+mod provider_content;
 mod provider_sink;
 mod raw_tool_call;
 mod reasoning_buffer;
@@ -175,16 +181,14 @@ mod state;
 mod str_ext;
 mod style;
 mod subcommand;
-#[macro_use]
-mod tools;
 mod tool;
 mod tool_action_tense;
 mod tool_approval;
+mod tool_call;
+mod tool_context;
 mod tool_invocation;
-mod tool_invocation_kind;
-mod tool_registry;
+mod tool_outcome;
 mod tool_result;
-mod tool_spec;
 mod transcript;
 mod transcript_entry;
 mod user_message_content;

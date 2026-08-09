@@ -15,29 +15,18 @@ impl ToolInvocation {
     self.title(ToolActionTense::Failed)
   }
 
-  pub(crate) fn from_raw<T>(call: RawToolCall) -> Result<ToolInvocationKind>
-  where
-    T: ToolSpec,
-  {
-    Ok(
-      serde_json::from_value::<T>(call.arguments)
-        .with_context(|| format!("failed to decode `{}` arguments", call.name))?
-        .into(),
-    )
-  }
-
   pub(crate) fn progressive_tense(&self) -> String {
     self.title(ToolActionTense::Progressive)
   }
 
   fn title(&self, tense: ToolActionTense) -> String {
-    format!("{} {}", self.kind.action(tense), self.kind.subject())
+    format!("{} {}", self.kind.action(tense), self.kind)
   }
 }
 
 impl Display for ToolInvocation {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-    write!(f, "{}", self.kind.display())
+    Display::fmt(&self.kind, f)
   }
 }
 
@@ -46,14 +35,13 @@ mod tests {
   use {super::*, serde_json::json};
 
   #[test]
-  fn parses_command_tool_call() {
-    let invocation = ToolRegistry::default()
-      .invocation(RawToolCall {
-        arguments: json!({"command": "bar baz", "cwd": null}),
-        id: "foo".into(),
-        name: "command".into(),
-      })
-      .unwrap();
+  fn decodes_command_tool_call() {
+    let invocation = ToolInvocationKind::decode(RawToolCall {
+      arguments: json!({"command": "bar baz", "cwd": null}),
+      id: "foo".into(),
+      name: "command".into(),
+    })
+    .unwrap();
 
     assert_eq!(
       invocation,
@@ -68,26 +56,34 @@ mod tests {
   }
 
   #[test]
-  fn serializes_tool_arguments() {
-    let invocation = ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "baz bar".into(),
-        cwd: None,
-      }),
-    };
+  fn tagged_kind_round_trips() {
+    let kind = ToolInvocationKind::Command(CommandTool {
+      command: "echo hello".into(),
+      cwd: None,
+    });
 
-    assert_eq!(invocation.kind.arguments(), json!({"command": "baz bar"}),);
+    let value = json!({
+      "name": "command",
+      "arguments": {"command": "echo hello"},
+    });
+
+    assert_eq!(serde_json::to_value(&kind).unwrap(), value);
+
+    assert_eq!(
+      serde_json::from_value::<ToolInvocationKind>(value).unwrap(),
+      kind
+    );
   }
 
   #[test]
   fn unknown_tool_errors() {
-    let result = ToolRegistry::default().invocation(RawToolCall {
+    let error = ToolInvocationKind::decode(RawToolCall {
       arguments: json!({}),
       id: "foo".into(),
       name: "bar".into(),
-    });
+    })
+    .unwrap_err();
 
-    assert_eq!(result.unwrap_err().to_string(), "unknown tool `bar`",);
+    assert_eq!(error.to_string(), "unknown tool `bar`");
   }
 }
