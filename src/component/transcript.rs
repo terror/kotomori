@@ -9,7 +9,7 @@ impl<'a> TranscriptComponent<'a> {
   const FRAMES: &'static [&'static str] = &["✦", "✧", "✶", "✹", "✶", "✧"];
 
   fn ensure_trailing_blank_line(lines: &mut Vec<LineComponent>) {
-    if !lines.last().is_some_and(LineComponent::is_blank) {
+    if lines.last().is_some_and(|line| !line.is_blank()) {
       lines.push(LineComponent::blank());
     }
   }
@@ -232,7 +232,6 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::blank(),
         LineComponent::raw("foo"),
         LineComponent::raw("bar"),
         LineComponent::blank(),
@@ -258,7 +257,6 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::blank(),
         LineComponent::raw("foo"),
         LineComponent::blank(),
         LineComponent::raw("bar"),
@@ -279,7 +277,6 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::blank(),
         LineComponent::raw("foo"),
         LineComponent::blank(),
         LineComponent::from([Span::styled(
@@ -299,7 +296,6 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::blank(),
         LineComponent::from([
           Span::styled("●", Style::Danger),
           Span::raw(" "),
@@ -322,7 +318,6 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::blank(),
         LineComponent::from([Span::styled(
           "■ Conversation interrupted, tell the model what to do differently.",
           Style::Danger,
@@ -341,7 +336,6 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::blank(),
         LineComponent::raw("foo"),
         LineComponent::raw("bar"),
         LineComponent::blank(),
@@ -359,7 +353,6 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::blank(),
         LineComponent::raw("foo"),
         LineComponent::raw("bar"),
         LineComponent::blank(),
@@ -392,7 +385,6 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::blank(),
         LineComponent::raw("foo"),
         LineComponent::blank(),
         LineComponent::from([
@@ -468,7 +460,6 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::blank(),
         LineComponent::from([
           Span::styled("●", Style::Danger),
           Span::raw(" "),
@@ -519,7 +510,6 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(10),
       [
-        LineComponent::blank(),
         LineComponent::from([
           Span::styled("●", Style::Success),
           Span::raw(" "),
@@ -564,7 +554,6 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
       [
-        LineComponent::blank(),
         LineComponent::from([
           Span::styled("●", Style::Accent),
           Span::raw(" "),
