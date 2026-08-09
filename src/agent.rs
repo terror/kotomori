@@ -93,12 +93,12 @@ impl Agent {
         ..Default::default()
       };
 
-      let request = Request::with_system(
-        self.settings.model.clone(),
-        messages.clone(),
-        system.clone(),
-        self.tool_registry.clone(),
-      );
+      let request = Request {
+        messages: messages.clone(),
+        model: self.settings.model.clone(),
+        system: (!system.is_empty()).then(|| system.clone()),
+        tool_registry: self.tool_registry.clone(),
+      };
 
       self.provider.stream(request, &mut sink).await?;
 
