@@ -45,20 +45,15 @@ impl Display for ToolInvocation {
 mod tests {
   use {super::*, serde_json::json};
 
-  fn invocation(name: &str, arguments: Value) -> ToolInvocation {
-    ToolRegistry::default()
-      .invocation(RawToolCall {
-        arguments,
-        id: "foo".into(),
-        name: name.into(),
-      })
-      .unwrap()
-  }
-
   #[test]
   fn parses_command_tool_call() {
-    let invocation =
-      invocation("command", json!({"command": "bar baz", "cwd": null}));
+    let invocation = ToolRegistry::default()
+      .invocation(RawToolCall {
+        arguments: json!({"command": "bar baz", "cwd": null}),
+        id: "foo".into(),
+        name: "command".into(),
+      })
+      .unwrap();
 
     assert_eq!(
       invocation,
