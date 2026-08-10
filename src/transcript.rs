@@ -16,7 +16,7 @@ impl Transcript {
   }
 
   pub(crate) fn error(&mut self, error: String) {
-    self.active_agent_activity = AgentActivity::Idle;
+    self.finish_agent_activity();
     self.active_elapsed = Duration::ZERO;
     self.entries.push(TranscriptEntry::Error(error));
   }
@@ -245,21 +245,54 @@ mod tests {
   }
 
   #[test]
-  fn error_clears_active_activity() {
+  fn error_preserves_active_reasoning() {
     let mut transcript = Transcript::default();
 
-    transcript.push_agent_delta("foo");
+    transcript.push_agent_reasoning_delta("foo");
+    transcript.tick(Duration::from_secs(1));
     transcript.error("bar".into());
 
     assert!(!transcript.is_agent_active());
 
     assert_eq!(transcript.active_elapsed, Duration::ZERO);
 
-    assert!(transcript.messages().is_empty());
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![AgentMessageContent::Reasoning(
+        "foo".into()
+      )])]
+    );
 
     assert_matches!(
       &transcript.entries[..],
-      [TranscriptEntry::Error(error)] if error == "bar"
+      [TranscriptEntry::Reasoning(reasoning), TranscriptEntry::Error(error)]
+        if reasoning == "foo" && error == "bar"
+    );
+  }
+
+  #[test]
+  fn error_preserves_active_streaming() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_delta("foo");
+    transcript.tick(Duration::from_secs(1));
+    transcript.error("bar".into());
+
+    assert!(!transcript.is_agent_active());
+
+    assert_eq!(transcript.active_elapsed, Duration::ZERO);
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::Agent(vec![AgentMessageContent::Text(
+        "foo".into()
+      )])]
+    );
+
+    assert_matches!(
+      &transcript.entries[..],
+      [TranscriptEntry::Agent(message), TranscriptEntry::Error(error)]
+        if message == "foo" && error == "bar"
     );
   }
 
