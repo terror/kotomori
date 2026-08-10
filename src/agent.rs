@@ -231,6 +231,12 @@ impl Agent {
   }
 }
 
+impl Drop for Agent {
+  fn drop(&mut self) {
+    self.interrupt();
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use {
