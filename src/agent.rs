@@ -105,16 +105,9 @@ impl Agent {
             Ok(AgentMessageContent::Reasoning(reasoning))
           }
           ProviderContent::Text(text) => Ok(AgentMessageContent::Text(text)),
-          ProviderContent::ToolCall(call) => {
-            let invocation = ToolInvocationKind::decode(call)?;
-
-            self.event_sender.send(Event::Agent {
-              event: AgentEvent::ToolCall(invocation.clone()),
-              run_id,
-            })?;
-
-            Ok(AgentMessageContent::ToolCall(invocation))
-          }
+          ProviderContent::ToolCall(call) => Ok(AgentMessageContent::ToolCall(
+            ToolInvocationKind::decode(call)?,
+          )),
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -138,22 +131,28 @@ impl Agent {
         break;
       }
 
-      tool_round_count += 1;
-
-      if tool_round_count > Self::MAX_TOOL_ROUNDS {
+      if tool_round_count >= Self::MAX_TOOL_ROUNDS {
         bail!(
           "maximum tool round limit of {} exceeded",
           Self::MAX_TOOL_ROUNDS
         );
       }
 
-      tool_call_count += tool_calls.len();
-
-      if tool_call_count > Self::MAX_TOOL_CALLS {
+      if tool_calls.len() > Self::MAX_TOOL_CALLS - tool_call_count {
         bail!(
           "maximum tool call limit of {} exceeded",
           Self::MAX_TOOL_CALLS
         );
+      }
+
+      (tool_round_count, tool_call_count) =
+        (tool_round_count + 1, tool_call_count + tool_calls.len());
+
+      for tool_call in &tool_calls {
+        self.event_sender.send(Event::Agent {
+          event: AgentEvent::ToolCall(tool_call.clone()),
+          run_id,
+        })?;
       }
 
       for tool_call in tool_calls {
@@ -243,6 +242,7 @@ mod tests {
   #[derive(Debug)]
   enum Output {
     Delta(&'static str),
+    MalformedToolCall,
     Reasoning(&'static str),
     ReasoningDelta(&'static str),
     ToolCall,
@@ -266,6 +266,11 @@ mod tests {
       for output in self.outputs.lock().unwrap().pop_front().unwrap() {
         match output {
           Output::Delta(delta) => sink.delta(delta)?,
+          Output::MalformedToolCall => sink.tool_call(RawToolCall {
+            arguments: json!({}),
+            id: "malformed".into(),
+            name: "command".into(),
+          }),
           Output::ReasoningDelta(delta) => {
             sink.reasoning_delta(None, delta)?;
           }
@@ -434,7 +439,30 @@ mod tests {
       .await
       .unwrap_err();
 
+    assert!(test_agent.events.is_empty());
+
     assert_eq!(error.to_string(), "maximum tool call limit of 128 exceeded");
+  }
+
+  #[tokio::test]
+  async fn does_not_emit_tool_calls_when_round_contains_malformed_call() {
+    let test_agent = TestAgent::new(
+      vec![vec![Output::ToolCall, Output::MalformedToolCall]],
+      true,
+    );
+
+    let error = test_agent
+      .agent
+      .stream(
+        0,
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+      )
+      .await
+      .unwrap_err();
+
+    assert!(test_agent.events.is_empty());
+
+    assert_eq!(error.to_string(), "failed to decode `command` arguments");
   }
 
   #[tokio::test]
@@ -443,7 +471,7 @@ mod tests {
       .map(|_| vec![Output::ToolCall])
       .collect::<Vec<Vec<Output>>>();
 
-    let test_agent = TestAgent::new(tool_calls, true);
+    let mut test_agent = TestAgent::new(tool_calls, true);
 
     let error = test_agent
       .agent
@@ -460,6 +488,22 @@ mod tests {
       test_agent.requests.lock().unwrap().len(),
       Agent::MAX_TOOL_ROUNDS + 1
     );
+
+    let mut tool_call_event_count = 0;
+
+    while let Ok(event) = test_agent.events.try_recv() {
+      if matches!(
+        event,
+        Event::Agent {
+          event: AgentEvent::ToolCall(_),
+          ..
+        }
+      ) {
+        tool_call_event_count += 1;
+      }
+    }
+
+    assert_eq!(tool_call_event_count, Agent::MAX_TOOL_ROUNDS);
   }
 
   #[tokio::test]
