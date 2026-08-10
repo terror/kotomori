@@ -183,10 +183,7 @@ impl State {
           Vec::new()
         }
       }
-      Command::Quit => {
-        self.quit();
-        Vec::new()
-      }
+      Command::Quit => self.handle_action(Action::Quit),
     };
 
     self.reset_input();
@@ -1046,6 +1043,50 @@ mod tests {
     assert!(state.should_quit);
 
     assert_eq!(state.composer.input_text(), "");
+  }
+
+  #[test]
+  fn command_quit_interrupts_active_agent_and_saves_partial_output() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_agent_event(AgentEvent::Delta("partial response".into()));
+
+    for character in "/quit".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(character),
+        ..Default::default()
+      })));
+    }
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::InterruptAgent]
+    );
+
+    assert!(!state.should_quit);
+    assert!(!state.transcript.is_agent_active());
+
+    assert_eq!(state.composer.input_text(), "");
+
+    let saved = state
+      .database
+      .load_session(state.session.id.unwrap())
+      .unwrap();
+
+    assert_matches!(
+      &saved.entries[..],
+      [
+        TranscriptEntry::User(input),
+        TranscriptEntry::Agent(output),
+        TranscriptEntry::Interrupted,
+      ] if input == "foo" && output == "partial response"
+    );
   }
 
   #[test]
