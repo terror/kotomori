@@ -11,16 +11,15 @@ impl Component for QueuedInputsComponent<'_> {
       return Vec::new();
     }
 
-    let mut lines = Vec::new();
-
-    for input in self.inputs {
-      lines.push(LineComponent::from([Span::styled("Queued", Style::Muted)]));
-      lines
-        .extend(GutteredLinesComponent::raw(input.split('\n')).render(width));
-      lines.push(LineComponent::blank());
-    }
-
-    lines
+    self
+      .inputs
+      .iter()
+      .flat_map(|input| {
+        once(LineComponent::from([Span::styled("Queued", Style::Muted)]))
+          .chain(GutteredLinesComponent::raw(input.split('\n')).render(width))
+          .chain(once(LineComponent::blank()))
+      })
+      .collect()
   }
 }
 
