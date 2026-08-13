@@ -2,13 +2,9 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ComposerComponent<'a> {
-  composer: &'a Composer,
-}
-
-impl<'a> ComposerComponent<'a> {
-  pub(crate) fn new(composer: &'a Composer) -> Self {
-    Self { composer }
-  }
+  pub(super) agent_active: bool,
+  pub(super) composer: &'a Composer,
+  pub(super) queued_input_count: usize,
 }
 
 impl Component for ComposerComponent<'_> {
@@ -57,6 +53,20 @@ impl Component for ComposerComponent<'_> {
       },
     ));
 
+    if self.agent_active {
+      let queued = match self.queued_input_count {
+        0 => String::new(),
+        count => format!(" · {count} queued"),
+      };
+
+      lines.push(LineComponent::from([
+        Span::styled("Enter", Style::Secondary),
+        Span::styled(" queue · ", Style::Muted),
+        Span::styled("Alt-Enter", Style::Secondary),
+        Span::styled(format!(" interrupt now{queued}"), Style::Muted),
+      ]));
+    }
+
     lines
   }
 }
@@ -66,29 +76,52 @@ mod tests {
   use super::*;
 
   #[test]
-  fn command_rendering() {
-    let composer = Composer::new("/", Vec::new());
-
-    let lines = ComposerComponent::new(&composer).render(80);
-
-    assert_eq!(lines[1], LineComponent::blank());
+  fn active_run_renders_steering_controls_and_queue_count() {
+    let component = ComposerComponent {
+      agent_active: true,
+      composer: &Composer::new("follow up", Vec::new()),
+      queued_input_count: 2,
+    };
 
     assert_eq!(
-      lines[2],
-      LineComponent::from([
-        Span::styled("/clear", Style::Accent),
-        Span::styled("  ", Style::Muted),
-        Span::styled("Clear the transcript", Style::Muted),
+      component.render(80).last().unwrap(),
+      &LineComponent::from([
+        Span::styled("Enter", Style::Secondary),
+        Span::styled(" queue · ", Style::Muted),
+        Span::styled("Alt-Enter", Style::Secondary),
+        Span::styled(" interrupt now · 2 queued", Style::Muted),
       ])
     );
+  }
+
+  #[test]
+  fn command_rendering() {
+    let component = ComposerComponent {
+      agent_active: false,
+      composer: &Composer::new("/", Vec::new()),
+      queued_input_count: 0,
+    };
 
     assert_eq!(
-      lines[3],
-      LineComponent::from([
-        Span::styled("/quit", Style::Secondary),
-        Span::styled("  ", Style::Muted),
-        Span::styled("Quit kotomori", Style::Muted),
-      ])
+      component.render(80),
+      [
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("/"),
+          Span::styled(" ", Style::Selection),
+        ]),
+        LineComponent::blank(),
+        LineComponent::from([
+          Span::styled("/clear", Style::Accent),
+          Span::styled("  ", Style::Muted),
+          Span::styled("Clear the transcript", Style::Muted),
+        ]),
+        LineComponent::from([
+          Span::styled("/quit", Style::Secondary),
+          Span::styled("  ", Style::Muted),
+          Span::styled("Quit kotomori", Style::Muted),
+        ]),
+      ]
     );
   }
 }

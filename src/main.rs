@@ -80,6 +80,7 @@ use {
   state::State,
   std::{
     backtrace::BacktraceStatus,
+    collections::VecDeque,
     env,
     fmt::{self, Debug, Display, Formatter},
     fs,

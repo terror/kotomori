@@ -41,9 +41,12 @@ impl Component for ViewComponent<'_> {
           InputMode::Approval(request) => {
             ApprovalPromptComponent::new(request).render(content_width)
           }
-          InputMode::Compose => {
-            ComposerComponent::new(&state.composer).render(content_width)
+          InputMode::Compose => ComposerComponent {
+            agent_active: state.transcript.is_agent_active(),
+            composer: &state.composer,
+            queued_input_count: state.queued_input_count(),
           }
+          .render(content_width),
         })
         .chain(once(LineComponent::blank()))
         .chain(

@@ -9,6 +9,7 @@ pub(crate) struct State {
   pub(crate) input_mode: InputMode,
   pub(crate) model: Model,
   next_run_id: u64,
+  queued_inputs: VecDeque<String>,
   session: Session,
   pub(crate) should_quit: bool,
   pub(crate) transcript: Transcript,
@@ -26,13 +27,15 @@ impl State {
     }
   }
 
-  fn handle_agent_event(&mut self, event: AgentEvent) {
+  fn handle_agent_event(&mut self, event: AgentEvent) -> Vec<Effect> {
     match event {
       AgentEvent::Done => {
         self.active_run_id = None;
         self.input_mode.clear_approval();
         self.transcript.finish_agent_activity();
         self.save_session();
+
+        return self.run_next_queued();
       }
       AgentEvent::Delta(delta) if self.transcript.is_agent_active() => {
         self.transcript.push_agent_delta(&delta);
@@ -57,11 +60,15 @@ impl State {
         self.input_mode.clear_approval();
         self.transcript.error(error);
         self.save_session();
+
+        return self.run_next_queued();
       }
       AgentEvent::ToolApprovalRequest(request) => {
         self.input_mode = InputMode::Approval(request);
       }
     }
+
+    Vec::new()
   }
 
   fn handle_approval_action(&mut self, action: Action) -> Vec<Effect> {
@@ -89,7 +96,8 @@ impl State {
       | Action::Edit(_)
       | Action::SelectNext
       | Action::SelectPrevious
-      | Action::Submit => {}
+      | Action::Submit
+      | Action::SubmitImmediately => {}
     }
 
     Vec::new()
@@ -107,12 +115,19 @@ impl State {
       }
       Action::Edit(input) => self.composer.input(input),
       Action::Interrupt => {
-        return self.interrupt_agent();
+        let mut effects = self.interrupt_agent();
+
+        if !effects.is_empty() {
+          effects.extend(self.run_next_queued());
+        }
+
+        return effects;
       }
       Action::Quit => self.quit(),
       Action::SelectNext => self.composer.select_next(),
       Action::SelectPrevious => self.composer.select_previous(),
       Action::Submit => return self.submit(),
+      Action::SubmitImmediately => return self.submit_immediately(),
     }
 
     Vec::new()
@@ -122,7 +137,7 @@ impl State {
     match event {
       Event::Action(action) => return self.handle_action(action),
       Event::Agent { event, run_id } if self.active_run_id == Some(run_id) => {
-        self.handle_agent_event(event);
+        return self.handle_agent_event(event);
       }
       Event::Agent { .. } => {}
       Event::Error(error) => {
@@ -154,6 +169,10 @@ impl State {
     Self::with_session(settings, Database::new()?, Session::new(settings)?)
   }
 
+  pub(crate) fn queued_input_count(&self) -> usize {
+    self.queued_inputs.len()
+  }
+
   fn quit(&mut self) {
     self.should_quit = true;
   }
@@ -166,6 +185,25 @@ impl State {
     self.input_mode.resolve_approval(approval);
   }
 
+  fn run(&mut self, input: String) -> Effect {
+    self.transcript.send(input);
+
+    self.save_session();
+
+    let messages = self.transcript.messages();
+
+    let run_id = self.next_run_id;
+
+    self.next_run_id = self
+      .next_run_id
+      .checked_add(1)
+      .expect("agent run ID overflow");
+
+    self.active_run_id = Some(run_id);
+
+    Effect::RunAgent { messages, run_id }
+  }
+
   fn run_command(&mut self, command: Command) -> Vec<Effect> {
     let effects = match command {
       Command::Clear => {
@@ -174,6 +212,7 @@ impl State {
         self.input_mode.clear_approval();
         self.transcript.clear();
         self.composer.clear_history();
+        self.queued_inputs.clear();
 
         self.save_session();
 
@@ -189,6 +228,14 @@ impl State {
     self.reset_input();
 
     effects
+  }
+
+  fn run_next_queued(&mut self) -> Vec<Effect> {
+    self
+      .queued_inputs
+      .pop_front()
+      .map(|input| vec![self.run(input)])
+      .unwrap_or_default()
   }
 
   fn save_session(&mut self) {
@@ -223,10 +270,6 @@ impl State {
       return Vec::new();
     }
 
-    if self.transcript.is_agent_active() {
-      return Vec::new();
-    }
-
     if input.is_empty() {
       return Vec::new();
     }
@@ -234,24 +277,36 @@ impl State {
     let input = input.to_string();
 
     self.composer.remember(&input);
-    self.transcript.send(input.clone());
-
-    self.save_session();
-
-    let messages = self.transcript.messages();
-
-    let run_id = self.next_run_id;
-
-    self.next_run_id = self
-      .next_run_id
-      .checked_add(1)
-      .expect("agent run ID overflow");
-
-    self.active_run_id = Some(run_id);
-
     self.reset_input();
 
-    vec![Effect::RunAgent { messages, run_id }]
+    if self.transcript.is_agent_active() {
+      self.queued_inputs.push_back(input);
+      Vec::new()
+    } else {
+      vec![self.run(input)]
+    }
+  }
+
+  fn submit_immediately(&mut self) -> Vec<Effect> {
+    if !self.transcript.is_agent_active() {
+      return self.submit();
+    }
+
+    let input = self.composer.input_text();
+    let input = input.trim();
+
+    if input.is_empty() || input.starts_with('/') {
+      return self.submit();
+    }
+
+    let input = input.to_string();
+
+    self.composer.remember(&input);
+    self.reset_input();
+
+    let mut effects = self.interrupt_agent();
+    effects.push(self.run(input));
+    effects
   }
 
   pub(crate) fn with_session(
@@ -283,6 +338,7 @@ impl State {
       input_mode: InputMode::Compose,
       model: settings.model.clone(),
       next_run_id: 0,
+      queued_inputs: VecDeque::new(),
       session,
       should_quit: false,
       transcript,
@@ -1135,6 +1191,81 @@ mod tests {
   }
 
   #[test]
+  fn immediate_submit_interrupts_active_agent_and_starts_new_run() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_agent_event(AgentEvent::Delta("partial".into()));
+
+    for c in "bar".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::SubmitImmediately)),
+      vec![
+        Effect::InterruptAgent,
+        Effect::RunAgent {
+          messages: vec![
+            Message::User(vec![UserMessageContent::Text("foo".into())]),
+            Message::Agent(vec![AgentMessageContent::Text("partial".into())]),
+            Message::User(vec![UserMessageContent::Text("bar".into())]),
+          ],
+          run_id: 1,
+        },
+      ]
+    );
+
+    assert!(state.transcript.is_agent_active());
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
+
+    assert!(state.transcript.is_agent_active());
+  }
+
+  #[test]
+  fn interrupt_advances_to_next_queued_submission() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("first".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+
+    for c in "second".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    state.handle_event(Event::Action(Action::Submit));
+
+    assert_matches!(
+      state
+        .handle_event(Event::Action(Action::Interrupt))
+        .as_slice(),
+      [Effect::InterruptAgent, Effect::RunAgent { run_id: 1, .. }]
+    );
+
+    assert_eq!(state.queued_input_count(), 0);
+    assert!(state.transcript.is_agent_active());
+  }
+
+  #[test]
   fn interrupt_stops_active_agent() {
     let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
@@ -1382,6 +1513,60 @@ mod tests {
   }
 
   #[test]
+  fn queued_submissions_run_in_order() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("first".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+
+    for input in ["second", "third"] {
+      for c in input.chars() {
+        state.handle_event(Event::Action(Action::Edit(Input {
+          key: Key::Char(c),
+          ..Default::default()
+        })));
+      }
+
+      state.handle_event(Event::Action(Action::Submit));
+    }
+
+    assert_eq!(state.queued_input_count(), 2);
+
+    assert_matches!(
+      state
+        .handle_event(Event::Agent {
+          event: AgentEvent::Done,
+          run_id: 0,
+        })
+        .as_slice(),
+      [Effect::RunAgent { run_id: 1, .. }]
+    );
+
+    assert_matches!(
+      state
+        .handle_event(Event::Agent {
+          event: AgentEvent::Done,
+          run_id: 1,
+        })
+        .as_slice(),
+      [Effect::RunAgent { run_id: 2, .. }]
+    );
+
+    assert_eq!(
+      state.transcript.messages(),
+      [
+        Message::User(vec![UserMessageContent::Text("first".into())]),
+        Message::User(vec![UserMessageContent::Text("second".into())]),
+        Message::User(vec![UserMessageContent::Text("third".into())]),
+      ]
+    );
+  }
+
+  #[test]
   fn quit_interrupts_active_agent() {
     let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
@@ -1530,7 +1715,7 @@ mod tests {
   }
 
   #[test]
-  fn submit_is_ignored_while_agent_active() {
+  fn submit_is_queued_while_agent_active() {
     let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
@@ -1560,12 +1745,29 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.composer.input_text(), "bar");
+    assert_eq!(state.composer.input_text(), "");
+    assert_eq!(state.queued_input_count(), 1);
 
     assert_eq!(
       state.transcript.messages(),
       vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
     );
+
+    assert_eq!(
+      state.handle_event(Event::Agent {
+        event: AgentEvent::Done,
+        run_id: 0,
+      }),
+      vec![Effect::RunAgent {
+        messages: vec![
+          Message::User(vec![UserMessageContent::Text("foo".into())]),
+          Message::User(vec![UserMessageContent::Text("bar".into())]),
+        ],
+        run_id: 1,
+      }]
+    );
+
+    assert_eq!(state.queued_input_count(), 0);
   }
 
   #[test]

@@ -9,6 +9,7 @@ pub(crate) enum Action {
   SelectNext,
   SelectPrevious,
   Submit,
+  SubmitImmediately,
 }
 
 impl Action {
@@ -24,6 +25,9 @@ impl Action {
         })
       }
       KeyCode::Esc => Self::Interrupt,
+      KeyCode::Enter if key.modifiers == KeyModifiers::ALT => {
+        Self::SubmitImmediately
+      }
       KeyCode::Enter if key.modifiers.is_empty() => Self::Submit,
       KeyCode::Tab => Self::CompleteCommand,
       KeyCode::Down => Self::SelectNext,
@@ -36,6 +40,14 @@ impl Action {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn alt_enter_submits_immediately() {
+    assert_eq!(
+      Action::from_key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT)),
+      Action::SubmitImmediately
+    );
+  }
 
   #[test]
   fn ctrl_j_inserts_newline() {
