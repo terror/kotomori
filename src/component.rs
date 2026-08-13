@@ -7,6 +7,7 @@ mod guttered_lines;
 mod header;
 mod hint;
 mod line;
+mod queued_inputs;
 mod resume_picker;
 mod transcript;
 mod transcript_error;
@@ -17,8 +18,8 @@ pub(crate) use {
   approval_prompt::ApprovalPromptComponent, composer::ComposerComponent,
   footer::FooterComponent, guttered_lines::GutteredLinesComponent,
   header::HeaderComponent, hint::HintComponent, line::LineComponent,
-  resume_picker::ResumePickerComponent, transcript::TranscriptComponent,
-  transcript_error::TranscriptErrorComponent,
+  queued_inputs::QueuedInputsComponent, resume_picker::ResumePickerComponent,
+  transcript::TranscriptComponent, transcript_error::TranscriptErrorComponent,
   transcript_tool_invocation::TranscriptToolInvocationComponent,
   view::ViewComponent,
 };
