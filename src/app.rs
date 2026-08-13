@@ -25,6 +25,9 @@ impl App {
     };
 
     match effect {
+      Effect::Compact { messages, run_id } => {
+        agent.spawn_compaction(run_id, messages);
+      }
       Effect::InterruptAgent => {
         agent.interrupt();
       }

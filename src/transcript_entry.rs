@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) enum TranscriptEntry {
   Agent(String),
+  Compaction(String),
   Error(String),
   Interrupted,
   Notice(String),

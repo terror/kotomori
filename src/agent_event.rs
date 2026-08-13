@@ -2,6 +2,7 @@ use super::*;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum AgentEvent {
+  Compacted(String),
   Delta(String),
   Done,
   Error(String),

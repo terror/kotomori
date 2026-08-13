@@ -9,6 +9,15 @@ pub(crate) struct Transcript {
 }
 
 impl Transcript {
+  const COMPACTION_CONTEXT: &'static str =
+    "The conversation before this point was compacted into this summary:";
+
+  pub(crate) fn begin_compaction(&mut self) {
+    self.active_agent_activity = AgentActivity::Waiting;
+    self.active_elapsed = Duration::ZERO;
+    self.active_frame = 0;
+  }
+
   pub(crate) fn clear(&mut self) {
     self.active_agent_activity = AgentActivity::Idle;
     self.active_elapsed = Duration::ZERO;
@@ -71,6 +80,14 @@ impl Transcript {
       match entry {
         TranscriptEntry::Agent(content) => {
           agent_content.push(AgentMessageContent::Text(content.clone()));
+        }
+        TranscriptEntry::Compaction(summary) => {
+          messages.clear();
+          agent_content.clear();
+          tool_results.clear();
+          messages.push(Message::User(vec![UserMessageContent::Text(
+            format!("{}\n\n{summary}", Self::COMPACTION_CONTEXT),
+          )]));
         }
         TranscriptEntry::Error(_)
         | TranscriptEntry::Interrupted
@@ -184,6 +201,12 @@ impl Transcript {
       };
   }
 
+  pub(crate) fn push_compaction(&mut self, summary: String) {
+    self.active_agent_activity = AgentActivity::Idle;
+    self.active_elapsed = Duration::ZERO;
+    self.entries.push(TranscriptEntry::Compaction(summary));
+  }
+
   pub(crate) fn push_tool_call(&mut self, invocation: ToolInvocation) {
     self.finish_agent_activity();
 
@@ -228,6 +251,44 @@ impl Transcript {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn compaction_replaces_prior_model_context() {
+    let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::User("old question".into()),
+      TranscriptEntry::Agent("old answer".into()),
+      TranscriptEntry::Compaction("important summary".into()),
+      TranscriptEntry::User("new question".into()),
+    ]);
+
+    assert_eq!(
+      transcript.messages(),
+      vec![
+        Message::User(vec![UserMessageContent::Text(
+          "The conversation before this point was compacted into this summary:\n\nimportant summary"
+            .into()
+        )]),
+        Message::User(vec![UserMessageContent::Text("new question".into())]),
+      ]
+    );
+  }
+
+  #[test]
+  fn latest_compaction_wins() {
+    let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::Compaction("old summary".into()),
+      TranscriptEntry::User("middle".into()),
+      TranscriptEntry::Compaction("new summary".into()),
+    ]);
+
+    assert_eq!(
+      transcript.messages(),
+      vec![Message::User(vec![UserMessageContent::Text(
+        "The conversation before this point was compacted into this summary:\n\nnew summary"
+          .into()
+      )])]
+    );
+  }
 
   #[test]
   fn clear_removes_entries_and_stops_agent() {

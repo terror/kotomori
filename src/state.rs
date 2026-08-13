@@ -29,6 +29,12 @@ impl State {
 
   fn handle_agent_event(&mut self, event: AgentEvent) -> Vec<Effect> {
     match event {
+      AgentEvent::Compacted(summary) => {
+        self.active_run_id = None;
+        self.transcript.push_compaction(summary);
+        self.save_session();
+        return self.run_next_queued();
+      }
       AgentEvent::Done => {
         self.active_run_id = None;
         self.input_mode.clear_approval();
@@ -220,6 +226,25 @@ impl State {
           Vec::new()
         }
       }
+      Command::Compact => {
+        let messages = self.transcript.messages();
+
+        if messages.is_empty() {
+          self.transcript.notice("Nothing to compact.");
+          Vec::new()
+        } else {
+          self.transcript.begin_compaction();
+
+          let run_id = self.next_run_id;
+          self.next_run_id = self
+            .next_run_id
+            .checked_add(1)
+            .expect("agent run ID overflow");
+          self.active_run_id = Some(run_id);
+
+          vec![Effect::Compact { messages, run_id }]
+        }
+      }
       Command::Quit => self.handle_action(Action::Quit),
     };
 
@@ -350,6 +375,45 @@ impl State {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn compact_command_summarizes_current_context() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_agent_event(AgentEvent::Delta("bar".into()));
+    state.handle_agent_event(AgentEvent::Done);
+    state.composer = Composer::new("/compact", Vec::new());
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::Compact {
+        messages: vec![
+          Message::User(vec![UserMessageContent::Text("foo".into())]),
+          Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
+        ],
+        run_id: 1,
+      }]
+    );
+
+    assert!(state.transcript.is_agent_active());
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Compacted("summary".into()),
+      run_id: 1,
+    });
+
+    assert_matches!(
+      state.transcript.entries.last(),
+      Some(TranscriptEntry::Compaction(summary)) if summary == "summary"
+    );
+    assert!(!state.transcript.is_agent_active());
+  }
 
   #[test]
   fn agent_events_update_transcript() {
@@ -860,13 +924,13 @@ mod tests {
         .commands()
         .map(Command::name)
         .collect::<Vec<_>>(),
-      vec!["clear", "quit"],
+      vec!["clear", "compact", "quit"],
     );
 
     state.handle_event(Event::Action(Action::SelectNext));
     state.handle_event(Event::Action(Action::CompleteCommand));
 
-    assert_eq!(state.composer.input_text(), "/quit");
+    assert_eq!(state.composer.input_text(), "/compact");
   }
 
   #[test]
@@ -884,7 +948,7 @@ mod tests {
         .commands()
         .map(Command::name)
         .collect::<Vec<_>>(),
-      vec!["clear", "quit"],
+      vec!["clear", "compact", "quit"],
     );
 
     state.handle_event(Event::Action(Action::SelectPrevious));

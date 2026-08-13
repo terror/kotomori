@@ -40,7 +40,7 @@ use {
   frame::Frame,
   futures_util::StreamExt,
   home::home_dir,
-  indoc::{formatdoc, indoc},
+  indoc::formatdoc,
   input_mode::InputMode,
   lexiclean::Lexiclean,
   loader::Loader,
@@ -90,7 +90,7 @@ use {
     path::{Path, PathBuf},
     process::{self, Stdio},
     str::{self, FromStr},
-    sync::{Arc, LazyLock, Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
   },
@@ -173,6 +173,7 @@ mod message;
 mod model;
 mod options;
 mod patch;
+mod prompts;
 mod provider;
 mod provider_content;
 mod provider_sink;
@@ -206,23 +207,6 @@ mod user_message_content;
 mod write_ext;
 
 static FIRST_DRAW_STARTED_AT: OnceLock<Instant> = OnceLock::new();
-
-pub(crate) static SYSTEM_PROMPT: LazyLock<String> = LazyLock::new(|| {
-  indoc! {
-    "
-    You are kotomori, a coding agent running on the user's machine.
-
-    Work directly in the local repository. Inspect the code before changing it.
-    Prefer small focused edits. Match the project's existing style.
-
-    Use the command tool to read, search, edit, and run automated checks.
-    Preserve user changes. Avoid destructive commands unless explicitly requested.
-    Report clearly what changed and what was verified.
-    "
-  }
-  .trim_end()
-  .to_string()
-});
 
 type AsyncCommand = tokio::process::Command;
 type OutputTask = task::JoinHandle<io::Result<String>>;

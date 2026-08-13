@@ -33,6 +33,51 @@ impl Agent {
     Ok(response_receiver.await.unwrap_or(ToolApproval::Denied))
   }
 
+  async fn compact(&self, mut messages: Vec<Message>) -> Result<String> {
+    messages.push(Message::User(vec![UserMessageContent::Text(
+      prompts::compaction().into(),
+    )]));
+
+    let (event_sender, _events) = mpsc::unbounded_channel();
+
+    let mut sink = ProviderSink {
+      event_sender,
+      ..Default::default()
+    };
+
+    self
+      .provider
+      .stream(
+        Request {
+          messages,
+          model: self.settings.model.clone(),
+          system: None,
+        },
+        &mut sink,
+      )
+      .await?;
+
+    let mut summary = String::new();
+
+    for content in sink.finish() {
+      match content {
+        ProviderContent::Text(text) => summary.push_str(&text),
+        ProviderContent::Reasoning(_) => {}
+        ProviderContent::ToolCall(_) => {
+          bail!("provider returned a tool call while compacting context");
+        }
+      }
+    }
+
+    let summary = summary.trim();
+
+    if summary.is_empty() {
+      bail!("provider returned an empty context summary");
+    }
+
+    Ok(summary.into())
+  }
+
   pub(crate) fn interrupt(&mut self) {
     if let Some(task) = self.task.take() {
       task.abort();
@@ -74,6 +119,32 @@ impl Agent {
           run_id,
         });
       }
+    }));
+  }
+
+  pub(crate) fn spawn_compaction(
+    &mut self,
+    run_id: u64,
+    messages: Vec<Message>,
+  ) {
+    self.interrupt();
+
+    let agent = Self {
+      event_sender: self.event_sender.clone(),
+      loader: self.loader.clone(),
+      provider: self.provider.clone(),
+      settings: self.settings.clone(),
+      task: None,
+      tool_context: self.tool_context,
+    };
+
+    self.task = Some(tokio::spawn(async move {
+      let event = match agent.compact(messages).await {
+        Ok(summary) => AgentEvent::Compacted(summary),
+        Err(error) => AgentEvent::Error(error.to_string()),
+      };
+
+      let _ = agent.event_sender.send(Event::Agent { event, run_id });
     }));
   }
 
@@ -210,7 +281,7 @@ impl Agent {
 
         {context}
         ",
-        SYSTEM_PROMPT.as_str(),
+        prompts::system(),
       }
       .trim_end()
       .to_string()
@@ -223,7 +294,7 @@ impl Agent {
 
         {agents}
         ",
-        SYSTEM_PROMPT.as_str(),
+        prompts::system(),
       }
       .trim_end()
       .to_string()
@@ -336,6 +407,38 @@ mod tests {
         requests,
       }
     }
+  }
+
+  #[tokio::test]
+  async fn compacts_context_without_streaming_summary() {
+    let test_agent = TestAgent::new(
+      vec![vec![
+        Output::ReasoningDelta("thinking"),
+        Output::Delta("summary"),
+      ]],
+      true,
+    );
+
+    let messages = vec![Message::User(vec![UserMessageContent::Text(
+      "question".into(),
+    )])];
+
+    assert_eq!(
+      test_agent.agent.compact(messages.clone()).await.unwrap(),
+      "summary"
+    );
+
+    assert!(test_agent.events.is_empty());
+
+    assert_eq!(
+      test_agent.requests.lock().unwrap()[0],
+      [
+        messages[0].clone(),
+        Message::User(vec![UserMessageContent::Text(
+          prompts::compaction().into()
+        )]),
+      ]
+    );
   }
 
   #[tokio::test]
@@ -783,13 +886,13 @@ mod tests {
     }
 
     case(None, |directory, _| {
-      format!("{}\n\n{}", SYSTEM_PROMPT.as_str(), context(directory))
+      format!("{}\n\n{}", prompts::system(), context(directory))
     });
 
     case(Some("foo\n"), |directory, agents_path| {
       format!(
         "{}\n\n{}\n\n{}:\nfoo",
-        SYSTEM_PROMPT.as_str(),
+        prompts::system(),
         context(directory),
         agents_path.display()
       )

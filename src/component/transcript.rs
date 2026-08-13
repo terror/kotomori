@@ -70,6 +70,12 @@ impl<'a> TranscriptComponent<'a> {
         TranscriptEntry::Agent(content) => {
           lines.extend(content.lines().map(LineComponent::raw));
         }
+        TranscriptEntry::Compaction(_) => {
+          lines.push(LineComponent::from([Span::styled(
+            "◆ Conversation context compacted.",
+            Style::Secondary,
+          )]));
+        }
         TranscriptEntry::Error(error) => {
           lines.extend(TranscriptErrorComponent::new(error).render(width));
         }

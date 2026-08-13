@@ -546,6 +546,7 @@ fn command_completion_quits() -> Result {
     .type_text("/")
     .expect_screen_contains("/clear")
     .down()
+    .down()
     .tab()
     .expect_screen_contains("/quit")
     .enter()
