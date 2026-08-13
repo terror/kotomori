@@ -35,7 +35,7 @@ impl Agent {
 
   async fn compact(&self, mut messages: Vec<Message>) -> Result<String> {
     messages.push(Message::User(vec![UserMessageContent::Text(
-      prompts::compaction().into(),
+      COMPACTION_PROMPT.to_string()
     )]));
 
     let (event_sender, _events) = mpsc::unbounded_channel();
@@ -281,7 +281,7 @@ impl Agent {
 
         {context}
         ",
-        prompts::system(),
+        SYSTEM_PROMPT.as_str(),
       }
       .trim_end()
       .to_string()
@@ -294,7 +294,7 @@ impl Agent {
 
         {agents}
         ",
-        prompts::system(),
+        SYSTEM_PROMPT.as_str(),
       }
       .trim_end()
       .to_string()
@@ -435,7 +435,7 @@ mod tests {
       [
         messages[0].clone(),
         Message::User(vec![UserMessageContent::Text(
-          prompts::compaction().into()
+          COMPACTION_PROMPT.to_string()
         )]),
       ]
     );
@@ -886,13 +886,13 @@ mod tests {
     }
 
     case(None, |directory, _| {
-      format!("{}\n\n{}", prompts::system(), context(directory))
+      format!("{}\n\n{}", SYSTEM_PROMPT.as_str(), context(directory))
     });
 
     case(Some("foo\n"), |directory, agents_path| {
       format!(
         "{}\n\n{}\n\n{}:\nfoo",
-        prompts::system(),
+        SYSTEM_PROMPT.as_str(),
         context(directory),
         agents_path.display()
       )
