@@ -48,6 +48,7 @@ use {
   model::Model,
   options::Options,
   patch::Patch,
+  prompts::{COMPACTION_PROMPT, SYSTEM_PROMPT},
   provider::Provider,
   provider_content::ProviderContent,
   provider_sink::ProviderSink,
@@ -90,7 +91,7 @@ use {
     path::{Path, PathBuf},
     process::{self, Stdio},
     str::{self, FromStr},
-    sync::{Arc, Mutex, OnceLock, LazyLock},
+    sync::{Arc, LazyLock, Mutex, OnceLock},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
   },
@@ -173,6 +174,7 @@ mod message;
 mod model;
 mod options;
 mod patch;
+mod prompts;
 mod provider;
 mod provider_content;
 mod provider_sink;
@@ -206,12 +208,6 @@ mod user_message_content;
 mod write_ext;
 
 static FIRST_DRAW_STARTED_AT: OnceLock<Instant> = OnceLock::new();
-
-pub(crate) static COMPACTION_PROMPT: LazyLock<String> =
-  LazyLock::new(|| include_str!("../prompts/compaction.md").trim_end().to_string());
-
-pub(crate) static SYSTEM_PROMPT: LazyLock<String> =
-  LazyLock::new(|| include_str!("../prompts/system.md").trim_end().to_string());
 
 type AsyncCommand = tokio::process::Command;
 type OutputTask = task::JoinHandle<io::Result<String>>;

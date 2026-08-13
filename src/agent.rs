@@ -35,7 +35,7 @@ impl Agent {
 
   async fn compact(&self, mut messages: Vec<Message>) -> Result<String> {
     messages.push(Message::User(vec![UserMessageContent::Text(
-      COMPACTION_PROMPT.to_string()
+      COMPACTION_PROMPT.to_string(),
     )]));
 
     let (event_sender, _events) = mpsc::unbounded_channel();
