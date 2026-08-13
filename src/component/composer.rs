@@ -2,13 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ComposerComponent<'a> {
-  composer: &'a Composer,
-}
-
-impl<'a> ComposerComponent<'a> {
-  pub(crate) fn new(composer: &'a Composer) -> Self {
-    Self { composer }
-  }
+  pub(super) composer: &'a Composer,
 }
 
 impl Component for ComposerComponent<'_> {
@@ -67,28 +61,30 @@ mod tests {
 
   #[test]
   fn command_rendering() {
-    let composer = Composer::new("/", Vec::new());
-
-    let lines = ComposerComponent::new(&composer).render(80);
-
-    assert_eq!(lines[1], LineComponent::blank());
+    let component = ComposerComponent {
+      composer: &Composer::new("/", Vec::new()),
+    };
 
     assert_eq!(
-      lines[2],
-      LineComponent::from([
-        Span::styled("/clear", Style::Accent),
-        Span::styled("  ", Style::Muted),
-        Span::styled("Clear the transcript", Style::Muted),
-      ])
-    );
-
-    assert_eq!(
-      lines[3],
-      LineComponent::from([
-        Span::styled("/quit", Style::Secondary),
-        Span::styled("  ", Style::Muted),
-        Span::styled("Quit kotomori", Style::Muted),
-      ])
+      component.render(80),
+      [
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("/"),
+          Span::styled(" ", Style::Selection),
+        ]),
+        LineComponent::blank(),
+        LineComponent::from([
+          Span::styled("/clear", Style::Accent),
+          Span::styled("  ", Style::Muted),
+          Span::styled("Clear the transcript", Style::Muted),
+        ]),
+        LineComponent::from([
+          Span::styled("/quit", Style::Secondary),
+          Span::styled("  ", Style::Muted),
+          Span::styled("Quit kotomori", Style::Muted),
+        ]),
+      ]
     );
   }
 }

@@ -37,13 +37,20 @@ impl Component for ViewComponent<'_> {
         .chain(
           TranscriptComponent::new(&state.transcript).render(content_width),
         )
+        .chain(
+          QueuedInputsComponent {
+            inputs: state.queued_inputs(),
+          }
+          .render(content_width),
+        )
         .chain(match &state.input_mode {
           InputMode::Approval(request) => {
             ApprovalPromptComponent::new(request).render(content_width)
           }
-          InputMode::Compose => {
-            ComposerComponent::new(&state.composer).render(content_width)
+          InputMode::Compose => ComposerComponent {
+            composer: &state.composer,
           }
+          .render(content_width),
         })
         .chain(once(LineComponent::blank()))
         .chain(

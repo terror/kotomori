@@ -63,7 +63,7 @@ impl ResumePicker {
           self.selected = self.selected.saturating_add(1) % len;
         }
       }
-      Action::Submit => {
+      Action::Submit | Action::SubmitImmediately => {
         if let Some(id) = self.selected_id() {
           return Some(ResumePickerAction::Resume(id));
         }
