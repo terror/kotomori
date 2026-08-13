@@ -169,8 +169,8 @@ impl State {
     Self::with_session(settings, Database::new()?, Session::new(settings)?)
   }
 
-  pub(crate) fn queued_input_count(&self) -> usize {
-    self.queued_inputs.len()
+  pub(crate) fn queued_inputs(&self) -> &VecDeque<String> {
+    &self.queued_inputs
   }
 
   fn quit(&mut self) {
@@ -1261,7 +1261,7 @@ mod tests {
       [Effect::InterruptAgent, Effect::RunAgent { run_id: 1, .. }]
     );
 
-    assert_eq!(state.queued_input_count(), 0);
+    assert!(state.queued_inputs().is_empty());
     assert!(state.transcript.is_agent_active());
   }
 
@@ -1534,7 +1534,7 @@ mod tests {
       state.handle_event(Event::Action(Action::Submit));
     }
 
-    assert_eq!(state.queued_input_count(), 2);
+    assert_eq!(state.queued_inputs().len(), 2);
 
     assert_matches!(
       state
@@ -1746,7 +1746,7 @@ mod tests {
     );
 
     assert_eq!(state.composer.input_text(), "");
-    assert_eq!(state.queued_input_count(), 1);
+    assert_eq!(state.queued_inputs().len(), 1);
 
     assert_eq!(
       state.transcript.messages(),
@@ -1767,7 +1767,7 @@ mod tests {
       }]
     );
 
-    assert_eq!(state.queued_input_count(), 0);
+    assert!(state.queued_inputs().is_empty());
   }
 
   #[test]

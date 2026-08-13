@@ -4,35 +4,50 @@ use super::*;
 pub(crate) struct ComposerComponent<'a> {
   pub(super) agent_active: bool,
   pub(super) composer: &'a Composer,
-  pub(super) queued_input_count: usize,
+  pub(super) queued_inputs: &'a VecDeque<String>,
 }
 
 impl Component for ComposerComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
+    let mut lines = Vec::new();
+
+    if !self.queued_inputs.is_empty() {
+      lines.push(LineComponent::from([Span::styled("Queued", Style::Muted)]));
+
+      for input in self.queued_inputs {
+        lines
+          .extend(GutteredLinesComponent::raw(input.split('\n')).render(width));
+      }
+
+      lines.push(LineComponent::blank());
+    }
+
     let cursor = self.composer.cursor();
 
     let selected = self.composer.selected_command_index();
 
-    let mut lines = GutteredLinesComponent::new(
-      self.composer.lines().iter().enumerate().map(|(row, line)| {
-        if cursor.0 != row {
-          return LineComponent::raw(line);
-        }
+    lines.extend(
+      GutteredLinesComponent::new(
+        self.composer.lines().iter().enumerate().map(|(row, line)| {
+          if cursor.0 != row {
+            return LineComponent::raw(line);
+          }
 
-        let mut chars = line.chars();
+          let mut chars = line.chars();
 
-        let before = chars.by_ref().take(cursor.1).collect::<String>();
-        let under_cursor = chars.next().unwrap_or(' ');
-        let after = chars.collect::<String>();
+          let before = chars.by_ref().take(cursor.1).collect::<String>();
+          let under_cursor = chars.next().unwrap_or(' ');
+          let after = chars.collect::<String>();
 
-        LineComponent::from([
-          Span::raw(before),
-          Span::styled(under_cursor.to_string(), Style::Selection),
-          Span::raw(after),
-        ])
-      }),
-    )
-    .render(width);
+          LineComponent::from([
+            Span::raw(before),
+            Span::styled(under_cursor.to_string(), Style::Selection),
+            Span::raw(after),
+          ])
+        }),
+      )
+      .render(width),
+    );
 
     if selected.is_some() {
       lines.push(LineComponent::blank());
@@ -54,7 +69,7 @@ impl Component for ComposerComponent<'_> {
     ));
 
     if self.agent_active {
-      let queued = match self.queued_input_count {
+      let queued = match self.queued_inputs.len() {
         0 => String::new(),
         count => format!(" · {count} queued"),
       };
@@ -76,21 +91,47 @@ mod tests {
   use super::*;
 
   #[test]
-  fn active_run_renders_steering_controls_and_queue_count() {
+  fn active_run_renders_queued_inputs_and_steering_controls() {
+    let queued_inputs = VecDeque::from([
+      "first follow-up".to_string(),
+      "second\nfollow-up".to_string(),
+    ]);
+
     let component = ComposerComponent {
       agent_active: true,
       composer: &Composer::new("follow up", Vec::new()),
-      queued_input_count: 2,
+      queued_inputs: &queued_inputs,
     };
 
     assert_eq!(
-      component.render(80).last().unwrap(),
-      &LineComponent::from([
-        Span::styled("Enter", Style::Secondary),
-        Span::styled(" queue · ", Style::Muted),
-        Span::styled("Alt-Enter", Style::Secondary),
-        Span::styled(" interrupt now · 2 queued", Style::Muted),
-      ])
+      component.render(80),
+      [
+        LineComponent::from([Span::styled("Queued", Style::Muted)]),
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("first follow-up"),
+        ]),
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("second"),
+        ]),
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("follow-up"),
+        ]),
+        LineComponent::blank(),
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("follow up"),
+          Span::styled(" ", Style::Selection),
+        ]),
+        LineComponent::from([
+          Span::styled("Enter", Style::Secondary),
+          Span::styled(" queue · ", Style::Muted),
+          Span::styled("Alt-Enter", Style::Secondary),
+          Span::styled(" interrupt now · 2 queued", Style::Muted),
+        ]),
+      ]
     );
   }
 
@@ -99,7 +140,7 @@ mod tests {
     let component = ComposerComponent {
       agent_active: false,
       composer: &Composer::new("/", Vec::new()),
-      queued_input_count: 0,
+      queued_inputs: &VecDeque::new(),
     };
 
     assert_eq!(

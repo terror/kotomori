@@ -44,7 +44,7 @@ impl Component for ViewComponent<'_> {
           InputMode::Compose => ComposerComponent {
             agent_active: state.transcript.is_agent_active(),
             composer: &state.composer,
-            queued_input_count: state.queued_input_count(),
+            queued_inputs: state.queued_inputs(),
           }
           .render(content_width),
         })
