@@ -34,7 +34,6 @@ impl State {
         self.input_mode.clear_approval();
         self.transcript.finish_agent_activity();
         self.save_session();
-
         return self.run_next_queued();
       }
       AgentEvent::Delta(delta) if self.transcript.is_agent_active() => {
@@ -60,7 +59,6 @@ impl State {
         self.input_mode.clear_approval();
         self.transcript.error(error);
         self.save_session();
-
         return self.run_next_queued();
       }
       AgentEvent::ToolApprovalRequest(request) => {
@@ -302,6 +300,7 @@ impl State {
     let input = input.to_string();
 
     self.composer.remember(&input);
+
     self.reset_input();
 
     self
