@@ -390,6 +390,7 @@ mod tests {
     state.handle_event(Event::Action(Action::Submit));
     state.handle_agent_event(AgentEvent::Delta("bar".into()));
     state.handle_agent_event(AgentEvent::Done);
+
     state.composer = Composer::new("/compact", Vec::new());
 
     assert_eq!(
@@ -414,6 +415,7 @@ mod tests {
       state.transcript.entries.last(),
       Some(TranscriptEntry::Compaction(summary)) if summary == "summary"
     );
+
     assert!(!state.transcript.is_agent_active());
   }
 
