@@ -685,6 +685,21 @@ fn provider_unknown_tool_recovers() -> Result {
 }
 
 #[test]
+fn queued_steering_runs_after_active_response() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:slow-streaming")
+    .type_text("foo")
+    .enter()
+    .expect_screen_contains("queued")
+    .type_text("bar")
+    .enter()
+    .expect_screen_contains("Queued\n  │ bar")
+    .expect_screen_contains("queued for mock:slow-streaming: bar")
+    .run()
+}
+
+#[test]
 fn resume_filters_and_loads_session() -> Result {
   let state = tempfile::Builder::new()
     .prefix("kotomori-state")
