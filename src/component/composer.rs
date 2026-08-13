@@ -2,7 +2,6 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ComposerComponent<'a> {
-  pub(super) agent_active: bool,
   pub(super) composer: &'a Composer,
   pub(super) queued_inputs: &'a VecDeque<String>,
 }
@@ -68,20 +67,6 @@ impl Component for ComposerComponent<'_> {
       },
     ));
 
-    if self.agent_active {
-      let queued = match self.queued_inputs.len() {
-        0 => String::new(),
-        count => format!(" · {count} queued"),
-      };
-
-      lines.push(LineComponent::from([
-        Span::styled("Enter", Style::Secondary),
-        Span::styled(" queue · ", Style::Muted),
-        Span::styled("Alt-Enter", Style::Secondary),
-        Span::styled(format!(" interrupt now{queued}"), Style::Muted),
-      ]));
-    }
-
     lines
   }
 }
@@ -91,14 +76,13 @@ mod tests {
   use super::*;
 
   #[test]
-  fn active_run_renders_queued_inputs_and_steering_controls() {
+  fn active_run_renders_queued_inputs() {
     let queued_inputs = VecDeque::from([
       "first follow-up".to_string(),
       "second\nfollow-up".to_string(),
     ]);
 
     let component = ComposerComponent {
-      agent_active: true,
       composer: &Composer::new("follow up", Vec::new()),
       queued_inputs: &queued_inputs,
     };
@@ -125,12 +109,6 @@ mod tests {
           Span::raw("follow up"),
           Span::styled(" ", Style::Selection),
         ]),
-        LineComponent::from([
-          Span::styled("Enter", Style::Secondary),
-          Span::styled(" queue · ", Style::Muted),
-          Span::styled("Alt-Enter", Style::Secondary),
-          Span::styled(" interrupt now · 2 queued", Style::Muted),
-        ]),
       ]
     );
   }
@@ -138,7 +116,6 @@ mod tests {
   #[test]
   fn command_rendering() {
     let component = ComposerComponent {
-      agent_active: false,
       composer: &Composer::new("/", Vec::new()),
       queued_inputs: &VecDeque::new(),
     };

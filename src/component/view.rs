@@ -42,7 +42,6 @@ impl Component for ViewComponent<'_> {
             ApprovalPromptComponent::new(request).render(content_width)
           }
           InputMode::Compose => ComposerComponent {
-            agent_active: state.transcript.is_agent_active(),
             composer: &state.composer,
             queued_inputs: state.queued_inputs(),
           }
