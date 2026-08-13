@@ -11,15 +11,14 @@ impl Component for QueuedInputsComponent<'_> {
       return Vec::new();
     }
 
-    let mut lines =
-      vec![LineComponent::from([Span::styled("Queued", Style::Muted)])];
+    let mut lines = Vec::new();
 
     for input in self.inputs {
+      lines.push(LineComponent::from([Span::styled("Queued", Style::Muted)]));
       lines
         .extend(GutteredLinesComponent::raw(input.split('\n')).render(width));
+      lines.push(LineComponent::blank());
     }
-
-    lines.push(LineComponent::blank());
 
     lines
   }
@@ -44,6 +43,8 @@ mod tests {
           Span::styled("│ ", Style::Accent),
           Span::raw("first follow-up"),
         ]),
+        LineComponent::blank(),
+        LineComponent::from([Span::styled("Queued", Style::Muted)]),
         LineComponent::from([
           Span::styled("│ ", Style::Accent),
           Span::raw("second"),
