@@ -13,6 +13,7 @@ include = [
   "/LICENSE",
   "/README.md",
   "/migrations/",
+  "/prompts/",
   "/screenshot.png",
   "/src/",
   "/tests/",
