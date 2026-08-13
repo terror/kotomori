@@ -236,10 +236,12 @@ impl State {
           self.transcript.begin_compaction();
 
           let run_id = self.next_run_id;
+
           self.next_run_id = self
             .next_run_id
             .checked_add(1)
             .expect("agent run ID overflow");
+
           self.active_run_id = Some(run_id);
 
           vec![Effect::Compact { messages, run_id }]
