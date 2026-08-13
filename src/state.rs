@@ -115,13 +115,13 @@ impl State {
       }
       Action::Edit(input) => self.composer.input(input),
       Action::Interrupt => {
-        let mut effects = self.interrupt_agent();
+        let effects = self.interrupt_agent();
 
-        if !effects.is_empty() {
-          effects.extend(self.run_next_queued());
+        if effects.is_empty() {
+          return effects;
         }
 
-        return effects;
+        return effects.into_iter().chain(self.run_next_queued()).collect();
       }
       Action::Quit => self.quit(),
       Action::SelectNext => self.composer.select_next(),
@@ -304,9 +304,11 @@ impl State {
     self.composer.remember(&input);
     self.reset_input();
 
-    let mut effects = self.interrupt_agent();
-    effects.push(self.run(input));
-    effects
+    self
+      .interrupt_agent()
+      .into_iter()
+      .chain(once(self.run(input)))
+      .collect()
   }
 
   pub(crate) fn with_session(
