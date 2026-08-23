@@ -208,7 +208,7 @@ mod write_ext;
 static FIRST_DRAW_STARTED_AT: OnceLock<Instant> = OnceLock::new();
 
 pub(crate) static SYSTEM_PROMPT: LazyLock<String> =
-  LazyLock::new(|| include_str!("../prompts/system.md").trim_end().to_string());
+  LazyLock::new(|| include_str!("../etc/system.md").trim_end().to_string());
 
 type AsyncCommand = tokio::process::Command;
 type OutputTask = task::JoinHandle<io::Result<String>>;
