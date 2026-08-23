@@ -30,9 +30,11 @@ impl<'a> TranscriptToolInvocationComponent<'a> {
   }
 
   fn preview(line: &str, width: usize) -> String {
+    let line = Span::raw(line);
+
     let (mut preview, mut preview_width) = (String::new(), 0usize);
 
-    for c in line.chars().by_ref() {
+    for c in line.text.chars() {
       let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
 
       if preview_width + char_width > width {
@@ -116,5 +118,18 @@ impl Component for TranscriptToolInvocationComponent<'_> {
     }
 
     lines
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn preview_escapes_controls_before_measuring_width() {
+    assert_eq!(
+      TranscriptToolInvocationComponent::preview("\tfoo", 4),
+      r"\...",
+    );
   }
 }
