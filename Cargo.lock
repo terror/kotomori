@@ -4120,6 +4120,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "kotomori-wasm"
+version = "0.0.0"
+
+[[package]]
 name = "lance"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,0 +1,10 @@
+[package]
+name = "kotomori-wasm"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
