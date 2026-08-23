@@ -44,12 +44,9 @@ impl Component for LineComponent {
 
         match spans.last_mut() {
           Some(last) if last.style == source_span.style => {
-            last.text.push(c);
+            last.push(c);
           }
-          _ => spans.push(Span {
-            style: source_span.style,
-            text: c.to_string(),
-          }),
+          _ => spans.push(Span::styled(c.to_string(), source_span.style)),
         }
 
         span_width += char_width;
@@ -118,6 +115,15 @@ mod tests {
   }
 
   #[test]
+  fn displays_escaped_control_characters_inside_style() {
+    assert_eq!(
+      LineComponent::from([Span::styled("\x1b[31mfoo", Style::Accent)])
+        .to_string(),
+      "\x1b[36;1m\\u{1b}[31mfoo\x1b[0m",
+    );
+  }
+
+  #[test]
   fn displays_mixed_styled_and_raw_text() {
     assert_eq!(
       LineComponent::from([
@@ -156,6 +162,14 @@ mod tests {
       ])
       .spans
       .spilled()
+    );
+  }
+
+  #[test]
+  fn rendering_accounts_for_escaped_control_characters() {
+    assert_eq!(
+      LineComponent::raw("a\tb").render(3),
+      [LineComponent::raw(r"a\t"), LineComponent::raw("b")],
     );
   }
 

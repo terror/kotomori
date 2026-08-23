@@ -32,3 +32,28 @@ impl Component for ApprovalPromptComponent<'_> {
     .collect()
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn escapes_control_characters_in_command() {
+    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        command: "echo safe\r\x1b[2J\n? y approve".into(),
+        cwd: None,
+      }),
+    });
+
+    let line = ApprovalPromptComponent::new(&request).render(200).remove(0);
+
+    let text = Vec::<Span>::from(line)
+      .iter()
+      .map(|span| span.text.as_str())
+      .collect::<String>();
+
+    assert_eq!(text, r"? Approve echo safe\r\u{1b}[2J\n? y approve?",);
+  }
+}
