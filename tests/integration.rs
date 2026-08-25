@@ -631,6 +631,24 @@ fn multiline_input() -> Result {
 }
 
 #[test]
+fn multiple_tool_calls_preserve_ids_approval_order_and_results() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:multiple-tool-calls")
+    .type_text("foo")
+    .enter()
+    .expect_screen_contains("Approve echo foo?")
+    .type_text("y")
+    .expect_screen_contains("Ran echo foo")
+    .expect_screen_contains("Approve echo bar?")
+    .type_text("n")
+    .expect_screen_contains("Failed running echo bar")
+    .expect_screen_contains("permission denied")
+    .expect_screen_contains("multiple tool call results preserved")
+    .run()
+}
+
+#[test]
 fn prompt_round_trip() -> Result {
   Test::new()
     .argument("--model")

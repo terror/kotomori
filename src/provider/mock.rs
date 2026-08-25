@@ -39,6 +39,45 @@ impl Provider for Mock {
           name: "command".into(),
         });
       }
+      "multiple-tool-calls" => {
+        let results = request
+          .messages
+          .iter()
+          .filter_map(|message| match message {
+            Message::User(content) => content.first(),
+            Message::Agent(_) => None,
+          })
+          .filter_map(|content| match content {
+            UserMessageContent::ToolResult { id, result } => Some((id, result)),
+            UserMessageContent::Text(_) => None,
+          })
+          .collect::<Vec<_>>();
+
+        match results.as_slice() {
+          [] => {
+            for (id, argument) in [("first", "foo"), ("second", "bar")] {
+              sink.tool_call(RawToolCall {
+                arguments: serde_json::json!({
+                  "arguments": [argument],
+                  "cwd": null,
+                  "program": "echo",
+                }),
+                id: id.into(),
+                name: "command".into(),
+              })?;
+            }
+          }
+          [(first_id, first_result), (second_id, second_result)]
+            if first_id.as_str() == "first"
+              && !first_result.is_error()
+              && second_id.as_str() == "second"
+              && second_result.is_error() =>
+          {
+            sink.delta("multiple tool call results preserved")?;
+          }
+          _ => bail!("multiple tool call results were not preserved"),
+        }
+      }
       "unknown-tool" if request.messages.len() == 1 => {
         sink.tool_call(RawToolCall {
           arguments: serde_json::json!({}),
