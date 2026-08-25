@@ -1401,17 +1401,20 @@ mod tests {
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
+
     state.handle_event(Event::Agent {
       event: AgentEvent::Done,
       run_id: 0,
     });
+
     state.handle_event(Event::Action(Action::SelectPrevious));
+
     state.handle_event(Event::Action(Action::Edit(Input {
       key: Key::Char('!'),
       ..Default::default()
     })));
-    state.handle_event(Event::Action(Action::SelectNext));
 
+    state.handle_event(Event::Action(Action::SelectNext));
     assert_eq!(state.composer.input_text(), "history!");
 
     state.handle_event(Event::Action(Action::SelectPrevious));
@@ -1459,6 +1462,7 @@ mod tests {
     };
 
     let mut session = Session::new(&settings).unwrap();
+
     session.entries = vec![
       TranscriptEntry::User("foo".into()),
       TranscriptEntry::Agent("bar".into()),
@@ -1489,6 +1493,7 @@ mod tests {
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
+
     state.handle_event(Event::Agent {
       event: AgentEvent::Done,
       run_id: 0,
