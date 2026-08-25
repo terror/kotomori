@@ -22,120 +22,130 @@ impl State {
     }
 
     match &self.input_mode {
-      InputMode::Approval(_) => self.handle_approval_action(action),
-      InputMode::Compose => self.handle_composer_action(action),
-    }
-  }
+      InputMode::Approval(_) => match action {
+        Action::Edit(input) if input.key == Key::Char('y') => {
+          self.resolve_approval(ToolApproval::Approved);
+        }
+        Action::Edit(input) if input.key == Key::Char('Y') => {
+          self.resolve_approval(ToolApproval::Approved);
+        }
+        Action::Edit(input) if input.key == Key::Char('n') => {
+          self.resolve_approval(ToolApproval::Denied);
+        }
+        Action::Edit(input) if input.key == Key::Char('N') => {
+          self.resolve_approval(ToolApproval::Denied);
+        }
+        Action::Interrupt => {
+          self.resolve_approval(ToolApproval::Denied);
+        }
+        Action::Quit => {
+          self.resolve_approval(ToolApproval::Denied);
+          self.quit();
+        }
+        Action::CompleteCommand
+        | Action::Edit(_)
+        | Action::SelectNext
+        | Action::SelectPrevious
+        | Action::Submit
+        | Action::SubmitImmediately => {}
+      },
+      InputMode::Compose => match action {
+        Action::CompleteCommand => {
+          if !self.composer.complete_command() {
+            self.composer.input(Input {
+              key: Key::Tab,
+              ..Default::default()
+            });
+          }
+        }
+        Action::Edit(input) => self.composer.input(input),
+        Action::Interrupt => {
+          let effects = self.interrupt_agent();
 
-  fn handle_agent_event(&mut self, event: AgentEvent) -> Vec<Effect> {
-    match event {
-      AgentEvent::Done => {
-        self.active_run_id = None;
-        self.input_mode.clear_approval();
-        self.transcript.finish_agent_activity();
-        self.save_session();
-        return self.run_next_queued();
-      }
-      AgentEvent::Delta(delta) if self.transcript.is_agent_active() => {
-        self.transcript.push_agent_delta(&delta);
-      }
-      AgentEvent::ReasoningDelta(delta)
-        if self.transcript.is_agent_active() =>
-      {
-        self.transcript.push_agent_reasoning_delta(&delta);
-      }
-      AgentEvent::Delta(_) | AgentEvent::ReasoningDelta(_) => {}
-      AgentEvent::ToolCall(tool_call) => {
-        self.transcript.push_tool_call(tool_call);
-        self.save_session();
-      }
-      AgentEvent::ToolResult { id, result } => {
-        self.input_mode.clear_approval();
-        self.transcript.push_tool_result(&id, result);
-        self.save_session();
-      }
-      AgentEvent::Error(error) => {
-        self.active_run_id = None;
-        self.input_mode.clear_approval();
-        self.transcript.error(error);
-        self.save_session();
-        return self.run_next_queued();
-      }
-      AgentEvent::ToolApprovalRequest(request) => {
-        self.input_mode = InputMode::Approval(request);
-      }
-    }
+          if effects.is_empty() {
+            return effects;
+          }
 
-    Vec::new()
-  }
-
-  fn handle_approval_action(&mut self, action: Action) -> Vec<Effect> {
-    match action {
-      Action::Edit(input) if input.key == Key::Char('y') => {
-        self.resolve_approval(ToolApproval::Approved);
-      }
-      Action::Edit(input) if input.key == Key::Char('Y') => {
-        self.resolve_approval(ToolApproval::Approved);
-      }
-      Action::Edit(input) if input.key == Key::Char('n') => {
-        self.resolve_approval(ToolApproval::Denied);
-      }
-      Action::Edit(input) if input.key == Key::Char('N') => {
-        self.resolve_approval(ToolApproval::Denied);
-      }
-      Action::Interrupt => {
-        self.resolve_approval(ToolApproval::Denied);
-      }
-      Action::Quit => {
-        self.resolve_approval(ToolApproval::Denied);
-        self.quit();
-      }
-      Action::CompleteCommand
-      | Action::Edit(_)
-      | Action::SelectNext
-      | Action::SelectPrevious
-      | Action::Submit
-      | Action::SubmitImmediately => {}
+          return effects.into_iter().chain(self.run_next_queued()).collect();
+        }
+        Action::Quit => self.quit(),
+        Action::SelectNext => self.composer.select_next(),
+        Action::SelectPrevious => self.composer.select_previous(),
+        Action::Submit => return self.submit(),
+        Action::SubmitImmediately => return self.submit_immediately(),
+      },
     }
 
     Vec::new()
   }
 
-  fn handle_composer_action(&mut self, action: Action) -> Vec<Effect> {
-    match action {
-      Action::CompleteCommand => {
-        if !self.composer.complete_command() {
-          self.composer.input(Input {
-            key: Key::Tab,
-            ..Default::default()
-          });
+  fn handle_command(&mut self, command: Command) -> Vec<Effect> {
+    let effects = match command {
+      Command::Clear => {
+        let interrupt_agent = self.active_run_id.take().is_some();
+
+        self.input_mode.clear_approval();
+        self.transcript.clear();
+        self.composer.clear_history();
+        self.queued_inputs.clear();
+
+        self.save_session();
+
+        if interrupt_agent {
+          vec![Effect::InterruptAgent]
+        } else {
+          Vec::new()
         }
       }
-      Action::Edit(input) => self.composer.input(input),
-      Action::Interrupt => {
-        let effects = self.interrupt_agent();
+      Command::Quit => self.handle_action(Action::Quit),
+    };
 
-        if effects.is_empty() {
-          return effects;
-        }
+    self.reset_input();
 
-        return effects.into_iter().chain(self.run_next_queued()).collect();
-      }
-      Action::Quit => self.quit(),
-      Action::SelectNext => self.composer.select_next(),
-      Action::SelectPrevious => self.composer.select_previous(),
-      Action::Submit => return self.submit(),
-      Action::SubmitImmediately => return self.submit_immediately(),
-    }
-
-    Vec::new()
+    effects
   }
 
   pub(crate) fn handle_event(&mut self, event: Event) -> Vec<Effect> {
     match event {
       Event::Action(action) => return self.handle_action(action),
       Event::Agent { event, run_id } if self.active_run_id == Some(run_id) => {
-        return self.handle_agent_event(event);
+        match event {
+          AgentEvent::Done => {
+            self.active_run_id = None;
+            self.input_mode.clear_approval();
+            self.transcript.finish_agent_activity();
+            self.save_session();
+            return self.run_next_queued();
+          }
+          AgentEvent::Delta(delta) if self.transcript.is_agent_active() => {
+            self.transcript.push_agent_delta(&delta);
+          }
+          AgentEvent::ReasoningDelta(delta)
+            if self.transcript.is_agent_active() =>
+          {
+            self.transcript.push_agent_reasoning_delta(&delta);
+          }
+          AgentEvent::Delta(_) | AgentEvent::ReasoningDelta(_) => {}
+          AgentEvent::ToolCall(tool_call) => {
+            self.transcript.push_tool_call(tool_call);
+            self.save_session();
+          }
+          AgentEvent::ToolResult { id, result } => {
+            self.input_mode.clear_approval();
+            self.transcript.push_tool_result(&id, result);
+            self.save_session();
+          }
+          AgentEvent::Error(error) => {
+            self.active_run_id = None;
+            self.input_mode.clear_approval();
+            self.transcript.error(error);
+            self.save_session();
+            return self.run_next_queued();
+          }
+          AgentEvent::ToolApprovalRequest(request) => {
+            self.input_mode = InputMode::Approval(request);
+          }
+        }
       }
       Event::Agent { .. } => {}
       Event::Error(error) => {
@@ -202,32 +212,6 @@ impl State {
     Effect::RunAgent { messages, run_id }
   }
 
-  fn run_command(&mut self, command: Command) -> Vec<Effect> {
-    let effects = match command {
-      Command::Clear => {
-        let interrupt_agent = self.active_run_id.take().is_some();
-
-        self.input_mode.clear_approval();
-        self.transcript.clear();
-        self.composer.clear_history();
-        self.queued_inputs.clear();
-
-        self.save_session();
-
-        if interrupt_agent {
-          vec![Effect::InterruptAgent]
-        } else {
-          Vec::new()
-        }
-      }
-      Command::Quit => self.handle_action(Action::Quit),
-    };
-
-    self.reset_input();
-
-    effects
-  }
-
   fn run_next_queued(&mut self) -> Vec<Effect> {
     self
       .queued_inputs
@@ -249,14 +233,14 @@ impl State {
     let input = input.trim();
 
     if let Some(command) = Command::from_input(input) {
-      return self.run_command(command);
+      return self.handle_command(command);
     }
 
     if input.starts_with('/') {
       let command = self.composer.selected_command();
 
       if let Some(command) = command {
-        self.run_command(command);
+        self.handle_command(command);
       } else if input.len() > 1 {
         self.transcript.notice(format!(
           "Unrecognized command '{input}'. Type \"/\" for a list of supported commands."
@@ -370,8 +354,14 @@ mod tests {
       }]
     );
 
-    state.handle_agent_event(AgentEvent::ReasoningDelta("bar".into()));
-    state.handle_agent_event(AgentEvent::Delta("baz".into()));
+    state.handle_event(Event::Agent {
+      event: AgentEvent::ReasoningDelta("bar".into()),
+      run_id: 0,
+    });
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Delta("baz".into()),
+      run_id: 0,
+    });
 
     let invocation = ToolInvocation {
       id: "foo".into(),
@@ -381,7 +371,10 @@ mod tests {
       }),
     };
 
-    state.handle_agent_event(AgentEvent::ToolCall(invocation.clone()));
+    state.handle_event(Event::Agent {
+      event: AgentEvent::ToolCall(invocation.clone()),
+      run_id: 0,
+    });
 
     let result = ToolResult {
       exit_status: Some(0),
@@ -390,12 +383,18 @@ mod tests {
       ..Default::default()
     };
 
-    state.handle_agent_event(AgentEvent::ToolResult {
-      id: "foo".into(),
-      result: result.clone(),
+    state.handle_event(Event::Agent {
+      event: AgentEvent::ToolResult {
+        id: "foo".into(),
+        result: result.clone(),
+      },
+      run_id: 0,
     });
 
-    state.handle_agent_event(AgentEvent::Done);
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
 
     assert_eq!(
       state.transcript.messages(),
@@ -431,7 +430,7 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.input_mode = InputMode::Approval(request);
 
     assert_matches!(state.input_mode, InputMode::Approval(_));
 
@@ -465,7 +464,7 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.input_mode = InputMode::Approval(request);
 
     assert_matches!(state.input_mode, InputMode::Approval(_));
 
@@ -499,7 +498,7 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.input_mode = InputMode::Approval(request);
 
     assert_eq!(
       state.handle_event(Event::Action(Action::CompleteCommand)),
@@ -526,7 +525,7 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.input_mode = InputMode::Approval(request);
 
     assert_matches!(state.input_mode, InputMode::Approval(_));
 
@@ -557,7 +556,7 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.input_mode = InputMode::Approval(request);
 
     assert_matches!(state.input_mode, InputMode::Approval(_));
 
@@ -591,7 +590,7 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.input_mode = InputMode::Approval(request);
 
     assert_matches!(state.input_mode, InputMode::Approval(_));
 
@@ -619,7 +618,7 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.input_mode = InputMode::Approval(request);
 
     assert_matches!(state.input_mode, InputMode::Approval(_));
 
@@ -653,7 +652,7 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.input_mode = InputMode::Approval(request);
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -683,7 +682,7 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.input_mode = InputMode::Approval(request);
 
     assert_eq!(
       state.handle_event(Event::Action(Action::SelectNext)),
@@ -710,7 +709,7 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.input_mode = InputMode::Approval(request);
 
     assert_eq!(
       state.handle_event(Event::Action(Action::SelectPrevious)),
@@ -737,7 +736,7 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.input_mode = InputMode::Approval(request);
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
@@ -764,8 +763,13 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
-    state.handle_agent_event(AgentEvent::Done);
+    state.active_run_id = Some(0);
+    state.input_mode = InputMode::Approval(request);
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
 
     assert_matches!(state.input_mode, InputMode::Compose);
     assert!(response_receiver.await.is_err());
@@ -788,14 +792,18 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.active_run_id = Some(0);
+    state.input_mode = InputMode::Approval(request);
 
-    state.handle_agent_event(AgentEvent::ToolResult {
-      id: "foo".into(),
-      result: ToolResult {
-        content: Some("bar".into()),
-        ..Default::default()
+    state.handle_event(Event::Agent {
+      event: AgentEvent::ToolResult {
+        id: "foo".into(),
+        result: ToolResult {
+          content: Some("bar".into()),
+          ..Default::default()
+        },
       },
+      run_id: 0,
     });
 
     assert_matches!(state.input_mode, InputMode::Compose);
@@ -819,8 +827,13 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
-    state.handle_agent_event(AgentEvent::Error("bar".into()));
+    state.active_run_id = Some(0);
+    state.input_mode = InputMode::Approval(request);
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Error("bar".into()),
+      run_id: 0,
+    });
 
     assert_matches!(state.input_mode, InputMode::Compose);
     assert!(response_receiver.await.is_err());
@@ -912,8 +925,14 @@ mod tests {
       }]
     );
 
-    state.handle_agent_event(AgentEvent::Delta("bar".into()));
-    state.handle_agent_event(AgentEvent::Done);
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Delta("bar".into()),
+      run_id: 0,
+    });
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
 
     state.handle_event(Event::Action(Action::Edit(Input {
       key: Key::Char('/'),
@@ -949,8 +968,14 @@ mod tests {
       }]
     );
 
-    state.handle_agent_event(AgentEvent::Delta("bar".into()));
-    state.handle_agent_event(AgentEvent::Done);
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Delta("bar".into()),
+      run_id: 0,
+    });
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
 
     for c in "/clear".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -1044,8 +1069,14 @@ mod tests {
       }]
     );
 
-    state.handle_agent_event(AgentEvent::Delta("bar".into()));
-    state.handle_agent_event(AgentEvent::Done);
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Delta("bar".into()),
+      run_id: 0,
+    });
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
 
     for c in "/c".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -1112,7 +1143,11 @@ mod tests {
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
-    state.handle_agent_event(AgentEvent::Delta("partial response".into()));
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Delta("partial response".into()),
+      run_id: 0,
+    });
 
     for character in "/quit".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -1165,7 +1200,10 @@ mod tests {
       }]
     );
 
-    state.handle_agent_event(AgentEvent::Error("bar".into()));
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Error("bar".into()),
+      run_id: 0,
+    });
 
     assert_eq!(
       state.transcript.messages(),
@@ -1201,7 +1239,11 @@ mod tests {
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
-    state.handle_agent_event(AgentEvent::Delta("partial".into()));
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Delta("partial".into()),
+      run_id: 0,
+    });
 
     for c in "bar".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -1359,14 +1401,20 @@ mod tests {
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
-    state.handle_agent_event(AgentEvent::Done);
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
+
     state.handle_event(Event::Action(Action::SelectPrevious));
+
     state.handle_event(Event::Action(Action::Edit(Input {
       key: Key::Char('!'),
       ..Default::default()
     })));
-    state.handle_event(Event::Action(Action::SelectNext));
 
+    state.handle_event(Event::Action(Action::SelectNext));
     assert_eq!(state.composer.input_text(), "history!");
 
     state.handle_event(Event::Action(Action::SelectPrevious));
@@ -1386,7 +1434,11 @@ mod tests {
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
-    state.handle_agent_event(AgentEvent::Done);
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
 
     for c in "/clear".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -1410,6 +1462,7 @@ mod tests {
     };
 
     let mut session = Session::new(&settings).unwrap();
+
     session.entries = vec![
       TranscriptEntry::User("foo".into()),
       TranscriptEntry::Agent("bar".into()),
@@ -1440,7 +1493,11 @@ mod tests {
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
-    state.handle_agent_event(AgentEvent::Done);
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
 
     for c in "bar".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -1450,7 +1507,10 @@ mod tests {
     }
 
     state.handle_event(Event::Action(Action::Submit));
-    state.handle_agent_event(AgentEvent::Done);
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 1,
+    });
 
     for c in "draft".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -1482,7 +1542,11 @@ mod tests {
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
-    state.handle_agent_event(AgentEvent::Done);
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
 
     for input in [
       Input {
@@ -1618,7 +1682,10 @@ mod tests {
       }),
     });
 
-    state.handle_agent_event(AgentEvent::ToolApprovalRequest(request));
+    state.handle_event(Event::Agent {
+      event: AgentEvent::ToolApprovalRequest(request),
+      run_id: 0,
+    });
 
     assert_matches!(state.input_mode, InputMode::Approval(_));
 
