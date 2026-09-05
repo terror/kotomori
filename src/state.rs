@@ -71,8 +71,9 @@ impl State {
         Action::Quit => self.quit(),
         Action::SelectNext => self.composer.select_next(),
         Action::SelectPrevious => self.composer.select_previous(),
-        Action::Submit => return self.submit(),
-        Action::SubmitImmediately => return self.submit_immediately(),
+        Action::Submit | Action::SubmitImmediately => {
+          return self.submit(&action);
+        }
       },
     }
 
@@ -228,20 +229,18 @@ impl State {
     }
   }
 
-  fn submit(&mut self) -> Vec<Effect> {
+  fn submit(&mut self, action: &Action) -> Vec<Effect> {
     let input = self.composer.input_text();
     let input = input.trim();
 
-    if let Some(command) = Command::from_input(input) {
+    if let Some(command) =
+      Command::from_input(input).or_else(|| self.composer.selected_command())
+    {
       return self.handle_command(command);
     }
 
     if input.starts_with('/') {
-      let command = self.composer.selected_command();
-
-      if let Some(command) = command {
-        self.handle_command(command);
-      } else if input.len() > 1 {
+      if input.len() > 1 {
         self.transcript.notice(format!(
           "Unrecognized command '{input}'. Type \"/\" for a list of supported commands."
         ));
@@ -261,37 +260,18 @@ impl State {
     self.composer.remember(&input);
     self.reset_input();
 
-    if self.transcript.is_agent_active() {
-      self.queued_inputs.push_back(input);
-      Vec::new()
-    } else {
-      vec![self.run(input)]
+    match action {
+      Action::SubmitImmediately => self
+        .interrupt_agent()
+        .into_iter()
+        .chain(once(self.run(input)))
+        .collect(),
+      _ if self.transcript.is_agent_active() => {
+        self.queued_inputs.push_back(input);
+        Vec::new()
+      }
+      _ => vec![self.run(input)],
     }
-  }
-
-  fn submit_immediately(&mut self) -> Vec<Effect> {
-    if !self.transcript.is_agent_active() {
-      return self.submit();
-    }
-
-    let input = self.composer.input_text();
-    let input = input.trim();
-
-    if input.is_empty() || input.starts_with('/') {
-      return self.submit();
-    }
-
-    let input = input.to_string();
-
-    self.composer.remember(&input);
-
-    self.reset_input();
-
-    self
-      .interrupt_agent()
-      .into_iter()
-      .chain(once(self.run(input)))
-      .collect()
   }
 
   pub(crate) fn with_session(
@@ -1182,6 +1162,35 @@ mod tests {
   }
 
   #[test]
+  fn command_submission_returns_effects() {
+    #[track_caller]
+    fn case(input: &str, action: Action) {
+      let mut state = State::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(input.into()),
+        yolo: false,
+      })
+      .unwrap();
+
+      state.run("foo".into());
+
+      assert_eq!(
+        state.handle_event(Event::Action(action)),
+        vec![Effect::InterruptAgent]
+      );
+
+      assert_eq!(state.active_run_id, None);
+      assert_eq!(state.composer.input_text(), "");
+    }
+
+    case("/cl", Action::Submit);
+    case("/cl", Action::SubmitImmediately);
+    case("/q", Action::Submit);
+    case("/q", Action::SubmitImmediately);
+    case("  /clear  ", Action::Submit);
+  }
+
+  #[test]
   fn error_is_not_included_in_next_request() {
     let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
@@ -1245,7 +1254,9 @@ mod tests {
       run_id: 0,
     });
 
-    for c in "bar".chars() {
+    state.queued_inputs.push_back("baz".into());
+
+    for c in "  bar  ".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
         key: Key::Char(c),
         ..Default::default()
@@ -1268,6 +1279,17 @@ mod tests {
     );
 
     assert!(state.transcript.is_agent_active());
+
+    assert_eq!(state.composer.input_text(), "");
+    assert_eq!(state.queued_inputs(), &VecDeque::from(["baz".into()]));
+
+    state.handle_event(Event::Action(Action::SelectPrevious));
+
+    assert_eq!(state.composer.input_text(), "bar");
+
+    state.handle_event(Event::Action(Action::SelectPrevious));
+
+    assert_eq!(state.composer.input_text(), "foo");
 
     state.handle_event(Event::Agent {
       event: AgentEvent::Done,
@@ -1840,24 +1862,34 @@ mod tests {
 
   #[test]
   fn submit_trims_input() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("  foo  ".into()),
-      yolo: false,
-    })
-    .unwrap();
+    #[track_caller]
+    fn case(action: Action) {
+      let mut state = State::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("  foo  ".into()),
+        yolo: false,
+      })
+      .unwrap();
 
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
-    );
+      assert_eq!(
+        state.handle_event(Event::Action(action)),
+        vec![Effect::RunAgent {
+          messages: vec![Message::User(vec![UserMessageContent::Text(
+            "foo".into()
+          )])],
+          run_id: 0,
+        }]
+      );
 
-    assert_eq!(state.composer.input_text(), "");
+      assert_eq!(state.composer.input_text(), "");
+
+      state.handle_event(Event::Action(Action::SelectPrevious));
+
+      assert_eq!(state.composer.input_text(), "foo");
+    }
+
+    case(Action::Submit);
+    case(Action::SubmitImmediately);
   }
 
   #[test]
