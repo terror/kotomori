@@ -85,11 +85,7 @@ impl Worker {
     let (mut tool_call_count, mut tool_round_count) = (0, 0);
 
     loop {
-      let mut sink = ProviderSink {
-        event_sender: self.event_sender.clone(),
-        run_id,
-        ..Default::default()
-      };
+      let mut sink = ProviderSink::new(self.event_sender.clone(), run_id);
 
       let request = Request {
         messages: messages.clone(),

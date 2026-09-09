@@ -2,10 +2,10 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ProviderSink {
-  pub(super) content: Vec<AgentMessageContent>,
-  pub(super) event_sender: UnboundedSender<Event>,
-  pub(super) reasoning_buffer: ReasoningBuffer,
-  pub(super) run_id: u64,
+  content: Vec<AgentMessageContent>,
+  event_sender: UnboundedSender<Event>,
+  reasoning_buffer: ReasoningBuffer,
+  run_id: u64,
 }
 
 impl ProviderSink {
@@ -32,6 +32,15 @@ impl ProviderSink {
 
   pub(crate) fn finish(self) -> Vec<AgentMessageContent> {
     self.content
+  }
+
+  pub(crate) fn new(event_sender: UnboundedSender<Event>, run_id: u64) -> Self {
+    Self {
+      content: Vec::new(),
+      event_sender,
+      reasoning_buffer: ReasoningBuffer::default(),
+      run_id,
+    }
   }
 
   fn push_reasoning_delta(&mut self, delta: &str) {
@@ -88,18 +97,5 @@ impl ProviderSink {
     ));
 
     Ok(())
-  }
-}
-
-impl Default for ProviderSink {
-  fn default() -> Self {
-    let (sender, _) = mpsc::unbounded_channel();
-
-    Self {
-      content: Vec::new(),
-      event_sender: sender,
-      reasoning_buffer: ReasoningBuffer::default(),
-      run_id: 0,
-    }
   }
 }
