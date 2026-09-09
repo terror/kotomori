@@ -3,7 +3,8 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct App {
   agent: Option<Agent>,
-  event_channel: Channel<Event>,
+  event_receiver: UnboundedReceiver<Event>,
+  event_sender: UnboundedSender<Event>,
   screen: Screen,
   settings: Settings,
 }
@@ -12,7 +13,7 @@ impl App {
   const TICK_INTERVAL: Duration = Duration::from_millis(120);
 
   fn drain_pending_events(&mut self) -> Result {
-    while let Some(event) = self.event_channel.try_recv() {
+    while let Ok(event) = self.event_receiver.try_recv() {
       self.handle_event(event)?;
     }
 
@@ -64,7 +65,7 @@ impl App {
   }
 
   fn listen_for_input(&self) {
-    let sender = self.event_channel.sender();
+    let sender = self.event_sender.clone();
 
     thread::spawn(move || {
       loop {
@@ -111,7 +112,7 @@ impl App {
       format!("failed to parse session model {}", session.model)
     })?;
 
-    self.agent = Some(Agent::new(self.event_channel.sender(), &settings)?);
+    self.agent = Some(Agent::new(self.event_sender.clone(), &settings)?);
 
     self.screen = Screen::Session(Box::new(State::with_session(
       &settings, database, session,
@@ -141,7 +142,7 @@ impl App {
       }
 
       tokio::select! {
-        event = self.event_channel.recv() => {
+        event = self.event_receiver.recv() => {
           let Some(event) = event else {
             break;
           };
@@ -163,17 +164,18 @@ impl App {
     settings: &Settings,
     screen: Screen,
   ) -> Result<Self> {
-    let event_channel = Channel::new();
+    let (event_sender, event_receiver) = mpsc::unbounded_channel();
 
     let agent = if matches!(screen, Screen::Session(_)) {
-      Some(Agent::new(event_channel.sender(), settings)?)
+      Some(Agent::new(event_sender.clone(), settings)?)
     } else {
       None
     };
 
     Ok(Self {
       agent,
-      event_channel,
+      event_receiver,
+      event_sender,
       screen,
       settings: settings.clone(),
     })
