@@ -89,7 +89,7 @@ use {
     path::{Path, PathBuf},
     process::{self, Stdio},
     str::{self, FromStr},
-    sync::{Arc, LazyLock, Mutex, OnceLock},
+    sync::{Arc, LazyLock, OnceLock},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
   },
@@ -140,7 +140,7 @@ macro_rules! assert_matches {
 }
 
 #[cfg(test)]
-use tool::CommandTool;
+use {std::sync::Mutex, tool::CommandTool};
 
 mod action;
 mod agent;

@@ -1,20 +1,11 @@
 use super::*;
 
-#[derive(Clone)]
 pub(crate) struct ApprovalRequest {
   pub(crate) invocation: ToolInvocation,
-  response_sender: Arc<Mutex<Option<oneshot::Sender<ToolApproval>>>>,
+  response_sender: oneshot::Sender<ToolApproval>,
 }
 
 impl ApprovalRequest {
-  pub(crate) fn approve(&self) {
-    self.respond(ToolApproval::Approved);
-  }
-
-  pub(crate) fn deny(&self) {
-    self.respond(ToolApproval::Denied);
-  }
-
   pub(crate) fn new(
     invocation: ToolInvocation,
   ) -> (Self, oneshot::Receiver<ToolApproval>) {
@@ -23,21 +14,14 @@ impl ApprovalRequest {
     (
       Self {
         invocation,
-        response_sender: Arc::new(Mutex::new(Some(response_sender))),
+        response_sender,
       },
       response_receiver,
     )
   }
 
-  fn respond(&self, approval: ToolApproval) {
-    if let Some(response_sender) = self
-      .response_sender
-      .lock()
-      .expect("approval response lock poisoned")
-      .take()
-    {
-      let _ = response_sender.send(approval);
-    }
+  pub(crate) fn respond(self, approval: ToolApproval) {
+    let _ = self.response_sender.send(approval);
   }
 }
 

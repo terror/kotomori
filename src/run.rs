@@ -93,10 +93,7 @@ impl Run {
       return;
     };
 
-    match approval {
-      ToolApproval::Approved => request.approve(),
-      ToolApproval::Denied => request.deny(),
-    }
+    request.respond(approval);
   }
 
   pub(crate) fn tick(&mut self, elapsed: Duration) {
