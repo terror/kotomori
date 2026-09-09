@@ -4,36 +4,6 @@ mod command;
 
 pub(crate) use command::CommandTool;
 
-#[derive(Debug)]
-pub(crate) struct Tool {
-  pub(crate) description: &'static str,
-  pub(crate) name: &'static str,
-  pub(crate) parameters: Value,
-}
-
-impl Tool {
-  fn new<T: ToolCall>() -> Self {
-    Self {
-      description: T::DESCRIPTION,
-      name: T::NAME,
-      parameters: serde_json::to_value(T::json_schema(
-        &mut schemars::SchemaGenerator::default(),
-      ))
-      .expect("failed to serialize tool schema"),
-    }
-  }
-}
-
-impl From<&Tool> for ToolDefinition {
-  fn from(tool: &Tool) -> Self {
-    Self {
-      description: tool.description.into(),
-      name: tool.name.into(),
-      parameters: tool.parameters.clone(),
-    }
-  }
-}
-
 macro_rules! define_tools {
   ($( $variant:ident($tool:ty), )*) => {
     #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -79,8 +49,15 @@ macro_rules! define_tools {
         Ok(ToolInvocation { id: call.id, kind })
       }
 
-      pub(crate) fn definitions() -> Vec<Tool> {
-        vec![$(Tool::new::<$tool>()),*]
+      pub(crate) fn definitions() -> Vec<ToolDefinition> {
+        vec![$(ToolDefinition {
+          description: <$tool>::DESCRIPTION.into(),
+          name: <$tool>::NAME.into(),
+          parameters: serde_json::to_value(<$tool>::json_schema(
+            &mut schemars::SchemaGenerator::default(),
+          ))
+          .expect("failed to serialize tool schema"),
+        }),*]
       }
 
       pub(crate) fn details(&self) -> Vec<(&'static str, String)> {

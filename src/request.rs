@@ -19,26 +19,17 @@ impl Request {
 
 impl From<&Request> for CompletionRequest {
   fn from(request: &Request) -> Self {
-    let messages = request
-      .system
-      .as_deref()
-      .map(RigMessage::system)
-      .into_iter()
-      .chain(request.messages.iter().map(Into::into))
-      .collect::<Vec<_>>();
-
-    let chat_history = if messages.is_empty() {
-      OneOrMany::one(RigMessage::user(""))
-    } else {
-      match OneOrMany::many(messages) {
-        Ok(messages) => messages,
-        Err(_) => OneOrMany::one(RigMessage::user("")),
-      }
-    };
-
     Self {
       additional_params: None,
-      chat_history,
+      chat_history: OneOrMany::many(
+        request
+          .system
+          .as_deref()
+          .map(RigMessage::system)
+          .into_iter()
+          .chain(request.messages.iter().map(Into::into)),
+      )
+      .unwrap_or_else(|_| OneOrMany::one(RigMessage::user(""))),
       documents: Vec::new(),
       max_tokens: None,
       model: Some(request.model.name.clone()),
@@ -46,10 +37,7 @@ impl From<&Request> for CompletionRequest {
       preamble: None,
       temperature: None,
       tool_choice: None,
-      tools: ToolInvocationKind::definitions()
-        .iter()
-        .map(Into::into)
-        .collect(),
+      tools: ToolInvocationKind::definitions(),
     }
   }
 }
