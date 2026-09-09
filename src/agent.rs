@@ -2,15 +2,61 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct Agent {
+  task: Option<task::JoinHandle<()>>,
+  worker: Arc<Worker>,
+}
+
+#[derive(Debug)]
+struct Worker {
   event_sender: UnboundedSender<Event>,
   loader: Loader,
   provider: Arc<dyn Provider>,
   settings: Settings,
-  task: Option<task::JoinHandle<()>>,
   tool_context: ToolContext,
 }
 
 impl Agent {
+  pub(crate) fn interrupt(&mut self) {
+    if let Some(task) = self.task.take() {
+      task.abort();
+    }
+  }
+
+  pub(crate) fn new(
+    event_sender: UnboundedSender<Event>,
+    settings: &Settings,
+  ) -> Result<Self> {
+    let provider = Arc::<dyn Provider>::try_from(settings.model.clone())?;
+
+    Ok(Self {
+      task: None,
+      worker: Arc::new(Worker {
+        event_sender,
+        loader: Loader::new()?,
+        provider,
+        settings: settings.clone(),
+        tool_context: ToolContext::default(),
+      }),
+    })
+  }
+
+  pub(crate) fn spawn(&mut self, run_id: u64, messages: Vec<Message>) {
+    self.interrupt();
+
+    let worker = self.worker.clone();
+
+    self.task = Some(tokio::spawn(async move {
+      if let Err(error) = worker.stream(run_id, messages).await {
+        let _ = worker.event_sender.send(Event::Agent {
+          event: AgentEvent::Error(error.to_string()),
+          run_id,
+        });
+      }
+    }));
+  }
+}
+
+impl Worker {
   const MAX_TOOL_CALLS: usize = 128;
   const MAX_TOOL_ROUNDS: usize = 32;
 
@@ -31,50 +77,6 @@ impl Agent {
     })?;
 
     Ok(response_receiver.await.unwrap_or(ToolApproval::Denied))
-  }
-
-  pub(crate) fn interrupt(&mut self) {
-    if let Some(task) = self.task.take() {
-      task.abort();
-    }
-  }
-
-  pub(crate) fn new(
-    event_sender: UnboundedSender<Event>,
-    settings: &Settings,
-  ) -> Result<Self> {
-    let provider = Arc::<dyn Provider>::try_from(settings.model.clone())?;
-
-    Ok(Self {
-      event_sender,
-      loader: Loader::new()?,
-      provider,
-      settings: settings.clone(),
-      task: None,
-      tool_context: ToolContext::default(),
-    })
-  }
-
-  pub(crate) fn spawn(&mut self, run_id: u64, messages: Vec<Message>) {
-    self.interrupt();
-
-    let agent = Self {
-      event_sender: self.event_sender.clone(),
-      loader: self.loader.clone(),
-      provider: self.provider.clone(),
-      settings: self.settings.clone(),
-      task: None,
-      tool_context: self.tool_context,
-    };
-
-    self.task = Some(tokio::spawn(async move {
-      if let Err(error) = agent.stream(run_id, messages).await {
-        let _ = agent.event_sender.send(Event::Agent {
-          event: AgentEvent::Error(error.to_string()),
-          run_id,
-        });
-      }
-    }));
   }
 
   async fn stream(&self, run_id: u64, mut messages: Vec<Message>) -> Result {
@@ -285,19 +287,21 @@ mod tests {
       let requests = Arc::new(Mutex::new(Vec::new()));
 
       let agent = Agent {
-        event_sender,
-        loader: Loader::with_cwd(directory.path()),
-        provider: Arc::new(TestProvider {
-          outputs: Mutex::new(outputs.into()),
-          requests: requests.clone(),
-        }),
-        settings: Settings {
-          model: "mock:local".parse().unwrap(),
-          prompt: None,
-          yolo,
-        },
         task: None,
-        tool_context: ToolContext::default(),
+        worker: Arc::new(Worker {
+          event_sender,
+          loader: Loader::with_cwd(directory.path()),
+          provider: Arc::new(TestProvider {
+            outputs: Mutex::new(outputs.into()),
+            requests: requests.clone(),
+          }),
+          settings: Settings {
+            model: "mock:local".parse().unwrap(),
+            prompt: None,
+            yolo,
+          },
+          tool_context: ToolContext::default(),
+        }),
       };
 
       Self {
@@ -312,7 +316,7 @@ mod tests {
   #[tokio::test]
   async fn command_tools_wait_for_approval() {
     let TestAgent {
-      agent,
+      mut agent,
       directory: _directory,
       mut events,
       requests,
@@ -321,15 +325,10 @@ mod tests {
       false,
     );
 
-    let task = tokio::spawn(async move {
-      agent
-        .stream(
-          0,
-          vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-        )
-        .await
-        .unwrap();
-    });
+    agent.spawn(
+      0,
+      vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+    );
 
     assert_eq!(
       events.recv().await.unwrap(),
@@ -357,7 +356,7 @@ mod tests {
 
     request.respond(ToolApproval::Denied);
 
-    task.await.unwrap();
+    agent.task.take().unwrap().await.unwrap();
 
     let tool_result = ToolResult {
       stderr: Some("permission denied".into()),
@@ -404,7 +403,7 @@ mod tests {
   #[tokio::test]
   async fn errors_when_tool_call_limit_is_exceeded() {
     let tool_calls = vec![
-      (0..=Agent::MAX_TOOL_CALLS)
+      (0..=Worker::MAX_TOOL_CALLS)
         .map(|_| Output::ToolCall)
         .collect(),
     ];
@@ -413,6 +412,7 @@ mod tests {
 
     let error = test_agent
       .agent
+      .worker
       .stream(
         0,
         vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
@@ -427,28 +427,32 @@ mod tests {
 
   #[tokio::test]
   async fn does_not_emit_tool_calls_when_round_contains_malformed_call() {
-    let test_agent = TestAgent::new(
+    let mut test_agent = TestAgent::new(
       vec![vec![Output::ToolCall, Output::MalformedToolCall]],
       true,
     );
 
-    let error = test_agent
-      .agent
-      .stream(
-        0,
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-      )
-      .await
-      .unwrap_err();
+    test_agent.agent.spawn(
+      1,
+      vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+    );
+
+    test_agent.agent.task.take().unwrap().await.unwrap();
+
+    assert_eq!(
+      test_agent.events.try_recv().unwrap(),
+      Event::Agent {
+        event: AgentEvent::Error("failed to decode `command` arguments".into()),
+        run_id: 1,
+      }
+    );
 
     assert!(test_agent.events.is_empty());
-
-    assert_eq!(error.to_string(), "failed to decode `command` arguments");
   }
 
   #[tokio::test]
   async fn errors_when_tool_round_limit_is_exceeded() {
-    let tool_calls = (0..=Agent::MAX_TOOL_ROUNDS)
+    let tool_calls = (0..=Worker::MAX_TOOL_ROUNDS)
       .map(|_| vec![Output::ToolCall])
       .collect::<Vec<Vec<Output>>>();
 
@@ -456,6 +460,7 @@ mod tests {
 
     let error = test_agent
       .agent
+      .worker
       .stream(
         0,
         vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
@@ -467,7 +472,7 @@ mod tests {
 
     assert_eq!(
       test_agent.requests.lock().unwrap().len(),
-      Agent::MAX_TOOL_ROUNDS + 1
+      Worker::MAX_TOOL_ROUNDS + 1
     );
 
     let mut tool_call_event_count = 0;
@@ -484,7 +489,7 @@ mod tests {
       }
     }
 
-    assert_eq!(tool_call_event_count, Agent::MAX_TOOL_ROUNDS);
+    assert_eq!(tool_call_event_count, Worker::MAX_TOOL_ROUNDS);
   }
 
   #[tokio::test]
@@ -496,6 +501,7 @@ mod tests {
 
     test_agent
       .agent
+      .worker
       .stream(
         0,
         vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
@@ -593,6 +599,7 @@ mod tests {
 
     test_agent
       .agent
+      .worker
       .stream(
         0,
         vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
@@ -647,6 +654,7 @@ mod tests {
 
     test_agent
       .agent
+      .worker
       .stream(
         0,
         vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
@@ -689,6 +697,25 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn spawning_interrupts_previous_task() {
+    let mut test_agent = TestAgent::new(vec![Vec::new()], true);
+
+    test_agent.agent.spawn(0, Vec::new());
+    test_agent.agent.spawn(1, Vec::new());
+    test_agent.agent.task.take().unwrap().await.unwrap();
+
+    assert_eq!(
+      test_agent.events.try_recv().unwrap(),
+      Event::Agent {
+        event: AgentEvent::Done,
+        run_id: 1,
+      },
+    );
+
+    assert!(test_agent.events.is_empty());
+  }
+
+  #[tokio::test]
   async fn streams_reasoning() {
     let mut test_agent = TestAgent::new(
       vec![vec![
@@ -701,6 +728,7 @@ mod tests {
 
     test_agent
       .agent
+      .worker
       .stream(
         0,
         vec![Message::User(vec![UserMessageContent::Text("baz".into())])],
@@ -769,7 +797,7 @@ mod tests {
       }
 
       assert_eq!(
-        test_agent.agent.system_prompt().unwrap(),
+        test_agent.agent.worker.system_prompt().unwrap(),
         expected(test_agent.directory.path(), &agents_path)
       );
     }
