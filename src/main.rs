@@ -49,7 +49,6 @@ use {
   options::Options,
   patch::Patch,
   provider::Provider,
-  provider_content::ProviderContent,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
   raw_tool_call::RawToolCall,
@@ -174,7 +173,6 @@ mod model;
 mod options;
 mod patch;
 mod provider;
-mod provider_content;
 mod provider_sink;
 mod raw_tool_call;
 mod reasoning_buffer;

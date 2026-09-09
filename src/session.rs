@@ -4,10 +4,10 @@ use super::*;
 pub(crate) struct Session {
   pub(crate) created_at: u64,
   pub(crate) directory: PathBuf,
-  pub(crate) entries: Vec<TranscriptEntry>,
   pub(crate) id: Option<i64>,
   pub(crate) model: String,
   pub(crate) title: Option<String>,
+  pub(crate) transcript: Transcript,
   pub(crate) updated_at: u64,
 }
 
@@ -70,39 +70,35 @@ impl Session {
       created_at: now,
       directory: env::current_dir()
         .context("failed to read current directory")?,
-      entries: Vec::new(),
       id: None,
       model: settings.model.to_string(),
       title: None,
+      transcript: Transcript::default(),
       updated_at: now,
     })
   }
 
-  pub(crate) fn save(
-    &mut self,
-    database: &Database,
-    transcript: &Transcript,
-  ) -> Result {
-    if transcript.is_empty() && self.id.is_none() {
+  pub(crate) fn save(&mut self, database: &Database) -> Result {
+    if self.transcript.is_empty() && self.id.is_none() {
       return Ok(());
     }
 
-    self.entries.clone_from(&transcript.entries);
+    self.title = self
+      .transcript
+      .entries
+      .iter()
+      .filter_map(TranscriptEntry::message)
+      .filter_map(Message::user_content)
+      .find_map(|content| {
+        let title = content
+          .split_whitespace()
+          .collect::<Vec<_>>()
+          .join(" ")
+          .as_str()
+          .truncate(Self::TITLE_LENGTH);
 
-    self.title = transcript.entries.iter().find_map(|entry| {
-      let TranscriptEntry::User(content) = entry else {
-        return None;
-      };
-
-      let title = content
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .as_str()
-        .truncate(Self::TITLE_LENGTH);
-
-      (!title.is_empty()).then_some(title)
-    });
+        (!title.is_empty()).then_some(title)
+      });
 
     self.updated_at = SystemTime::now()
       .duration_since(UNIX_EPOCH)
@@ -116,5 +112,40 @@ impl Session {
 
   pub(crate) fn set_model(&mut self, model: &Model) {
     self.model = model.to_string();
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn save_excludes_streaming_content() {
+    let database = Database::new().unwrap();
+
+    let mut session = Session::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    })
+    .unwrap();
+
+    session.transcript.send("foo".into());
+    session.transcript.push_agent_reasoning_delta("bar");
+    session.transcript.push_agent_delta("baz");
+
+    session.save(&database).unwrap();
+
+    let session = database.load_session(session.id.unwrap()).unwrap();
+
+    assert_eq!(
+      session.transcript,
+      Transcript {
+        entries: vec![TranscriptEntry::Message(Message::User(vec![
+          UserMessageContent::Text("foo".into())
+        ]))],
+        ..Default::default()
+      }
+    );
   }
 }

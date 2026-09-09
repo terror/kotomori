@@ -97,19 +97,7 @@ impl Agent {
 
       self.provider.stream(request, &mut sink).await?;
 
-      let content = sink
-        .finish()
-        .into_iter()
-        .map(|content| match content {
-          ProviderContent::Reasoning(reasoning) => {
-            Ok(AgentMessageContent::Reasoning(reasoning))
-          }
-          ProviderContent::Text(text) => Ok(AgentMessageContent::Text(text)),
-          ProviderContent::ToolCall(call) => Ok(AgentMessageContent::ToolCall(
-            ToolInvocationKind::decode(call)?,
-          )),
-        })
-        .collect::<Result<Vec<_>>>()?;
+      let content = sink.finish();
 
       if content.is_empty() {
         break;
@@ -125,13 +113,7 @@ impl Agent {
         })
         .collect::<Vec<_>>();
 
-      messages.push(Message::Agent(content));
-
-      if tool_calls.is_empty() {
-        break;
-      }
-
-      if tool_round_count >= Self::MAX_TOOL_ROUNDS {
+      if !tool_calls.is_empty() && tool_round_count >= Self::MAX_TOOL_ROUNDS {
         bail!(
           "maximum tool round limit of {} exceeded",
           Self::MAX_TOOL_ROUNDS
@@ -145,15 +127,21 @@ impl Agent {
         );
       }
 
+      let message = Message::Agent(content);
+
+      self.event_sender.send(Event::Agent {
+        event: AgentEvent::Message(message.clone()),
+        run_id,
+      })?;
+
+      messages.push(message);
+
+      if tool_calls.is_empty() {
+        break;
+      }
+
       (tool_round_count, tool_call_count) =
         (tool_round_count + 1, tool_call_count + tool_calls.len());
-
-      for tool_call in &tool_calls {
-        self.event_sender.send(Event::Agent {
-          event: AgentEvent::ToolCall(tool_call.clone()),
-          run_id,
-        })?;
-      }
 
       for tool_call in tool_calls {
         let result = match self.approval(run_id, &tool_call).await? {
@@ -166,18 +154,17 @@ impl Agent {
           },
         };
 
-        messages.push(Message::User(vec![UserMessageContent::ToolResult {
-          id: tool_call.id.clone(),
-          result: result.clone(),
-        }]));
+        let message = Message::User(vec![UserMessageContent::ToolResult {
+          id: tool_call.id,
+          result,
+        }]);
 
         self.event_sender.send(Event::Agent {
-          event: AgentEvent::ToolResult {
-            id: tool_call.id,
-            result,
-          },
+          event: AgentEvent::Message(message.clone()),
           run_id,
         })?;
+
+        messages.push(message);
       }
     }
 
@@ -276,7 +263,7 @@ mod tests {
             arguments: json!({}),
             id: "malformed".into(),
             name: "command".into(),
-          }),
+          })?,
           Output::ReasoningDelta(delta) => {
             sink.reasoning_delta(None, delta)?;
           }
@@ -290,7 +277,7 @@ mod tests {
             }),
             id: "foo".into(),
             name: "command".into(),
-          }),
+          })?,
         }
       }
 
@@ -363,13 +350,15 @@ mod tests {
     assert_eq!(
       events.recv().await.unwrap(),
       Event::Agent {
-        event: AgentEvent::ToolCall(ToolInvocation {
-          id: "foo".into(),
-          kind: ToolInvocationKind::Command(CommandTool {
-            command: "echo bar".into(),
-            cwd: None,
-          }),
-        }),
+        event: AgentEvent::Message(Message::Agent(vec![
+          AgentMessageContent::ToolCall(ToolInvocation {
+            id: "foo".into(),
+            kind: ToolInvocationKind::Command(CommandTool {
+              command: "echo bar".into(),
+              cwd: None,
+            }),
+          })
+        ])),
         run_id: 0,
       }
     );
@@ -394,10 +383,12 @@ mod tests {
     assert_eq!(
       events.recv().await.unwrap(),
       Event::Agent {
-        event: AgentEvent::ToolResult {
-          id: "foo".into(),
-          result: tool_result.clone(),
-        },
+        event: AgentEvent::Message(Message::User(vec![
+          UserMessageContent::ToolResult {
+            id: "foo".into(),
+            result: tool_result.clone(),
+          }
+        ])),
         run_id: 0,
       },
     );
@@ -501,7 +492,7 @@ mod tests {
       if matches!(
         event,
         Event::Agent {
-          event: AgentEvent::ToolCall(_),
+          event: AgentEvent::Message(Message::Agent(_)),
           ..
         }
       ) {
@@ -568,24 +559,34 @@ mod tests {
       events,
       [
         Event::Agent {
-          event: AgentEvent::ToolCall(ToolInvocation {
-            id: "foo".into(),
-            kind: ToolInvocationKind::Command(CommandTool {
-              command: "echo bar".into(),
-              cwd: None,
-            }),
-          }),
+          event: AgentEvent::Message(Message::Agent(vec![
+            AgentMessageContent::ToolCall(ToolInvocation {
+              id: "foo".into(),
+              kind: ToolInvocationKind::Command(CommandTool {
+                command: "echo bar".into(),
+                cwd: None,
+              }),
+            })
+          ])),
           run_id: 0,
         },
         Event::Agent {
-          event: AgentEvent::ToolResult {
-            id: "foo".into(),
-            result: tool_result,
-          },
+          event: AgentEvent::Message(Message::User(vec![
+            UserMessageContent::ToolResult {
+              id: "foo".into(),
+              result: tool_result,
+            }
+          ])),
           run_id: 0,
         },
         Event::Agent {
           event: AgentEvent::Delta("done".into()),
+          run_id: 0,
+        },
+        Event::Agent {
+          event: AgentEvent::Message(Message::Agent(vec![
+            AgentMessageContent::Text("done".into())
+          ])),
           run_id: 0,
         },
         Event::Agent {
@@ -738,6 +739,13 @@ mod tests {
         },
         Event::Agent {
           event: AgentEvent::Delta("bar".into()),
+          run_id: 0,
+        },
+        Event::Agent {
+          event: AgentEvent::Message(Message::Agent(vec![
+            AgentMessageContent::Reasoning("foo".into()),
+            AgentMessageContent::Text("bar".into())
+          ])),
           run_id: 0,
         },
         Event::Agent {

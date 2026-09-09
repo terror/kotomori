@@ -35,7 +35,8 @@ impl Component for ViewComponent<'_> {
         .chain(HintComponent.render(content_width))
         .chain(once(LineComponent::blank()))
         .chain(
-          TranscriptComponent::new(&state.transcript).render(content_width),
+          TranscriptComponent::new(&state.session.transcript)
+            .render(content_width),
         )
         .chain(
           QueuedInputsComponent {
@@ -91,7 +92,7 @@ mod tests {
 
     state.handle_event(Event::Action(Action::Submit));
 
-    assert!(state.transcript.is_agent_active());
+    assert!(state.session.transcript.is_agent_active());
 
     let screen = Screen::Session(Box::new(state));
 

@@ -18,8 +18,9 @@ impl<'a> TranscriptComponent<'a> {
     Self { state }
   }
 
-  fn render_agent_activity(&self) -> Vec<LineComponent> {
-    let mut lines = Vec::new();
+  fn render_agent_activity(&self, width: u16) -> Vec<LineComponent> {
+    let mut lines =
+      Self::render_agent_content(&self.state.active_content, &[], width);
 
     let working = || {
       LineComponent::from([
@@ -56,50 +57,91 @@ impl<'a> TranscriptComponent<'a> {
     lines
   }
 
+  fn render_agent_content(
+    content: &[AgentMessageContent],
+    following: &[TranscriptEntry],
+    width: u16,
+  ) -> Vec<LineComponent> {
+    let mut lines = Vec::new();
+
+    for content in content {
+      Self::ensure_trailing_blank_line(&mut lines);
+
+      match content {
+        AgentMessageContent::Reasoning(text)
+        | AgentMessageContent::Text(text) => {
+          lines.extend(text.lines().map(LineComponent::raw));
+        }
+        AgentMessageContent::ToolCall(invocation) => {
+          let result = following
+            .iter()
+            .filter_map(TranscriptEntry::message)
+            .take_while(|message| matches!(message, Message::User(_)))
+            .find_map(|message| match message {
+              Message::User(content) => {
+                content.iter().find_map(|content| match content {
+                  UserMessageContent::ToolResult { id, result }
+                    if *id == invocation.id =>
+                  {
+                    Some(result)
+                  }
+                  _ => None,
+                })
+              }
+              Message::Agent(_) => None,
+            });
+
+          lines.extend(
+            TranscriptToolInvocationComponent::new(invocation, result)
+              .render(width),
+          );
+        }
+      }
+
+      Self::ensure_trailing_blank_line(&mut lines);
+    }
+
+    lines
+  }
+
   fn render_entries(&self, width: u16) -> Vec<LineComponent> {
     let mut lines = Vec::new();
 
-    for entry in &self.state.entries {
-      let separated = !matches!(entry, TranscriptEntry::User(_));
-
-      if separated {
-        Self::ensure_trailing_blank_line(&mut lines);
-      }
-
+    for (index, entry) in self.state.entries.iter().enumerate() {
       match entry {
-        TranscriptEntry::Agent(content) => {
-          lines.extend(content.lines().map(LineComponent::raw));
-        }
         TranscriptEntry::Error(error) => {
+          Self::ensure_trailing_blank_line(&mut lines);
           lines.extend(TranscriptErrorComponent::new(error).render(width));
+          Self::ensure_trailing_blank_line(&mut lines);
         }
         TranscriptEntry::Interrupted => {
+          Self::ensure_trailing_blank_line(&mut lines);
           lines.push(LineComponent::from([Span::styled(
             "■ Conversation interrupted, tell the model what to do differently.",
             Style::Danger,
           )]));
+          Self::ensure_trailing_blank_line(&mut lines);
+        }
+        TranscriptEntry::Message(Message::Agent(content)) => {
+          Self::ensure_trailing_blank_line(&mut lines);
+          lines.extend(Self::render_agent_content(
+            content,
+            &self.state.entries[index + 1..],
+            width,
+          ));
+        }
+        TranscriptEntry::Message(Message::User(content)) => {
+          for text in content.iter().filter_map(UserMessageContent::text) {
+            lines.extend(
+              GutteredLinesComponent::raw(text.split('\n')).render(width),
+            );
+          }
         }
         TranscriptEntry::Notice(notice) => {
+          Self::ensure_trailing_blank_line(&mut lines);
           lines.extend(notice.lines().map(LineComponent::raw));
+          Self::ensure_trailing_blank_line(&mut lines);
         }
-        TranscriptEntry::Reasoning(reasoning) => {
-          lines.extend(reasoning.lines().map(LineComponent::raw));
-        }
-        TranscriptEntry::Tool { invocation, result } => {
-          lines.extend(
-            TranscriptToolInvocationComponent::new(invocation, result.as_ref())
-              .render(width),
-          );
-        }
-        TranscriptEntry::User(content) => {
-          lines.extend(
-            GutteredLinesComponent::raw(content.split('\n')).render(width),
-          );
-        }
-      }
-
-      if separated {
-        Self::ensure_trailing_blank_line(&mut lines);
       }
     }
 
@@ -111,7 +153,7 @@ impl Component for TranscriptComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     let mut lines = self.render_entries(width);
 
-    let activity = self.render_agent_activity();
+    let activity = self.render_agent_activity(width);
 
     if !activity.is_empty() {
       if !lines.is_empty() {
@@ -135,6 +177,7 @@ mod tests {
   fn render_active_reasoning() {
     let transcript = Transcript {
       active_agent_activity: AgentActivity::Reasoning("foo\nbar".into()),
+      active_content: Vec::new(),
       active_elapsed: Duration::from_secs(61),
       active_frame: 1,
       entries: Vec::new(),
@@ -160,6 +203,7 @@ mod tests {
   fn render_active_streaming() {
     let transcript = Transcript {
       active_agent_activity: AgentActivity::Streaming("foo\nbar".into()),
+      active_content: Vec::new(),
       active_elapsed: Duration::ZERO,
       active_frame: 0,
       entries: Vec::new(),
@@ -176,9 +220,34 @@ mod tests {
   }
 
   #[test]
+  fn render_active_content_in_order() {
+    let mut transcript = Transcript::default();
+
+    transcript.push_agent_reasoning_delta("foo");
+    transcript.push_agent_delta("bar");
+    transcript.push_agent_reasoning_delta("baz");
+    transcript.push_agent_delta("qux");
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        LineComponent::raw("foo"),
+        LineComponent::blank(),
+        LineComponent::raw("bar"),
+        LineComponent::blank(),
+        LineComponent::raw("baz"),
+        LineComponent::blank(),
+        LineComponent::raw("qux"),
+        LineComponent::blank(),
+      ]
+    );
+  }
+
+  #[test]
   fn render_active_waiting() {
     let transcript = Transcript {
       active_agent_activity: AgentActivity::Waiting,
+      active_content: Vec::new(),
       active_elapsed: Duration::from_secs(111),
       active_frame: 2,
       entries: Vec::new(),
@@ -201,9 +270,12 @@ mod tests {
   fn render_active_activity_is_separated_from_user_entry() {
     let transcript = Transcript {
       active_agent_activity: AgentActivity::Waiting,
+      active_content: Vec::new(),
       active_elapsed: Duration::ZERO,
       active_frame: 0,
-      entries: vec![TranscriptEntry::User("hello".into())],
+      entries: vec![TranscriptEntry::Message(Message::User(vec![
+        UserMessageContent::Text("hello".into()),
+      ]))],
     };
 
     assert_eq!(
@@ -226,8 +298,9 @@ mod tests {
 
   #[test]
   fn render_agent_entry_handles_multiline_content() {
-    let transcript =
-      Transcript::with_entries(vec![TranscriptEntry::Agent("foo\nbar".into())]);
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
+      Message::Agent(vec![AgentMessageContent::Text("foo\nbar".into())]),
+    )]);
 
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
@@ -248,11 +321,13 @@ mod tests {
 
   #[test]
   fn render_entry_spacing() {
-    let transcript = Transcript::with_entries(vec![
-      TranscriptEntry::Agent("foo".into()),
-      TranscriptEntry::Reasoning("bar".into()),
-      TranscriptEntry::Agent("baz".into()),
-    ]);
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
+      Message::Agent(vec![
+        AgentMessageContent::Text("foo".into()),
+        AgentMessageContent::Reasoning("bar".into()),
+        AgentMessageContent::Text("baz".into()),
+      ]),
+    )]);
 
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
@@ -270,7 +345,9 @@ mod tests {
   #[test]
   fn render_adjacent_non_user_entries_have_single_blank_line() {
     let transcript = Transcript::with_entries(vec![
-      TranscriptEntry::Agent("foo".into()),
+      TranscriptEntry::Message(Message::Agent(vec![
+        AgentMessageContent::Text("foo".into()),
+      ])),
       TranscriptEntry::Interrupted,
     ]);
 
@@ -345,10 +422,9 @@ mod tests {
 
   #[test]
   fn render_reasoning_entry_handles_multiline_content() {
-    let transcript =
-      Transcript::with_entries(vec![TranscriptEntry::Reasoning(
-        "foo\nbar".into(),
-      )]);
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
+      Message::Agent(vec![AgentMessageContent::Reasoning("foo\nbar".into())]),
+    )]);
 
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
@@ -371,16 +447,22 @@ mod tests {
     };
 
     let transcript = Transcript::with_entries(vec![
-      TranscriptEntry::Agent("foo".into()),
-      TranscriptEntry::Tool {
-        invocation,
-        result: Some(ToolResult {
-          exit_status: Some(0),
-          outcome: ToolOutcome::Success,
-          stdout: Some("baz\n".into()),
-          ..Default::default()
-        }),
-      },
+      TranscriptEntry::Message(Message::Agent(vec![
+        AgentMessageContent::Text("foo".into()),
+        AgentMessageContent::ToolCall(invocation.clone()),
+        AgentMessageContent::Text("bar".into()),
+      ])),
+      TranscriptEntry::Message(Message::User(vec![
+        UserMessageContent::ToolResult {
+          id: invocation.id.clone(),
+          result: ToolResult {
+            exit_status: Some(0),
+            outcome: ToolOutcome::Success,
+            stdout: Some("baz\n".into()),
+            ..Default::default()
+          },
+        },
+      ])),
     ]);
 
     assert_eq!(
@@ -398,6 +480,8 @@ mod tests {
           Span::raw("baz"),
         ]),
         LineComponent::blank(),
+        LineComponent::raw("bar"),
+        LineComponent::blank(),
       ]
     );
   }
@@ -413,11 +497,12 @@ mod tests {
     };
 
     let transcript = Transcript::with_entries(vec![
-      TranscriptEntry::User("foo".into()),
-      TranscriptEntry::Tool {
-        invocation,
-        result: None,
-      },
+      TranscriptEntry::Message(Message::User(vec![UserMessageContent::Text(
+        "foo".into(),
+      )])),
+      TranscriptEntry::Message(Message::Agent(vec![
+        AgentMessageContent::ToolCall(invocation.clone()),
+      ])),
     ]);
 
     assert_eq!(
@@ -448,15 +533,22 @@ mod tests {
       }),
     };
 
-    let transcript = Transcript::with_entries(vec![TranscriptEntry::Tool {
-      invocation,
-      result: Some(ToolResult {
-        exit_status: Some(1),
-        stderr: Some("quux".into()),
-        stdout: Some("qux\n".into()),
-        ..Default::default()
-      }),
-    }]);
+    let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::Message(Message::Agent(vec![
+        AgentMessageContent::ToolCall(invocation.clone()),
+      ])),
+      TranscriptEntry::Message(Message::User(vec![
+        UserMessageContent::ToolResult {
+          id: invocation.id.clone(),
+          result: ToolResult {
+            exit_status: Some(1),
+            stderr: Some("quux".into()),
+            stdout: Some("qux\n".into()),
+            ..Default::default()
+          },
+        },
+      ])),
+    ]);
 
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
@@ -499,15 +591,22 @@ mod tests {
       }),
     };
 
-    let transcript = Transcript::with_entries(vec![TranscriptEntry::Tool {
-      invocation,
-      result: Some(ToolResult {
-        exit_status: Some(0),
-        outcome: ToolOutcome::Success,
-        stdout: Some("foobarbaz\n\nbar\nbaz\nqux\n".into()),
-        ..Default::default()
-      }),
-    }]);
+    let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::Message(Message::Agent(vec![
+        AgentMessageContent::ToolCall(invocation.clone()),
+      ])),
+      TranscriptEntry::Message(Message::User(vec![
+        UserMessageContent::ToolResult {
+          id: invocation.id.clone(),
+          result: ToolResult {
+            exit_status: Some(0),
+            outcome: ToolOutcome::Success,
+            stdout: Some("foobarbaz\n\nbar\nbaz\nqux\n".into()),
+            ..Default::default()
+          },
+        },
+      ])),
+    ]);
 
     assert_eq!(
       TranscriptComponent::new(&transcript).render(10),
@@ -548,10 +647,9 @@ mod tests {
       }),
     };
 
-    let transcript = Transcript::with_entries(vec![TranscriptEntry::Tool {
-      invocation,
-      result: None,
-    }]);
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
+      Message::Agent(vec![AgentMessageContent::ToolCall(invocation.clone())]),
+    )]);
 
     assert_eq!(
       TranscriptComponent::new(&transcript).render(80),
@@ -567,9 +665,59 @@ mod tests {
   }
 
   #[test]
+  fn render_tool_results_are_scoped_to_the_agent_message() {
+    let invocation = ToolInvocation {
+      id: "foo".into(),
+      kind: ToolInvocationKind::Command(CommandTool {
+        command: "bar".into(),
+        cwd: None,
+      }),
+    };
+
+    let message =
+      Message::Agent(vec![AgentMessageContent::ToolCall(invocation)]);
+
+    let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::Message(message.clone()),
+      TranscriptEntry::Message(message),
+      TranscriptEntry::Message(Message::User(vec![
+        UserMessageContent::ToolResult {
+          id: "baz".into(),
+          result: ToolResult::default(),
+        },
+        UserMessageContent::ToolResult {
+          id: "foo".into(),
+          result: ToolResult {
+            outcome: ToolOutcome::Success,
+            ..Default::default()
+          },
+        },
+      ])),
+    ]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript).render(80),
+      [
+        LineComponent::from([
+          Span::styled("●", Style::Accent),
+          Span::raw(" "),
+          Span::raw("Running bar"),
+        ]),
+        LineComponent::blank(),
+        LineComponent::from([
+          Span::styled("●", Style::Success),
+          Span::raw(" "),
+          Span::raw("Ran bar"),
+        ]),
+        LineComponent::blank(),
+      ]
+    );
+  }
+
+  #[test]
   fn render_user_entry_uses_width() {
-    let transcript = Transcript::with_entries(vec![TranscriptEntry::User(
-      "foobar\nbaz".into(),
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
+      Message::User(vec![UserMessageContent::Text("foobar\nbaz".into())]),
     )]);
 
     assert_eq!(

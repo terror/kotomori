@@ -59,6 +59,7 @@ jobs:
 
     - name: Install Dependencies
       run: |
+        sudo rm -f /etc/apt/sources.list.d/google-chrome.*
         sudo apt-get update
         sudo apt-get install ripgrep shellcheck
 

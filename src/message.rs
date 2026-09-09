@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) enum Message {
   Agent(Vec<AgentMessageContent>),
   User(Vec<UserMessageContent>),

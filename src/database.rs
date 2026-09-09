@@ -29,10 +29,10 @@ impl Database {
       Ok(Session {
         created_at: 0,
         directory: row.get::<_, String>(2)?.into(),
-        entries: Vec::new(),
         id: Some(row.get(0)?),
         model: row.get(3)?,
         title: row.get(4)?,
+        transcript: Transcript::default(),
         updated_at: row.get_u64(1)?,
       })
     })?;
@@ -52,18 +52,18 @@ impl Database {
           Ok(Session {
             created_at: row.get_u64(1)?,
             directory: row.get::<_, String>(3)?.into(),
-            entries: serde_json::from_str(&row.get::<_, String>(6)?).map_err(
-              |error| {
+            id: Some(row.get(0)?),
+            model: row.get(4)?,
+            title: row.get(5)?,
+            transcript: serde_json::from_str(&row.get::<_, String>(6)?)
+              .map(Transcript::with_entries)
+              .map_err(|error| {
                 rusqlite::Error::FromSqlConversionFailure(
                   6,
                   rusqlite::types::Type::Text,
                   Box::new(error),
                 )
-              },
-            )?,
-            id: Some(row.get(0)?),
-            model: row.get(4)?,
-            title: row.get(5)?,
+              })?,
             updated_at: row.get_u64(2)?,
           })
         },
@@ -101,7 +101,7 @@ impl Database {
       .to_str()
       .context("session directory is not valid UTF-8")?;
 
-    let entries = serde_json::to_string(&session.entries)
+    let entries = serde_json::to_string(&session.transcript.entries)
       .context("failed to serialize session transcript")?;
 
     let created_at = i64::try_from(session.created_at)
@@ -256,10 +256,10 @@ mod tests {
     let mut session = Session {
       created_at: 0,
       directory: env::current_dir().unwrap(),
-      entries: Vec::new(),
       id: None,
       model: "mock:local".into(),
       title: None,
+      transcript: Transcript::default(),
       updated_at: 0,
     };
 
