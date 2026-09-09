@@ -11,7 +11,6 @@ use {
   arguments::Arguments,
   async_trait::async_trait,
   changed_range::ChangedRange,
-  channel::Channel,
   clap::{Args, Parser},
   command::Command,
   command_executor::CommandExecutor,
@@ -152,7 +151,6 @@ mod approval_policy;
 mod approval_request;
 mod arguments;
 mod changed_range;
-mod channel;
 mod command;
 mod command_executor;
 mod component;
