@@ -9,29 +9,15 @@ pub(crate) struct ResumePicker {
 
 impl ResumePicker {
   fn clamp_selection(&mut self) {
-    let len = self.filtered_len();
-
-    self.selected = if len == 0 {
-      0
-    } else {
-      self.selected.min(len.saturating_sub(1))
-    };
+    self.selected =
+      self.selected.min(self.filtered().count().saturating_sub(1));
   }
 
-  pub(crate) fn filtered(&self) -> Vec<&Session> {
+  pub(crate) fn filtered(&self) -> impl Iterator<Item = &Session> + '_ {
     self
       .sessions
       .iter()
       .filter(|session| session.matches(&self.query))
-      .collect()
-  }
-
-  fn filtered_len(&self) -> usize {
-    self
-      .sessions
-      .iter()
-      .filter(|session| session.matches(&self.query))
-      .count()
   }
 
   pub(crate) fn handle_action(
@@ -57,11 +43,7 @@ impl ResumePicker {
         self.clamp_selection();
       }
       Action::SelectNext => {
-        let len = self.filtered_len();
-
-        if len > 0 {
-          self.selected = self.selected.saturating_add(1) % len;
-        }
+        self.selected = selection::next(self.selected, self.filtered().count());
       }
       Action::Submit | Action::SubmitImmediately => {
         if let Some(id) = self.selected_id() {
@@ -72,15 +54,8 @@ impl ResumePicker {
         return Some(ResumePickerAction::Cancel);
       }
       Action::SelectPrevious => {
-        let len = self.filtered_len();
-
-        if len > 0 {
-          self.selected = if self.selected == 0 {
-            len.saturating_sub(1)
-          } else {
-            self.selected.saturating_sub(1)
-          };
-        }
+        self.selected =
+          selection::previous(self.selected, self.filtered().count());
       }
       Action::CompleteCommand | Action::Edit(_) => {}
     }
@@ -99,7 +74,7 @@ impl ResumePicker {
   fn selected_id(&self) -> Option<i64> {
     self
       .filtered()
-      .get(self.selected)
+      .nth(self.selected)
       .and_then(|session| session.id)
   }
 }
@@ -131,6 +106,10 @@ mod tests {
       },
     ]);
 
+    picker.handle_action(Action::SelectNext);
+
+    assert_eq!(picker.selected_id(), Some(2));
+
     picker.handle_action(Action::Edit(Input {
       key: Key::Char('b'),
       ..Default::default()
@@ -139,10 +118,29 @@ mod tests {
     assert_eq!(
       picker
         .filtered()
-        .into_iter()
         .filter_map(|session| session.id)
         .collect::<Vec<_>>(),
       [2],
     );
+    assert_eq!(picker.selected, 0);
+    assert_eq!(picker.selected_id(), Some(2));
+
+    picker.handle_action(Action::Edit(Input {
+      key: Key::Char('x'),
+      ..Default::default()
+    }));
+
+    assert_eq!(picker.filtered().count(), 0);
+    assert_eq!(picker.selected, 0);
+    assert_eq!(picker.selected_id(), None);
+
+    picker.handle_action(Action::Edit(Input {
+      key: Key::Char('u'),
+      ctrl: true,
+      ..Default::default()
+    }));
+    picker.handle_action(Action::SelectPrevious);
+
+    assert_eq!(picker.selected_id(), Some(2));
   }
 }

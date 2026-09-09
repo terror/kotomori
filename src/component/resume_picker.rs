@@ -32,9 +32,9 @@ impl Component for ResumePickerComponent<'_> {
       .chain(once(LineComponent::blank()))
       .collect::<Vec<_>>();
 
-    let filtered = self.picker.filtered();
+    let mut filtered = self.picker.filtered().peekable();
 
-    if filtered.is_empty() {
+    if filtered.peek().is_none() {
       lines.push(LineComponent::from([Span::styled(
         "No matching sessions.",
         Style::Muted,
@@ -43,7 +43,7 @@ impl Component for ResumePickerComponent<'_> {
       return lines;
     }
 
-    for (index, session) in filtered.into_iter().enumerate() {
+    for (index, session) in filtered.enumerate() {
       let style = if index == self.picker.selected {
         Style::Accent
       } else {

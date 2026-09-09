@@ -183,6 +183,7 @@ mod resume_picker_action;
 mod row_ext;
 mod run;
 mod screen;
+mod selection;
 mod session;
 mod settings;
 mod span;

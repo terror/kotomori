@@ -89,7 +89,8 @@ impl Composer {
 
   pub(crate) fn select_next(&mut self) {
     if self.selected_command().is_some() {
-      self.select_next_command();
+      self.command_index =
+        selection::next(self.command_index, self.commands().count());
     } else if self.cursor().0 == self.lines().len().saturating_sub(1) {
       self.select_next_history();
     } else {
@@ -97,14 +98,6 @@ impl Composer {
         key: Key::Down,
         ..Default::default()
       });
-    }
-  }
-
-  fn select_next_command(&mut self) {
-    let len = self.commands().count();
-
-    if len > 0 {
-      self.command_index = self.command_index.saturating_add(1) % len;
     }
   }
 
@@ -127,7 +120,8 @@ impl Composer {
 
   pub(crate) fn select_previous(&mut self) {
     if self.selected_command().is_some() {
-      self.select_previous_command();
+      self.command_index =
+        selection::previous(self.command_index, self.commands().count());
     } else if self.cursor().0 == 0 {
       self.select_previous_history();
     } else {
@@ -135,18 +129,6 @@ impl Composer {
         key: Key::Up,
         ..Default::default()
       });
-    }
-  }
-
-  fn select_previous_command(&mut self) {
-    let len = self.commands().count();
-
-    if len > 0 {
-      self.command_index = if self.command_index == 0 {
-        len.saturating_sub(1)
-      } else {
-        self.command_index.saturating_sub(1)
-      };
     }
   }
 
