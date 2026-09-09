@@ -22,14 +22,13 @@ impl Renderer {
 }
 
 impl<W: Write> Renderer<W> {
-  pub(crate) fn draw(&mut self, component: &impl Component) -> Result {
+  pub(crate) fn draw(&mut self, view: &ViewComponent<'_>) -> Result {
     let (width, height) =
       crossterm_terminal::size().context("failed to read terminal size")?;
 
-    let lines = component
+    let lines = view
       .render(width)
       .into_iter()
-      .flat_map(|line| line.render(width))
       .map(|line| format!("{line}{}", Style::None.sequence()))
       .collect::<Vec<_>>();
 

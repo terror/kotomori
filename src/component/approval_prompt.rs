@@ -12,8 +12,8 @@ impl<'a> ApprovalPromptComponent<'a> {
 }
 
 impl Component for ApprovalPromptComponent<'_> {
-  fn render(&self, width: u16) -> Vec<LineComponent> {
-    [
+  fn render(&self, _width: u16) -> Vec<LineComponent> {
+    vec![
       LineComponent::from([
         Span::styled("?", Style::Accent),
         Span::raw(" Approve "),
@@ -27,9 +27,6 @@ impl Component for ApprovalPromptComponent<'_> {
         Span::styled(" deny", Style::Muted),
       ]),
     ]
-    .into_iter()
-    .flat_map(|line| line.render(width))
-    .collect()
   }
 }
 

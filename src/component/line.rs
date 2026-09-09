@@ -14,10 +14,23 @@ impl LineComponent {
     self.spans.iter().all(|span| span.text.is_empty())
   }
 
+  pub(crate) fn prefix(mut self, prefix: Span) -> Self {
+    self.spans.insert(0, prefix);
+    self
+  }
+
   pub(crate) fn raw(text: impl Into<String>) -> Self {
     Self {
       spans: [Span::raw(text)].into_iter().collect(),
     }
+  }
+
+  pub(crate) fn render_prefixed(&self, width: u16, prefix: &Span) -> Vec<Self> {
+    self
+      .render(width)
+      .into_iter()
+      .map(|line| line.prefix(prefix.clone()))
+      .collect()
   }
 }
 
@@ -162,6 +175,22 @@ mod tests {
       ])
       .spans
       .spilled()
+    );
+  }
+
+  #[test]
+  fn prefix_preserves_spans() {
+    assert_eq!(
+      LineComponent::from([
+        Span::styled("bar", Style::Secondary),
+        Span::raw("baz"),
+      ])
+      .prefix(Span::styled("foo", Style::Accent)),
+      LineComponent::from([
+        Span::styled("foo", Style::Accent),
+        Span::styled("bar", Style::Secondary),
+        Span::raw("baz"),
+      ]),
     );
   }
 

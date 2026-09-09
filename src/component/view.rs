@@ -7,6 +7,22 @@ pub(crate) struct ViewComponent<'a> {
 }
 
 impl<'a> ViewComponent<'a> {
+  fn layout(lines: Vec<LineComponent>, width: u16) -> Vec<LineComponent> {
+    let content_width = width.saturating_sub(4).max(1);
+
+    lines
+      .into_iter()
+      .flat_map(|line| {
+        if line.is_blank() {
+          vec![line]
+        } else {
+          line.render_prefixed(content_width, &Span::raw("  "))
+        }
+      })
+      .flat_map(|line| line.render(width))
+      .collect()
+  }
+
   pub(crate) fn new(
     screen: &'a Screen,
     first_draw_duration: Option<Duration>,
@@ -64,19 +80,7 @@ impl Component for ViewComponent<'_> {
         .collect(),
     };
 
-    lines
-      .into_iter()
-      .flat_map(|line| line.render(content_width))
-      .map(|line| {
-        if line.is_blank() {
-          line
-        } else {
-          let mut spans = Vec::<Span>::from(line);
-          spans.insert(0, Span::raw("  "));
-          LineComponent::from(spans)
-        }
-      })
-      .collect()
+    Self::layout(lines, width)
   }
 }
 
@@ -129,7 +133,16 @@ mod tests {
 
       assert!(width <= 18);
 
-      assert_eq!(spans.first().unwrap().text, "  ");
+      assert_eq!(
+        spans
+          .first()
+          .unwrap()
+          .text
+          .chars()
+          .take(2)
+          .collect::<String>(),
+        "  ",
+      );
     }
   }
 
@@ -198,5 +211,46 @@ mod tests {
 
     assert!(footer > command + 1);
     assert!(lines[footer - 1].is_blank());
+  }
+
+  #[test]
+  fn layout_preserves_styles_when_wide_characters_exceed_content_width() {
+    assert_eq!(
+      ViewComponent::layout(
+        vec![LineComponent::from([Span::styled("界", Style::Accent)])],
+        3,
+      ),
+      [
+        LineComponent::raw("  "),
+        LineComponent::from([Span::styled("界", Style::Accent)]),
+      ],
+    );
+  }
+
+  #[test]
+  fn layout_wraps_padding_at_narrow_widths() {
+    #[track_caller]
+    fn case(width: u16, expected: &[&str]) {
+      assert_eq!(
+        ViewComponent::layout(
+          vec![LineComponent::blank(), LineComponent::raw("foo")],
+          width,
+        ),
+        expected
+          .iter()
+          .copied()
+          .map(LineComponent::raw)
+          .collect::<Vec<_>>(),
+      );
+    }
+
+    case(0, &["", " ", " ", "f", " ", " ", "o", " ", " ", "o"]);
+    case(1, &["", " ", " ", "f", " ", " ", "o", " ", " ", "o"]);
+    case(2, &["", "  ", "f", "  ", "o", "  ", "o"]);
+    case(3, &["", "  f", "  o", "  o"]);
+    case(4, &["", "  f", "  o", "  o"]);
+    case(5, &["", "  f", "  o", "  o"]);
+    case(6, &["", "  fo", "  o"]);
+    case(7, &["", "  foo"]);
   }
 }

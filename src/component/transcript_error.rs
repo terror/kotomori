@@ -23,13 +23,12 @@ impl Component for TranscriptErrorComponent<'_> {
 
     let detail_width = width.saturating_sub(4).max(1);
 
-    for detail in self.error.lines() {
-      for line in LineComponent::raw(detail).render(detail_width) {
-        let mut spans = vec![Span::styled(Self::GUTTER, Style::Muted)];
-        spans.extend(Vec::<Span>::from(line));
-        lines.push(LineComponent::from(spans));
-      }
-    }
+    lines.extend(self.error.lines().flat_map(|detail| {
+      LineComponent::raw(detail).render_prefixed(
+        detail_width,
+        &Span::styled(Self::GUTTER, Style::Muted),
+      )
+    }));
 
     lines
   }
@@ -42,7 +41,7 @@ mod tests {
   #[test]
   fn renders_error() {
     assert_eq!(
-      TranscriptErrorComponent::new("foo\nbar").render(80),
+      TranscriptErrorComponent::new("foo\n\nbar").render(80),
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),
@@ -52,6 +51,10 @@ mod tests {
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
           Span::raw("foo"),
+        ]),
+        LineComponent::from([
+          Span::styled("  │ ", Style::Muted),
+          Span::raw(""),
         ]),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
