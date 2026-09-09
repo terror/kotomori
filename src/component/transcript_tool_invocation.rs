@@ -64,18 +64,18 @@ impl Component for TranscriptToolInvocationComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     let mut lines = Vec::new();
 
-    let (symbol, symbol_style, title) = match self.result {
+    let (symbol, symbol_style, tense) = match self.result {
       Some(result) if result.is_error() => {
-        ("●", Style::Danger, self.invocation.failed_tense())
+        ("●", Style::Danger, ToolActionTense::Failed)
       }
-      Some(_) => ("●", Style::Success, self.invocation.completed_tense()),
-      None => ("●", Style::Accent, self.invocation.progressive_tense()),
+      Some(_) => ("●", Style::Success, ToolActionTense::Completed),
+      None => ("●", Style::Accent, ToolActionTense::Progressive),
     };
 
     lines.push(LineComponent::from([
       Span::styled(symbol, symbol_style),
       Span::raw(" "),
-      Span::raw(title),
+      Span::raw(self.invocation.title(tense)),
     ]));
 
     lines.extend(self.details().into_iter().map(|(label, value)| {

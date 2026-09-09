@@ -7,19 +7,7 @@ pub(crate) struct ToolInvocation {
 }
 
 impl ToolInvocation {
-  pub(crate) fn completed_tense(&self) -> String {
-    self.title(ToolActionTense::Completed)
-  }
-
-  pub(crate) fn failed_tense(&self) -> String {
-    self.title(ToolActionTense::Failed)
-  }
-
-  pub(crate) fn progressive_tense(&self) -> String {
-    self.title(ToolActionTense::Progressive)
-  }
-
-  fn title(&self, tense: ToolActionTense) -> String {
+  pub(crate) fn title(&self, tense: ToolActionTense) -> String {
     format!("{} {}", self.kind.action(tense), self.kind)
   }
 }
