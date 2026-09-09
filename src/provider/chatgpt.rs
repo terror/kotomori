@@ -1,19 +1,7 @@
-use {
-  super::{rig::Rig, *},
-  ::rig::{
-    client::{CompletionClient, ProviderClient},
-    providers::chatgpt,
-  },
-};
+use {super::*, ::rig::providers::chatgpt};
 
 pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
   let client = chatgpt::Client::from_env()?;
 
-  let completion_model =
-    CompletionClient::completion_model(&client, &model.name);
-
-  Ok(Arc::new(Rig {
-    model: completion_model,
-    provider: "chatgpt",
-  }))
+  Ok(Rig::build(&client, model))
 }

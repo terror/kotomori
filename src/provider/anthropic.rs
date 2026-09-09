@@ -1,7 +1,4 @@
-use {
-  super::{rig::Rig, *},
-  ::rig::{client::CompletionClient, providers::anthropic},
-};
+use {super::*, ::rig::providers::anthropic};
 
 pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
   let api_key = env::var("ANTHROPIC_API_KEY")
@@ -16,11 +13,5 @@ pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
     .base_url(base_url)
     .build()?;
 
-  let completion_model =
-    CompletionClient::completion_model(&client, &model.name);
-
-  Ok(Arc::new(Rig {
-    model: completion_model,
-    provider: "anthropic",
-  }))
+  Ok(Rig::build(&client, model))
 }

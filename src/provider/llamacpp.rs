@@ -1,7 +1,4 @@
-use {
-  super::{rig::Rig, *},
-  ::rig::{client::CompletionClient, providers::openai},
-};
+use {super::*, ::rig::providers::openai};
 
 pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
   let api_key = env::var("LLAMACPP_API_KEY").unwrap_or_else(|_| "none".into());
@@ -14,11 +11,5 @@ pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
     .base_url(base_url)
     .build()?;
 
-  let completion_model =
-    CompletionClient::completion_model(&client, &model.name);
-
-  Ok(Arc::new(Rig {
-    model: completion_model,
-    provider: "llamacpp",
-  }))
+  Ok(Rig::build(&client, model))
 }
