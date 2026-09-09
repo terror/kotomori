@@ -8,12 +8,8 @@ pub(crate) struct Request {
 }
 
 impl Request {
-  pub(crate) fn last_user_message(&self) -> Option<&Message> {
-    self
-      .messages
-      .iter()
-      .rev()
-      .find(|message| message.user_content().is_some())
+  pub(crate) fn last_user_text(&self) -> Option<&str> {
+    self.messages.iter().rev().find_map(Message::user_content)
   }
 }
 
@@ -111,15 +107,12 @@ mod tests {
   }
 
   #[test]
-  fn last_user_message_returns_latest_text_message() {
-    let last_user_message =
-      Message::User(vec![UserMessageContent::Text("baz".into())]);
-
+  fn last_user_text_returns_latest_text() {
     let request = Request {
       messages: vec![
         Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
         Message::User(vec![UserMessageContent::Text("foo".into())]),
-        last_user_message.clone(),
+        Message::User(vec![UserMessageContent::Text("baz".into())]),
         Message::Agent(vec![AgentMessageContent::Text("qux".into())]),
         Message::User(vec![UserMessageContent::ToolResult {
           id: "quux".into(),
@@ -133,11 +126,11 @@ mod tests {
       system: None,
     };
 
-    assert_eq!(request.last_user_message().unwrap(), &last_user_message);
+    assert_eq!(request.last_user_text(), Some("baz"));
   }
 
   #[test]
-  fn last_user_message_returns_none_without_user_text() {
+  fn last_user_text_returns_none_without_user_text() {
     let request = Request {
       messages: vec![
         Message::Agent(vec![AgentMessageContent::Text("foo".into())]),
@@ -153,6 +146,6 @@ mod tests {
       system: None,
     };
 
-    assert_eq!(request.last_user_message(), None);
+    assert_eq!(request.last_user_text(), None);
   }
 }

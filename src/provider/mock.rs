@@ -47,10 +47,7 @@ impl Provider for Mock {
         })?;
       }
       model => {
-        let input = request
-          .last_user_message()
-          .and_then(Message::content)
-          .unwrap_or_default();
+        let input = request.last_user_text().unwrap_or_default();
 
         let response = format!("queued for mock:{model}: {input}");
 
