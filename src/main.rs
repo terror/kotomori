@@ -41,7 +41,6 @@ use {
   futures_util::StreamExt,
   home::home_dir,
   indoc::formatdoc,
-  input_mode::InputMode,
   lexiclean::Lexiclean,
   loader::Loader,
   message::Message,
@@ -67,6 +66,7 @@ use {
     message::{Reasoning, ToolResultContent, UserContent},
   },
   row_ext::RowExt,
+  run::Run,
   rusqlite::{Connection, TransactionBehavior, params},
   schemars::JsonSchema,
   screen::Screen,
@@ -166,7 +166,6 @@ mod effect;
 mod event;
 mod execution_limit;
 mod frame;
-mod input_mode;
 mod loader;
 mod message;
 mod model;
@@ -182,6 +181,7 @@ mod request;
 mod resume_picker;
 mod resume_picker_action;
 mod row_ext;
+mod run;
 mod screen;
 mod session;
 mod settings;

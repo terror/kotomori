@@ -114,38 +114,3 @@ impl Session {
     self.model = model.to_string();
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn save_excludes_streaming_content() {
-    let database = Database::new().unwrap();
-
-    let mut session = Session::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
-    .unwrap();
-
-    session.transcript.send("foo".into());
-    session.transcript.push_agent_reasoning_delta("bar");
-    session.transcript.push_agent_delta("baz");
-
-    session.save(&database).unwrap();
-
-    let session = database.load_session(session.id.unwrap()).unwrap();
-
-    assert_eq!(
-      session.transcript,
-      Transcript {
-        entries: vec![TranscriptEntry::Message(Message::User(vec![
-          UserMessageContent::Text("foo".into())
-        ]))],
-        ..Default::default()
-      }
-    );
-  }
-}

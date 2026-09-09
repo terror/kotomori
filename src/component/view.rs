@@ -35,8 +35,11 @@ impl Component for ViewComponent<'_> {
         .chain(HintComponent.render(content_width))
         .chain(once(LineComponent::blank()))
         .chain(
-          TranscriptComponent::new(&state.session.transcript)
-            .render(content_width),
+          TranscriptComponent::new(
+            &state.session.transcript,
+            state.active_run(),
+          )
+          .render(content_width),
         )
         .chain(
           QueuedInputsComponent {
@@ -44,11 +47,11 @@ impl Component for ViewComponent<'_> {
           }
           .render(content_width),
         )
-        .chain(match &state.input_mode {
-          InputMode::Approval(request) => {
+        .chain(match state.approval() {
+          Some(request) => {
             ApprovalPromptComponent::new(request).render(content_width)
           }
-          InputMode::Compose => ComposerComponent {
+          None => ComposerComponent {
             composer: &state.composer,
           }
           .render(content_width),
@@ -92,7 +95,7 @@ mod tests {
 
     state.handle_event(Event::Action(Action::Submit));
 
-    assert!(state.session.transcript.is_agent_active());
+    assert!(state.active_run().is_some());
 
     let screen = Screen::Session(Box::new(state));
 
@@ -134,7 +137,7 @@ mod tests {
   fn footer_renders_below_approval_prompt() {
     let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
-      prompt: None,
+      prompt: Some("foo".into()),
       yolo: false,
     })
     .unwrap();
@@ -147,7 +150,11 @@ mod tests {
       }),
     });
 
-    state.input_mode = InputMode::Approval(request);
+    state.handle_event(Event::Action(Action::Submit));
+    state.handle_event(Event::Agent {
+      event: AgentEvent::ToolApprovalRequest(request),
+      run_id: 0,
+    });
 
     let lines =
       ViewComponent::new(&Screen::Session(Box::new(state)), None).render(80);

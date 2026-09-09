@@ -2,6 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct TranscriptComponent<'a> {
+  run: Option<&'a Run>,
   state: &'a Transcript,
 }
 
@@ -14,33 +15,32 @@ impl<'a> TranscriptComponent<'a> {
     }
   }
 
-  pub(crate) fn new(state: &'a Transcript) -> Self {
-    Self { state }
+  pub(crate) fn new(state: &'a Transcript, run: Option<&'a Run>) -> Self {
+    Self { run, state }
   }
 
   fn render_agent_activity(&self, width: u16) -> Vec<LineComponent> {
-    let mut lines =
-      Self::render_agent_content(&self.state.active_content, &[], width);
+    let Some(run) = self.run else {
+      return Vec::new();
+    };
+
+    let mut lines = Self::render_agent_content(&run.content, &[], width);
 
     let working = || {
       LineComponent::from([
         Span::styled(
-          Self::FRAMES[self.state.active_frame % Self::FRAMES.len()],
+          Self::FRAMES[run.frame % Self::FRAMES.len()],
           Style::Accent,
         ),
         Span::styled(" Working...", Style::Secondary),
         Span::styled(
-          format!(
-            " ({} • Esc to interrupt)",
-            self.state.active_elapsed.format()
-          ),
+          format!(" ({} • Esc to interrupt)", run.elapsed.format()),
           Style::Muted,
         ),
       ])
     };
 
-    match &self.state.active_agent_activity {
-      AgentActivity::Idle => {}
+    match &run.activity {
       AgentActivity::Reasoning(reasoning) => {
         lines.extend(reasoning.lines().map(LineComponent::raw));
 
@@ -116,14 +116,17 @@ impl<'a> TranscriptComponent<'a> {
         }
         TranscriptEntry::Interrupted => {
           Self::ensure_trailing_blank_line(&mut lines);
+
           lines.push(LineComponent::from([Span::styled(
             "■ Conversation interrupted, tell the model what to do differently.",
             Style::Danger,
           )]));
+
           Self::ensure_trailing_blank_line(&mut lines);
         }
         TranscriptEntry::Message(Message::Agent(content)) => {
           Self::ensure_trailing_blank_line(&mut lines);
+
           lines.extend(Self::render_agent_content(
             content,
             &self.state.entries[index + 1..],
@@ -175,16 +178,15 @@ mod tests {
 
   #[test]
   fn render_active_reasoning() {
-    let transcript = Transcript {
-      active_agent_activity: AgentActivity::Reasoning("foo\nbar".into()),
-      active_content: Vec::new(),
-      active_elapsed: Duration::from_secs(61),
-      active_frame: 1,
-      entries: Vec::new(),
+    let run = Run {
+      activity: AgentActivity::Reasoning("foo\nbar".into()),
+      elapsed: Duration::from_secs(61),
+      frame: 1,
+      ..Run::new(0)
     };
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::raw("bar"),
@@ -201,16 +203,13 @@ mod tests {
 
   #[test]
   fn render_active_streaming() {
-    let transcript = Transcript {
-      active_agent_activity: AgentActivity::Streaming("foo\nbar".into()),
-      active_content: Vec::new(),
-      active_elapsed: Duration::ZERO,
-      active_frame: 0,
-      entries: Vec::new(),
+    let run = Run {
+      activity: AgentActivity::Streaming("foo\nbar".into()),
+      ..Run::new(0)
     };
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::raw("bar"),
@@ -221,15 +220,15 @@ mod tests {
 
   #[test]
   fn render_active_content_in_order() {
-    let mut transcript = Transcript::default();
+    let mut run = Run::new(0);
 
-    transcript.push_agent_reasoning_delta("foo");
-    transcript.push_agent_delta("bar");
-    transcript.push_agent_reasoning_delta("baz");
-    transcript.push_agent_delta("qux");
+    run.push_reasoning_delta("foo");
+    run.push_delta("bar");
+    run.push_reasoning_delta("baz");
+    run.push_delta("qux");
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::blank(),
@@ -245,16 +244,14 @@ mod tests {
 
   #[test]
   fn render_active_waiting() {
-    let transcript = Transcript {
-      active_agent_activity: AgentActivity::Waiting,
-      active_content: Vec::new(),
-      active_elapsed: Duration::from_secs(111),
-      active_frame: 2,
-      entries: Vec::new(),
+    let run = Run {
+      elapsed: Duration::from_secs(111),
+      frame: 2,
+      ..Run::new(0)
     };
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
       [
         LineComponent::from([
           Span::styled("✶", Style::Accent),
@@ -268,22 +265,18 @@ mod tests {
 
   #[test]
   fn render_active_activity_is_separated_from_user_entry() {
-    let transcript = Transcript {
-      active_agent_activity: AgentActivity::Waiting,
-      active_content: Vec::new(),
-      active_elapsed: Duration::ZERO,
-      active_frame: 0,
-      entries: vec![TranscriptEntry::Message(Message::User(vec![
-        UserMessageContent::Text("hello".into()),
-      ]))],
-    };
+    let run = Run::new(0);
+
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
+      Message::User(vec![UserMessageContent::Text("foo".into())]),
+    )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, Some(&run)).render(80),
       [
         LineComponent::from([
           Span::styled("│ ", Style::Accent),
-          Span::raw("hello"),
+          Span::raw("foo"),
         ]),
         LineComponent::blank(),
         LineComponent::from([
@@ -303,7 +296,7 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::raw("bar"),
@@ -316,7 +309,7 @@ mod tests {
   fn render_empty_transcript() {
     let transcript = Transcript::default();
 
-    assert_eq!(TranscriptComponent::new(&transcript).render(80), []);
+    assert_eq!(TranscriptComponent::new(&transcript, None).render(80), []);
   }
 
   #[test]
@@ -330,7 +323,7 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::blank(),
@@ -352,7 +345,7 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::blank(),
@@ -371,7 +364,7 @@ mod tests {
       Transcript::with_entries(vec![TranscriptEntry::Error("foo".into())]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),
@@ -393,7 +386,7 @@ mod tests {
       Transcript::with_entries(vec![TranscriptEntry::Interrupted]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::from([Span::styled(
           "■ Conversation interrupted, tell the model what to do differently.",
@@ -411,7 +404,7 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::raw("bar"),
@@ -427,7 +420,7 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::raw("bar"),
@@ -466,7 +459,7 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::blank(),
@@ -506,7 +499,7 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::from([
           Span::styled("│ ", Style::Accent),
@@ -551,7 +544,7 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),
@@ -609,7 +602,7 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(10),
+      TranscriptComponent::new(&transcript, None).render(10),
       [
         LineComponent::from([
           Span::styled("●", Style::Success),
@@ -652,7 +645,7 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::from([
           Span::styled("●", Style::Accent),
@@ -696,7 +689,7 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
         LineComponent::from([
           Span::styled("●", Style::Accent),
@@ -721,7 +714,7 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript).render(5),
+      TranscriptComponent::new(&transcript, None).render(5),
       [
         LineComponent::from([
           Span::styled("│ ", Style::Accent),
