@@ -186,35 +186,19 @@ impl Agent {
       The command tool runs commands using the platform's system shell. Omit `cwd` to use the current working directory. Do not invent absolute paths.
       ",
       self.loader.cwd.display(),
-    }
-    .trim_end()
-    .to_string();
+    };
 
-    Ok(if agents.is_empty() {
-      formatdoc! {
-        "
-        {}
-
-        {context}
-        ",
+    Ok(
+      [
         SYSTEM_PROMPT.as_str(),
-      }
-      .trim_end()
-      .to_string()
-    } else {
-      formatdoc! {
-        "
-        {}
-
-        {context}
-
-        {agents}
-        ",
-        SYSTEM_PROMPT.as_str(),
-      }
-      .trim_end()
-      .to_string()
-    })
+        context.trim_end(),
+        agents.trim_end(),
+      ]
+      .into_iter()
+      .filter(|section| !section.is_empty())
+      .collect::<Vec<_>>()
+      .join("\n\n"),
+    )
   }
 }
 

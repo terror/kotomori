@@ -28,46 +28,34 @@ impl From<&Message> for RigMessage {
   fn from(message: &Message) -> Self {
     match message {
       Message::Agent(content) => Self::Assistant {
-        content: OneOrMany::many(
-          content
-            .iter()
-            .map(|content| match content {
-              AgentMessageContent::Reasoning(reasoning) => {
-                AssistantContent::reasoning(reasoning.clone())
-              }
-              AgentMessageContent::Text(text) => {
-                AssistantContent::text(text.clone())
-              }
-              AgentMessageContent::ToolCall(invocation) => {
-                AssistantContent::tool_call(
-                  invocation.id.clone(),
-                  invocation.kind.name(),
-                  invocation.kind.arguments(),
-                )
-              }
-            })
-            .collect::<Vec<_>>(),
-        )
+        content: OneOrMany::many(content.iter().map(|content| match content {
+          AgentMessageContent::Reasoning(reasoning) => {
+            AssistantContent::reasoning(reasoning.clone())
+          }
+          AgentMessageContent::Text(text) => {
+            AssistantContent::text(text.clone())
+          }
+          AgentMessageContent::ToolCall(invocation) => {
+            AssistantContent::tool_call(
+              invocation.id.clone(),
+              invocation.kind.name(),
+              invocation.kind.arguments(),
+            )
+          }
+        }))
         .unwrap_or_else(|_| OneOrMany::one(AssistantContent::text(""))),
         id: None,
       },
       Message::User(content) => Self::User {
-        content: OneOrMany::many(
-          content
-            .iter()
-            .map(|content| match content {
-              UserMessageContent::Text(text) => UserContent::text(text.clone()),
-              UserMessageContent::ToolResult { id, result } => {
-                UserContent::tool_result(
-                  id.clone(),
-                  OneOrMany::one(ToolResultContent::text(
-                    result.message_content(),
-                  )),
-                )
-              }
-            })
-            .collect::<Vec<_>>(),
-        )
+        content: OneOrMany::many(content.iter().map(|content| match content {
+          UserMessageContent::Text(text) => UserContent::text(text.clone()),
+          UserMessageContent::ToolResult { id, result } => {
+            UserContent::tool_result(
+              id.clone(),
+              OneOrMany::one(ToolResultContent::text(result.message_content())),
+            )
+          }
+        }))
         .unwrap_or_else(|_| OneOrMany::one(UserContent::text(String::new()))),
       },
     }
