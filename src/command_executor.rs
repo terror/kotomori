@@ -6,21 +6,26 @@ pub(crate) struct CommandExecutor {
 }
 
 impl CommandExecutor {
-  pub(crate) async fn execute(&self, mut command: AsyncCommand) -> ToolResult {
+  pub(crate) async fn execute(&self, command: AsyncCommand) -> ToolResult {
+    self
+      .execute_inner(command)
+      .await
+      .unwrap_or_else(|error| ToolResult {
+        stderr: Some(error.to_string()),
+        ..Default::default()
+      })
+  }
+
+  async fn execute_inner(
+    &self,
+    mut command: AsyncCommand,
+  ) -> Result<ToolResult> {
     command.kill_on_drop(true);
 
     command.stderr(Stdio::piped());
     command.stdout(Stdio::piped());
 
-    let mut child = match command.spawn() {
-      Ok(child) => child,
-      Err(error) => {
-        return ToolResult {
-          stderr: Some(error.to_string()),
-          ..Default::default()
-        };
-      }
-    };
+    let mut child = command.spawn()?;
 
     let stdout = child.stdout.take().expect("stdout is piped");
     let stdout = task::spawn(self.read_pipe(stdout));
@@ -31,49 +36,14 @@ impl CommandExecutor {
     let status = timeout(self.limits.timeout, child.wait()).await;
 
     let status = match status {
-      Ok(Ok(status)) => status,
-      Ok(Err(error)) => {
-        return ToolResult {
-          stderr: Some(error.to_string()),
-          ..Default::default()
-        };
-      }
-      Err(_) => return self.timeout_result(child, stdout, stderr).await,
+      Ok(status) => status?,
+      Err(_) => return Ok(self.timeout_result(child, stdout, stderr).await),
     };
 
-    let stdout = match stdout.await {
-      Ok(Ok(stdout)) => stdout,
-      Ok(Err(error)) => {
-        return ToolResult {
-          stderr: Some(error.to_string()),
-          ..Default::default()
-        };
-      }
-      Err(error) => {
-        return ToolResult {
-          stderr: Some(error.to_string()),
-          ..Default::default()
-        };
-      }
-    };
+    let stdout = stdout.await??;
+    let stderr = stderr.await??;
 
-    let stderr = match stderr.await {
-      Ok(Ok(stderr)) => stderr,
-      Ok(Err(error)) => {
-        return ToolResult {
-          stderr: Some(error.to_string()),
-          ..Default::default()
-        };
-      }
-      Err(error) => {
-        return ToolResult {
-          stderr: Some(error.to_string()),
-          ..Default::default()
-        };
-      }
-    };
-
-    ToolResult {
+    Ok(ToolResult {
       exit_status: status.code(),
       outcome: if status.success() {
         ToolOutcome::Success
@@ -83,7 +53,7 @@ impl CommandExecutor {
       stderr: (!stderr.is_empty()).then_some(stderr),
       stdout: (!stdout.is_empty()).then_some(stdout),
       ..Default::default()
-    }
+    })
   }
 
   async fn read_pipe<R>(self, mut reader: R) -> io::Result<String>
@@ -196,6 +166,68 @@ impl CommandExecutor {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[tokio::test]
+  async fn execute_exit_status() {
+    let (shell, flag) = if cfg!(windows) {
+      ("cmd.exe", "/C")
+    } else {
+      ("/bin/sh", "-c")
+    };
+
+    for (exit_status, outcome) in
+      [(0, ToolOutcome::Success), (1, ToolOutcome::Failure)]
+    {
+      let mut command = AsyncCommand::new(shell);
+      command.arg(flag).arg(format!("exit {exit_status}"));
+
+      assert_eq!(
+        CommandExecutor::default().execute(command).await,
+        ToolResult {
+          exit_status: Some(exit_status),
+          outcome,
+          ..Default::default()
+        },
+      );
+    }
+  }
+
+  #[tokio::test]
+  async fn execute_spawn_error() {
+    let directory = tempfile::tempdir().unwrap();
+
+    assert_eq!(
+      CommandExecutor::default()
+        .execute(AsyncCommand::new(directory.path().join("foo")))
+        .await,
+      ToolResult {
+        stderr: Some(io::Error::from_raw_os_error(2).to_string()),
+        ..Default::default()
+      },
+    );
+  }
+
+  #[cfg(unix)]
+  #[tokio::test]
+  async fn execute_timeout() {
+    let executor = CommandExecutor {
+      limits: ExecutionLimit {
+        timeout: Duration::ZERO,
+        ..Default::default()
+      },
+    };
+
+    let mut command = AsyncCommand::new("/bin/sleep");
+    command.arg("10");
+
+    assert_eq!(
+      executor.execute(command).await,
+      ToolResult {
+        stderr: Some("tool timed out after 0 seconds".into()),
+        ..Default::default()
+      },
+    );
+  }
 
   #[tokio::test]
   async fn read_pipe_output_is_capped() {
