@@ -7,15 +7,6 @@ pub(crate) enum Message {
 }
 
 impl Message {
-  pub(crate) fn content(&self) -> Option<&str> {
-    match self {
-      Self::Agent(content) => {
-        content.iter().find_map(AgentMessageContent::text)
-      }
-      Self::User(content) => content.iter().find_map(UserMessageContent::text),
-    }
-  }
-
   pub(crate) fn user_content(&self) -> Option<&str> {
     match self {
       Self::User(content) => content.iter().find_map(UserMessageContent::text),
