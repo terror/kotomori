@@ -408,339 +408,100 @@ mod tests {
     );
   }
 
-  #[tokio::test]
-  async fn approval_approves_with_lowercase_y() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
+  #[test]
+  fn approval_inputs_leave_request_pending() {
+    #[track_caller]
+    fn case(action: Action) {
+      let mut state = State::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap();
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+      let (request, mut response_receiver) =
+        ApprovalRequest::new(ToolInvocation {
+          id: "foo".into(),
+          kind: ToolInvocationKind::Command(CommandTool {
+            command: "bar".into(),
+            cwd: None,
+          }),
+        });
 
-    state.run = Some(Run {
-      approval: Some(request),
-      ..Run::new(0)
-    });
+      let invocation = request.invocation.clone();
 
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char('y'),
-        ..Default::default()
-      }))),
-      Vec::new()
-    );
+      state.run = Some(Run {
+        approval: Some(request),
+        ..Run::new(0)
+      });
 
-    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
+      assert_eq!(state.handle_event(Event::Action(action)), Vec::new());
+      assert_eq!(state.approval().unwrap().invocation, invocation);
+      assert_eq!(state.composer.input_text(), "foo");
+      assert_eq!(
+        response_receiver.try_recv(),
+        Err(oneshot::error::TryRecvError::Empty)
+      );
+    }
 
-    assert_eq!(state.run, Some(Run::new(0)));
-  }
-
-  #[tokio::test]
-  async fn approval_approves_with_uppercase_y() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
-
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
-
-    state.run = Some(Run {
-      approval: Some(request),
-      ..Run::new(0)
-    });
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char('Y'),
-        ..Default::default()
-      }))),
-      Vec::new()
-    );
-
-    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
-
-    assert_eq!(state.run, Some(Run::new(0)));
+    case(Action::CompleteCommand);
+    case(Action::Edit(Input {
+      key: Key::Char('x'),
+      ..Default::default()
+    }));
+    case(Action::SelectNext);
+    case(Action::SelectPrevious);
+    case(Action::Submit);
+    case(Action::SubmitImmediately);
   }
 
   #[test]
-  fn approval_complete_command_leaves_request_pending() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
+  fn approval_inputs_resolve_request() {
+    #[track_caller]
+    fn case(action: Action, approval: ToolApproval) {
+      let mut state = State::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap();
 
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+      let (request, mut response_receiver) =
+        ApprovalRequest::new(ToolInvocation {
+          id: "foo".into(),
+          kind: ToolInvocationKind::Command(CommandTool {
+            command: "bar".into(),
+            cwd: None,
+          }),
+        });
 
-    let invocation = request.invocation.clone();
+      state.run = Some(Run {
+        approval: Some(request),
+        ..Run::new(0)
+      });
 
-    state.run = Some(Run {
-      approval: Some(request),
-      ..Run::new(0)
-    });
+      assert_eq!(state.handle_event(Event::Action(action)), Vec::new());
+      assert_eq!(response_receiver.try_recv().unwrap(), approval);
+      assert_eq!(state.run, Some(Run::new(0)));
+      assert_eq!(state.composer.input_text(), "foo");
+    }
 
-    assert_eq!(
-      state.handle_event(Event::Action(Action::CompleteCommand)),
-      Vec::new()
-    );
+    for (key, approval) in [
+      ('y', ToolApproval::Approved),
+      ('Y', ToolApproval::Approved),
+      ('n', ToolApproval::Denied),
+      ('N', ToolApproval::Denied),
+    ] {
+      case(
+        Action::Edit(Input {
+          key: Key::Char(key),
+          ..Default::default()
+        }),
+        approval,
+      );
+    }
 
-    assert_eq!(state.approval().unwrap().invocation, invocation);
-  }
-
-  #[tokio::test]
-  async fn approval_denies_with_escape() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
-
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
-
-    state.run = Some(Run {
-      approval: Some(request),
-      ..Run::new(0)
-    });
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Interrupt)),
-      Vec::new()
-    );
-
-    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
-
-    assert_eq!(state.run, Some(Run::new(0)));
-  }
-
-  #[tokio::test]
-  async fn approval_denies_with_lowercase_n() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
-
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
-
-    state.run = Some(Run {
-      approval: Some(request),
-      ..Run::new(0)
-    });
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char('n'),
-        ..Default::default()
-      }))),
-      Vec::new()
-    );
-
-    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
-
-    assert_eq!(state.run, Some(Run::new(0)));
-  }
-
-  #[tokio::test]
-  async fn approval_denies_with_uppercase_n() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
-
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
-
-    state.run = Some(Run {
-      approval: Some(request),
-      ..Run::new(0)
-    });
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char('N'),
-        ..Default::default()
-      }))),
-      Vec::new()
-    );
-
-    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
-
-    assert_eq!(state.run, Some(Run::new(0)));
-  }
-
-  #[test]
-  fn approval_edit_other_key_leaves_request_pending() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
-
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
-
-    let invocation = request.invocation.clone();
-
-    state.run = Some(Run {
-      approval: Some(request),
-      ..Run::new(0)
-    });
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char('x'),
-        ..Default::default()
-      }))),
-      Vec::new()
-    );
-
-    assert_eq!(state.approval().unwrap().invocation, invocation);
-  }
-
-  #[test]
-  fn approval_select_next_command_leaves_request_pending() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
-
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
-
-    let invocation = request.invocation.clone();
-
-    state.run = Some(Run {
-      approval: Some(request),
-      ..Run::new(0)
-    });
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::SelectNext)),
-      Vec::new()
-    );
-
-    assert_eq!(state.approval().unwrap().invocation, invocation);
-  }
-
-  #[test]
-  fn approval_select_previous_command_leaves_request_pending() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
-
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
-
-    let invocation = request.invocation.clone();
-
-    state.run = Some(Run {
-      approval: Some(request),
-      ..Run::new(0)
-    });
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::SelectPrevious)),
-      Vec::new()
-    );
-
-    assert_eq!(state.approval().unwrap().invocation, invocation);
-  }
-
-  #[test]
-  fn approval_submit_leaves_request_pending() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
-
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
-
-    let invocation = request.invocation.clone();
-
-    state.run = Some(Run {
-      approval: Some(request),
-      ..Run::new(0)
-    });
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      Vec::new()
-    );
-
-    assert_eq!(state.approval().unwrap().invocation, invocation);
+    case(Action::Interrupt, ToolApproval::Denied);
   }
 
   #[tokio::test]
