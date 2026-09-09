@@ -2,26 +2,43 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct State {
-  active_run_id: Option<u64>,
   pub(crate) composer: Composer,
   database: Database,
   pub(crate) directory: PathBuf,
-  pub(crate) input_mode: InputMode,
   pub(crate) model: Model,
   next_run_id: u64,
   queued_inputs: VecDeque<String>,
+  run: Option<Run>,
   pub(crate) session: Session,
   pub(crate) should_quit: bool,
 }
 
 impl State {
+  pub(crate) fn active_run(&self) -> Option<&Run> {
+    self.run.as_ref()
+  }
+
+  pub(crate) fn approval(&self) -> Option<&ApprovalRequest> {
+    self.run.as_ref().and_then(|run| run.approval.as_ref())
+  }
+
+  fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
+    if let Some(message) = self.run.take().and_then(Run::finish) {
+      self.session.transcript.push_message(message);
+    }
+
+    self.session.transcript.entries.extend(entry);
+
+    self.save_session();
+  }
+
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
-    if action == Action::Quit && self.session.transcript.is_agent_active() {
+    if action == Action::Quit && self.run.is_some() {
       return self.interrupt_agent();
     }
 
-    match &self.input_mode {
-      InputMode::Approval(_) => match action {
+    match self.approval() {
+      Some(_) => match action {
         Action::Edit(input) if input.key == Key::Char('y') => {
           self.resolve_approval(ToolApproval::Approved);
         }
@@ -37,18 +54,15 @@ impl State {
         Action::Interrupt => {
           self.resolve_approval(ToolApproval::Denied);
         }
-        Action::Quit => {
-          self.resolve_approval(ToolApproval::Denied);
-          self.quit();
-        }
         Action::CompleteCommand
         | Action::Edit(_)
+        | Action::Quit
         | Action::SelectNext
         | Action::SelectPrevious
         | Action::Submit
         | Action::SubmitImmediately => {}
       },
-      InputMode::Compose => match action {
+      None => match action {
         Action::CompleteCommand => {
           if !self.composer.complete_command() {
             self.composer.input(Input {
@@ -82,9 +96,8 @@ impl State {
   fn handle_command(&mut self, command: Command) -> Vec<Effect> {
     let effects = match command {
       Command::Clear => {
-        let interrupt_agent = self.active_run_id.take().is_some();
+        let interrupt_agent = self.run.take().is_some();
 
-        self.input_mode.clear_approval();
         self.session.transcript.clear();
         self.composer.clear_history();
         self.queued_inputs.clear();
@@ -108,65 +121,63 @@ impl State {
   pub(crate) fn handle_event(&mut self, event: Event) -> Vec<Effect> {
     match event {
       Event::Action(action) => return self.handle_action(action),
-      Event::Agent { event, run_id } if self.active_run_id == Some(run_id) => {
+      Event::Agent { event, run_id } => {
+        let Some(run) = self.run.as_mut().filter(|run| run.id == run_id) else {
+          return Vec::new();
+        };
+
         match event {
           AgentEvent::Done => {
-            self.active_run_id = None;
-            self.input_mode.clear_approval();
-            self.session.transcript.finish_agent_activity();
-            self.save_session();
+            self.finish_run(None);
             return self.run_next_queued();
           }
-          AgentEvent::Delta(delta)
-            if self.session.transcript.is_agent_active() =>
-          {
-            self.session.transcript.push_agent_delta(&delta);
+          AgentEvent::Delta(delta) => {
+            run.push_delta(&delta);
           }
-          AgentEvent::ReasoningDelta(delta)
-            if self.session.transcript.is_agent_active() =>
-          {
-            self.session.transcript.push_agent_reasoning_delta(&delta);
+          AgentEvent::ReasoningDelta(delta) => {
+            run.push_reasoning_delta(&delta);
           }
-          AgentEvent::Delta(_) | AgentEvent::ReasoningDelta(_) => {}
           AgentEvent::Message(message) => {
-            self.input_mode.clear_approval();
+            run.reset_message();
             self.session.transcript.push_message(message);
             self.save_session();
           }
           AgentEvent::Error(error) => {
-            self.active_run_id = None;
-            self.input_mode.clear_approval();
-            self.session.transcript.error(error);
-            self.save_session();
+            self.finish_run(Some(TranscriptEntry::Error(error)));
             return self.run_next_queued();
           }
           AgentEvent::ToolApprovalRequest(request) => {
-            self.input_mode = InputMode::Approval(request);
+            run.approval = Some(request);
           }
         }
       }
-      Event::Agent { .. } => {}
       Event::Error(error) => {
-        self.input_mode.clear_approval();
-        self.session.transcript.error(error);
-        self.save_session();
+        let effects = if self.run.is_some() {
+          vec![Effect::InterruptAgent]
+        } else {
+          Vec::new()
+        };
+
+        self.finish_run(Some(TranscriptEntry::Error(error)));
+
+        return effects;
       }
-      Event::Tick(elapsed) => self.session.transcript.tick(elapsed),
+      Event::Tick(elapsed) => {
+        if let Some(run) = &mut self.run {
+          run.tick(elapsed);
+        }
+      }
     }
 
     Vec::new()
   }
 
   fn interrupt_agent(&mut self) -> Vec<Effect> {
-    if !self.session.transcript.is_agent_active() {
+    if self.run.is_none() {
       return Vec::new();
     }
 
-    self.input_mode.clear_approval();
-    self.active_run_id = None;
-    self.session.transcript.interrupt();
-
-    self.save_session();
+    self.finish_run(Some(TranscriptEntry::Interrupted));
 
     vec![Effect::InterruptAgent]
   }
@@ -188,7 +199,9 @@ impl State {
   }
 
   fn resolve_approval(&mut self, approval: ToolApproval) {
-    self.input_mode.resolve_approval(approval);
+    if let Some(run) = &mut self.run {
+      run.resolve_approval(approval);
+    }
   }
 
   fn run(&mut self, input: String) -> Effect {
@@ -205,7 +218,7 @@ impl State {
       .checked_add(1)
       .expect("agent run ID overflow");
 
-    self.active_run_id = Some(run_id);
+    self.run = Some(Run::new(run_id));
 
     Effect::RunAgent { messages, run_id }
   }
@@ -264,7 +277,7 @@ impl State {
         .into_iter()
         .chain(once(self.run(input)))
         .collect(),
-      _ if self.session.transcript.is_agent_active() => {
+      _ if self.run.is_some() => {
         self.queued_inputs.push_back(input);
         Vec::new()
       }
@@ -289,17 +302,16 @@ impl State {
     session.set_model(&settings.model);
 
     Ok(Self {
-      active_run_id: None,
       composer: Composer::new(
         settings.prompt.as_deref().unwrap_or_default(),
         history,
       ),
       database,
       directory: env::current_dir()?,
-      input_mode: InputMode::Compose,
       model: settings.model.clone(),
       next_run_id: 0,
       queued_inputs: VecDeque::new(),
+      run: None,
       session,
       should_quit: false,
     })
@@ -377,6 +389,8 @@ mod tests {
       run_id: 0,
     });
 
+    assert_eq!(state.run, None);
+
     assert_eq!(
       state.session.transcript.messages(),
       vec![
@@ -411,9 +425,10 @@ mod tests {
       }),
     });
 
-    state.input_mode = InputMode::Approval(request);
-
-    assert_matches!(state.input_mode, InputMode::Approval(_));
+    state.run = Some(Run {
+      approval: Some(request),
+      ..Run::new(0)
+    });
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -425,7 +440,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
 
-    assert_matches!(state.input_mode, InputMode::Compose);
+    assert_eq!(state.run, Some(Run::new(0)));
   }
 
   #[tokio::test]
@@ -445,9 +460,10 @@ mod tests {
       }),
     });
 
-    state.input_mode = InputMode::Approval(request);
-
-    assert_matches!(state.input_mode, InputMode::Approval(_));
+    state.run = Some(Run {
+      approval: Some(request),
+      ..Run::new(0)
+    });
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -459,7 +475,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
 
-    assert_matches!(state.input_mode, InputMode::Compose);
+    assert_eq!(state.run, Some(Run::new(0)));
   }
 
   #[test]
@@ -479,14 +495,17 @@ mod tests {
       }),
     });
 
-    state.input_mode = InputMode::Approval(request);
+    state.run = Some(Run {
+      approval: Some(request.clone()),
+      ..Run::new(0)
+    });
 
     assert_eq!(
       state.handle_event(Event::Action(Action::CompleteCommand)),
       Vec::new()
     );
 
-    assert_matches!(state.input_mode, InputMode::Approval(_));
+    assert_eq!(state.approval(), Some(&request));
   }
 
   #[tokio::test]
@@ -506,9 +525,10 @@ mod tests {
       }),
     });
 
-    state.input_mode = InputMode::Approval(request);
-
-    assert_matches!(state.input_mode, InputMode::Approval(_));
+    state.run = Some(Run {
+      approval: Some(request),
+      ..Run::new(0)
+    });
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Interrupt)),
@@ -517,7 +537,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert_matches!(state.input_mode, InputMode::Compose);
+    assert_eq!(state.run, Some(Run::new(0)));
   }
 
   #[tokio::test]
@@ -537,9 +557,10 @@ mod tests {
       }),
     });
 
-    state.input_mode = InputMode::Approval(request);
-
-    assert_matches!(state.input_mode, InputMode::Approval(_));
+    state.run = Some(Run {
+      approval: Some(request),
+      ..Run::new(0)
+    });
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -551,35 +572,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert_matches!(state.input_mode, InputMode::Compose);
-  }
-
-  #[tokio::test]
-  async fn approval_denies_with_quit() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
-
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
-
-    state.input_mode = InputMode::Approval(request);
-
-    assert_matches!(state.input_mode, InputMode::Approval(_));
-
-    assert_eq!(state.handle_event(Event::Action(Action::Quit)), Vec::new());
-    assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
-
-    assert_matches!(state.input_mode, InputMode::Compose);
-    assert!(state.should_quit);
+    assert_eq!(state.run, Some(Run::new(0)));
   }
 
   #[tokio::test]
@@ -599,9 +592,10 @@ mod tests {
       }),
     });
 
-    state.input_mode = InputMode::Approval(request);
-
-    assert_matches!(state.input_mode, InputMode::Approval(_));
+    state.run = Some(Run {
+      approval: Some(request),
+      ..Run::new(0)
+    });
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -613,7 +607,7 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert_matches!(state.input_mode, InputMode::Compose);
+    assert_eq!(state.run, Some(Run::new(0)));
   }
 
   #[test]
@@ -633,7 +627,10 @@ mod tests {
       }),
     });
 
-    state.input_mode = InputMode::Approval(request);
+    state.run = Some(Run {
+      approval: Some(request.clone()),
+      ..Run::new(0)
+    });
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -643,7 +640,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_matches!(state.input_mode, InputMode::Approval(_));
+    assert_eq!(state.approval(), Some(&request));
   }
 
   #[test]
@@ -663,14 +660,17 @@ mod tests {
       }),
     });
 
-    state.input_mode = InputMode::Approval(request);
+    state.run = Some(Run {
+      approval: Some(request.clone()),
+      ..Run::new(0)
+    });
 
     assert_eq!(
       state.handle_event(Event::Action(Action::SelectNext)),
       Vec::new()
     );
 
-    assert_matches!(state.input_mode, InputMode::Approval(_));
+    assert_eq!(state.approval(), Some(&request));
   }
 
   #[test]
@@ -690,14 +690,17 @@ mod tests {
       }),
     });
 
-    state.input_mode = InputMode::Approval(request);
+    state.run = Some(Run {
+      approval: Some(request.clone()),
+      ..Run::new(0)
+    });
 
     assert_eq!(
       state.handle_event(Event::Action(Action::SelectPrevious)),
       Vec::new()
     );
 
-    assert_matches!(state.input_mode, InputMode::Approval(_));
+    assert_eq!(state.approval(), Some(&request));
   }
 
   #[test]
@@ -717,43 +720,17 @@ mod tests {
       }),
     });
 
-    state.input_mode = InputMode::Approval(request);
+    state.run = Some(Run {
+      approval: Some(request.clone()),
+      ..Run::new(0)
+    });
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       Vec::new()
     );
 
-    assert_matches!(state.input_mode, InputMode::Approval(_));
-  }
-
-  #[tokio::test]
-  async fn approval_terminal_agent_done_drops_pending_request() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
-    .unwrap();
-
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
-
-    state.active_run_id = Some(0);
-    state.input_mode = InputMode::Approval(request);
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
-      run_id: 0,
-    });
-
-    assert_matches!(state.input_mode, InputMode::Compose);
-    assert!(response_receiver.await.is_err());
+    assert_eq!(state.approval(), Some(&request));
   }
 
   #[tokio::test]
@@ -773,8 +750,10 @@ mod tests {
       }),
     });
 
-    state.active_run_id = Some(0);
-    state.input_mode = InputMode::Approval(request);
+    state.run = Some(Run {
+      approval: Some(request),
+      ..Run::new(0)
+    });
 
     state.handle_event(Event::Agent {
       event: AgentEvent::Message(Message::User(vec![
@@ -789,7 +768,7 @@ mod tests {
       run_id: 0,
     });
 
-    assert_matches!(state.input_mode, InputMode::Compose);
+    assert_eq!(state.run, Some(Run::new(0)));
     assert!(response_receiver.await.is_err());
   }
 
@@ -797,7 +776,7 @@ mod tests {
   async fn approval_terminal_error_drops_pending_request() {
     let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
+      prompt: None,
       yolo: false,
     })
     .unwrap();
@@ -810,15 +789,17 @@ mod tests {
       }),
     });
 
-    state.active_run_id = Some(0);
-    state.input_mode = InputMode::Approval(request);
+    state.run = Some(Run {
+      approval: Some(request),
+      ..Run::new(0)
+    });
 
     state.handle_event(Event::Agent {
       event: AgentEvent::Error("bar".into()),
       run_id: 0,
     });
 
-    assert_matches!(state.input_mode, InputMode::Compose);
+    assert_eq!(state.run, None);
     assert!(response_receiver.await.is_err());
   }
 
@@ -1000,7 +981,7 @@ mod tests {
       vec![Effect::InterruptAgent]
     );
 
-    assert_eq!(state.active_run_id, None);
+    assert_eq!(state.run, None);
 
     assert!(state.session.transcript.messages().is_empty());
 
@@ -1149,7 +1130,7 @@ mod tests {
     );
 
     assert!(!state.should_quit);
-    assert!(!state.session.transcript.is_agent_active());
+    assert_eq!(state.run, None);
 
     assert_eq!(state.composer.input_text(), "");
 
@@ -1190,7 +1171,7 @@ mod tests {
         vec![Effect::InterruptAgent]
       );
 
-      assert_eq!(state.active_run_id, None);
+      assert_eq!(state.run, None);
       assert_eq!(state.composer.input_text(), "");
     }
 
@@ -1351,6 +1332,70 @@ mod tests {
   }
 
   #[test]
+  fn failed_save_preserves_run() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    })
+    .unwrap();
+
+    state.run = Some(Run {
+      activity: AgentActivity::Streaming("foo".into()),
+      ..Run::new(0)
+    });
+
+    state.session.id = Some(0);
+
+    state.save_session();
+
+    assert_eq!(
+      state.run,
+      Some(Run {
+        activity: AgentActivity::Streaming("foo".into()),
+        ..Run::new(0)
+      })
+    );
+    assert_eq!(
+      state.session.transcript.entries,
+      [TranscriptEntry::Error(
+        "failed to save session: session `0` no longer exists".into()
+      )]
+    );
+  }
+
+  #[test]
+  fn finish_run_saves_partial_output() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    })
+    .unwrap();
+
+    state.run = Some(Run {
+      activity: AgentActivity::Streaming("foo".into()),
+      ..Run::new(0)
+    });
+
+    state.finish_run(None);
+
+    let session = state
+      .database
+      .load_session(state.session.id.unwrap())
+      .unwrap();
+
+    assert_eq!(state.run, None);
+    assert_eq!(
+      state.session.transcript.messages(),
+      [Message::Agent(vec![AgentMessageContent::Text(
+        "foo".into()
+      )])]
+    );
+    assert_eq!(session.transcript, state.session.transcript);
+  }
+
+  #[test]
   fn immediate_submit_interrupts_active_agent_and_starts_new_run() {
     let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
@@ -1390,7 +1435,7 @@ mod tests {
       ]
     );
 
-    assert!(state.session.transcript.is_agent_active());
+    assert_eq!(state.run, Some(Run::new(1)));
 
     assert_eq!(state.composer.input_text(), "");
     assert_eq!(state.queued_inputs(), &VecDeque::from(["baz".into()]));
@@ -1408,7 +1453,7 @@ mod tests {
       run_id: 0,
     });
 
-    assert!(state.session.transcript.is_agent_active());
+    assert_eq!(state.run, Some(Run::new(1)));
   }
 
   #[test]
@@ -1439,7 +1484,7 @@ mod tests {
     );
 
     assert!(state.queued_inputs().is_empty());
-    assert!(state.session.transcript.is_agent_active());
+    assert_eq!(state.run, Some(Run::new(1)));
   }
 
   #[test]
@@ -1466,7 +1511,7 @@ mod tests {
       vec![Effect::InterruptAgent]
     );
 
-    assert!(!state.session.transcript.is_agent_active());
+    assert_eq!(state.run, None);
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Interrupt)),
@@ -1796,7 +1841,7 @@ mod tests {
     );
 
     assert!(!state.should_quit);
-    assert!(!state.session.transcript.is_agent_active());
+    assert_eq!(state.run, None);
 
     assert_eq!(state.handle_event(Event::Action(Action::Quit)), Vec::new());
 
@@ -1827,7 +1872,7 @@ mod tests {
       run_id: 0,
     });
 
-    assert_matches!(state.input_mode, InputMode::Approval(_));
+    assert!(state.approval().is_some());
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Quit)),
@@ -1835,10 +1880,39 @@ mod tests {
     );
 
     assert!(!state.should_quit);
-    assert!(!state.session.transcript.is_agent_active());
+    assert_eq!(state.run, None);
 
-    assert_matches!(state.input_mode, InputMode::Compose);
+    assert_eq!(state.approval(), None);
     assert!(response_receiver.await.is_err());
+  }
+
+  #[test]
+  fn save_excludes_streaming_content() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    })
+    .unwrap();
+
+    state.session.transcript.send("foo".into());
+
+    state.run = Some(Run {
+      activity: AgentActivity::Streaming("bar".into()),
+      ..Run::new(0)
+    });
+
+    state.save_session();
+
+    let session = state
+      .database
+      .load_session(state.session.id.unwrap())
+      .unwrap();
+
+    assert_eq!(
+      session.transcript.messages(),
+      [Message::User(vec![UserMessageContent::Text("foo".into())])]
+    );
   }
 
   #[tokio::test]
@@ -1902,9 +1976,9 @@ mod tests {
       "channel closed"
     );
 
-    assert_matches!(state.input_mode, InputMode::Compose);
+    assert_eq!(state.approval(), None);
 
-    assert!(state.session.transcript.is_agent_active());
+    assert_eq!(state.run, Some(Run::new(1)));
 
     state.handle_event(Event::Agent {
       event: AgentEvent::Delta("current".into()),
@@ -2012,6 +2086,45 @@ mod tests {
 
     case(Action::Submit);
     case(Action::SubmitImmediately);
+  }
+
+  #[test]
+  fn terminal_error_interrupts_run() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    })
+    .unwrap();
+
+    state.run = Some(Run::new(0));
+
+    assert_eq!(
+      state.handle_event(Event::Error("foo".into())),
+      vec![Effect::InterruptAgent]
+    );
+    assert_eq!(state.run, None);
+    assert_eq!(
+      state.session.transcript.entries,
+      [TranscriptEntry::Error("foo".into())]
+    );
+  }
+
+  #[test]
+  fn terminal_error_without_run() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(state.handle_event(Event::Error("foo".into())), Vec::new());
+    assert_eq!(state.run, None);
+    assert_eq!(
+      state.session.transcript.entries,
+      [TranscriptEntry::Error("foo".into())]
+    );
   }
 
   #[test]
