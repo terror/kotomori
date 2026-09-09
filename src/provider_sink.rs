@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ProviderSink {
-  pub(super) content: Vec<ProviderContent>,
+  pub(super) content: Vec<AgentMessageContent>,
   pub(super) event_sender: UnboundedSender<Event>,
   pub(super) reasoning_buffer: ReasoningBuffer,
   pub(super) run_id: u64,
@@ -14,10 +14,12 @@ impl ProviderSink {
 
     if !delta.is_empty() {
       match self.content.last_mut() {
-        Some(ProviderContent::Text(text)) => text.push_str(&delta),
-        Some(ProviderContent::Reasoning(_) | ProviderContent::ToolCall(_))
+        Some(AgentMessageContent::Text(text)) => text.push_str(&delta),
+        Some(
+          AgentMessageContent::Reasoning(_) | AgentMessageContent::ToolCall(_),
+        )
         | None => {
-          self.content.push(ProviderContent::Text(delta.clone()));
+          self.content.push(AgentMessageContent::Text(delta.clone()));
         }
       }
     }
@@ -28,7 +30,7 @@ impl ProviderSink {
     })?)
   }
 
-  pub(crate) fn finish(self) -> Vec<ProviderContent> {
+  pub(crate) fn finish(self) -> Vec<AgentMessageContent> {
     self.content
   }
 
@@ -38,13 +40,14 @@ impl ProviderSink {
     }
 
     match self.content.last_mut() {
-      Some(ProviderContent::Reasoning(reasoning)) => {
+      Some(AgentMessageContent::Reasoning(reasoning)) => {
         reasoning.push_str(delta);
       }
-      Some(ProviderContent::Text(_) | ProviderContent::ToolCall(_)) | None => {
+      Some(AgentMessageContent::Text(_) | AgentMessageContent::ToolCall(_))
+      | None => {
         self
           .content
-          .push(ProviderContent::Reasoning(delta.to_owned()));
+          .push(AgentMessageContent::Reasoning(delta.to_owned()));
       }
     }
   }
@@ -79,8 +82,12 @@ impl ProviderSink {
     Ok(())
   }
 
-  pub(crate) fn tool_call(&mut self, tool_call: RawToolCall) {
-    self.content.push(ProviderContent::ToolCall(tool_call));
+  pub(crate) fn tool_call(&mut self, tool_call: RawToolCall) -> Result {
+    self.content.push(AgentMessageContent::ToolCall(
+      ToolInvocationKind::decode(tool_call)?,
+    ));
+
+    Ok(())
   }
 }
 

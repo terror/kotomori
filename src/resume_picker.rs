@@ -114,19 +114,19 @@ mod tests {
       Session {
         created_at: 0,
         directory: "foo".into(),
-        entries: Vec::new(),
         id: Some(1),
         model: "mock:local".into(),
         title: Some("foo".into()),
+        transcript: Transcript::default(),
         updated_at: 0,
       },
       Session {
         created_at: 0,
         directory: "bar".into(),
-        entries: Vec::new(),
         id: Some(2),
         model: "mock:local".into(),
         title: Some("bar".into()),
+        transcript: Transcript::default(),
         updated_at: 0,
       },
     ]);

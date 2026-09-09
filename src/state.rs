@@ -10,14 +10,13 @@ pub(crate) struct State {
   pub(crate) model: Model,
   next_run_id: u64,
   queued_inputs: VecDeque<String>,
-  session: Session,
+  pub(crate) session: Session,
   pub(crate) should_quit: bool,
-  pub(crate) transcript: Transcript,
 }
 
 impl State {
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
-    if action == Action::Quit && self.transcript.is_agent_active() {
+    if action == Action::Quit && self.session.transcript.is_agent_active() {
       return self.interrupt_agent();
     }
 
@@ -86,7 +85,7 @@ impl State {
         let interrupt_agent = self.active_run_id.take().is_some();
 
         self.input_mode.clear_approval();
-        self.transcript.clear();
+        self.session.transcript.clear();
         self.composer.clear_history();
         self.queued_inputs.clear();
 
@@ -114,32 +113,30 @@ impl State {
           AgentEvent::Done => {
             self.active_run_id = None;
             self.input_mode.clear_approval();
-            self.transcript.finish_agent_activity();
+            self.session.transcript.finish_agent_activity();
             self.save_session();
             return self.run_next_queued();
           }
-          AgentEvent::Delta(delta) if self.transcript.is_agent_active() => {
-            self.transcript.push_agent_delta(&delta);
+          AgentEvent::Delta(delta)
+            if self.session.transcript.is_agent_active() =>
+          {
+            self.session.transcript.push_agent_delta(&delta);
           }
           AgentEvent::ReasoningDelta(delta)
-            if self.transcript.is_agent_active() =>
+            if self.session.transcript.is_agent_active() =>
           {
-            self.transcript.push_agent_reasoning_delta(&delta);
+            self.session.transcript.push_agent_reasoning_delta(&delta);
           }
           AgentEvent::Delta(_) | AgentEvent::ReasoningDelta(_) => {}
-          AgentEvent::ToolCall(tool_call) => {
-            self.transcript.push_tool_call(tool_call);
-            self.save_session();
-          }
-          AgentEvent::ToolResult { id, result } => {
+          AgentEvent::Message(message) => {
             self.input_mode.clear_approval();
-            self.transcript.push_tool_result(&id, result);
+            self.session.transcript.push_message(message);
             self.save_session();
           }
           AgentEvent::Error(error) => {
             self.active_run_id = None;
             self.input_mode.clear_approval();
-            self.transcript.error(error);
+            self.session.transcript.error(error);
             self.save_session();
             return self.run_next_queued();
           }
@@ -151,23 +148,23 @@ impl State {
       Event::Agent { .. } => {}
       Event::Error(error) => {
         self.input_mode.clear_approval();
-        self.transcript.error(error);
+        self.session.transcript.error(error);
         self.save_session();
       }
-      Event::Tick(elapsed) => self.transcript.tick(elapsed),
+      Event::Tick(elapsed) => self.session.transcript.tick(elapsed),
     }
 
     Vec::new()
   }
 
   fn interrupt_agent(&mut self) -> Vec<Effect> {
-    if !self.transcript.is_agent_active() {
+    if !self.session.transcript.is_agent_active() {
       return Vec::new();
     }
 
     self.input_mode.clear_approval();
     self.active_run_id = None;
-    self.transcript.interrupt();
+    self.session.transcript.interrupt();
 
     self.save_session();
 
@@ -195,11 +192,11 @@ impl State {
   }
 
   fn run(&mut self, input: String) -> Effect {
-    self.transcript.send(input);
+    self.session.transcript.send(input);
 
     self.save_session();
 
-    let messages = self.transcript.messages();
+    let messages = self.session.transcript.messages();
 
     let run_id = self.next_run_id;
 
@@ -222,8 +219,9 @@ impl State {
   }
 
   fn save_session(&mut self) {
-    if let Err(error) = self.session.save(&self.database, &self.transcript) {
+    if let Err(error) = self.session.save(&self.database) {
       self
+        .session
         .transcript
         .error(format!("failed to save session: {error}"));
     }
@@ -241,7 +239,7 @@ impl State {
 
     if input.starts_with('/') {
       if input.len() > 1 {
-        self.transcript.notice(format!(
+        self.session.transcript.notice(format!(
           "Unrecognized command '{input}'. Type \"/\" for a list of supported commands."
         ));
 
@@ -266,7 +264,7 @@ impl State {
         .into_iter()
         .chain(once(self.run(input)))
         .collect(),
-      _ if self.transcript.is_agent_active() => {
+      _ if self.session.transcript.is_agent_active() => {
         self.queued_inputs.push_back(input);
         Vec::new()
       }
@@ -279,15 +277,13 @@ impl State {
     database: Database,
     mut session: Session,
   ) -> Result<Self> {
-    let transcript = Transcript::with_entries(session.entries.clone());
-
-    let history = transcript
+    let history = session
+      .transcript
       .entries
       .iter()
-      .filter_map(|entry| match entry {
-        TranscriptEntry::User(input) => Some(input.clone()),
-        _ => None,
-      })
+      .filter_map(TranscriptEntry::message)
+      .filter_map(Message::user_content)
+      .map(str::to_owned)
       .collect();
 
     session.set_model(&settings.model);
@@ -306,7 +302,6 @@ impl State {
       queued_inputs: VecDeque::new(),
       session,
       should_quit: false,
-      transcript,
     })
   }
 }
@@ -352,7 +347,11 @@ mod tests {
     };
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::ToolCall(invocation.clone()),
+      event: AgentEvent::Message(Message::Agent(vec![
+        AgentMessageContent::Reasoning("bar".into()),
+        AgentMessageContent::Text("baz".into()),
+        AgentMessageContent::ToolCall(invocation.clone()),
+      ])),
       run_id: 0,
     });
 
@@ -364,10 +363,12 @@ mod tests {
     };
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::ToolResult {
-        id: "foo".into(),
-        result: result.clone(),
-      },
+      event: AgentEvent::Message(Message::User(vec![
+        UserMessageContent::ToolResult {
+          id: "foo".into(),
+          result: result.clone(),
+        },
+      ])),
       run_id: 0,
     });
 
@@ -377,7 +378,7 @@ mod tests {
     });
 
     assert_eq!(
-      state.transcript.messages(),
+      state.session.transcript.messages(),
       vec![
         Message::User(vec![UserMessageContent::Text("foo".into())]),
         Message::Agent(vec![
@@ -776,13 +777,15 @@ mod tests {
     state.input_mode = InputMode::Approval(request);
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::ToolResult {
-        id: "foo".into(),
-        result: ToolResult {
-          content: Some("bar".into()),
-          ..Default::default()
+      event: AgentEvent::Message(Message::User(vec![
+        UserMessageContent::ToolResult {
+          id: "foo".into(),
+          result: ToolResult {
+            content: Some("bar".into()),
+            ..Default::default()
+          },
         },
-      },
+      ])),
       run_id: 0,
     });
 
@@ -833,7 +836,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.transcript.messages().is_empty());
+    assert!(state.session.transcript.messages().is_empty());
 
     assert_eq!(state.composer.input_text(), "  ");
   }
@@ -924,7 +927,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.transcript.messages().is_empty());
+    assert!(state.session.transcript.messages().is_empty());
 
     assert_eq!(state.composer.input_text(), "");
   }
@@ -969,7 +972,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.transcript.messages().is_empty());
+    assert!(state.session.transcript.messages().is_empty());
 
     assert_eq!(state.composer.input_text(), "");
   }
@@ -999,7 +1002,7 @@ mod tests {
 
     assert_eq!(state.active_run_id, None);
 
-    assert!(state.transcript.messages().is_empty());
+    assert!(state.session.transcript.messages().is_empty());
 
     let invocation = ToolInvocation {
       id: "late".into(),
@@ -1010,15 +1013,19 @@ mod tests {
     };
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::ToolCall(invocation),
+      event: AgentEvent::Message(Message::Agent(vec![
+        AgentMessageContent::ToolCall(invocation),
+      ])),
       run_id: 0,
     });
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::ToolResult {
-        id: "late".into(),
-        result: ToolResult::default(),
-      },
+      event: AgentEvent::Message(Message::User(vec![
+        UserMessageContent::ToolResult {
+          id: "late".into(),
+          result: ToolResult::default(),
+        },
+      ])),
       run_id: 0,
     });
 
@@ -1027,7 +1034,7 @@ mod tests {
       run_id: 0,
     });
 
-    assert!(state.transcript.messages().is_empty());
+    assert!(state.session.transcript.messages().is_empty());
   }
 
   #[test]
@@ -1070,7 +1077,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.transcript.messages().is_empty());
+    assert!(state.session.transcript.messages().is_empty());
 
     assert_eq!(state.composer.input_text(), "");
   }
@@ -1142,7 +1149,7 @@ mod tests {
     );
 
     assert!(!state.should_quit);
-    assert!(!state.transcript.is_agent_active());
+    assert!(!state.session.transcript.is_agent_active());
 
     assert_eq!(state.composer.input_text(), "");
 
@@ -1151,13 +1158,17 @@ mod tests {
       .load_session(state.session.id.unwrap())
       .unwrap();
 
-    assert_matches!(
-      &saved.entries[..],
+    assert_eq!(
+      saved.transcript.entries,
       [
-        TranscriptEntry::User(input),
-        TranscriptEntry::Agent(output),
+        TranscriptEntry::Message(Message::User(vec![
+          UserMessageContent::Text("foo".into())
+        ])),
+        TranscriptEntry::Message(Message::Agent(vec![
+          AgentMessageContent::Text("partial response".into())
+        ])),
         TranscriptEntry::Interrupted,
-      ] if input == "foo" && output == "partial response"
+      ],
     );
   }
 
@@ -1191,6 +1202,107 @@ mod tests {
   }
 
   #[test]
+  fn completed_messages_survive_resumption() {
+    let settings = Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    };
+
+    let mut state = State::new(&settings).unwrap();
+
+    state.handle_event(Event::Action(Action::Submit));
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Delta("bar".into()),
+      run_id: 0,
+    });
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::ReasoningDelta("baz".into()),
+      run_id: 0,
+    });
+
+    let messages = vec![
+      Message::Agent(vec![
+        AgentMessageContent::Reasoning("foo".into()),
+        AgentMessageContent::Text("bar".into()),
+        AgentMessageContent::ToolCall(ToolInvocation {
+          id: "foo".into(),
+          kind: ToolInvocationKind::Command(CommandTool {
+            command: "bar".into(),
+            cwd: None,
+          }),
+        }),
+        AgentMessageContent::Text("baz".into()),
+        AgentMessageContent::ToolCall(ToolInvocation {
+          id: "bar".into(),
+          kind: ToolInvocationKind::Command(CommandTool {
+            command: "qux".into(),
+            cwd: None,
+          }),
+        }),
+      ]),
+      Message::User(vec![
+        UserMessageContent::ToolResult {
+          id: "bar".into(),
+          result: ToolResult {
+            content: Some("foo".into()),
+            ..Default::default()
+          },
+        },
+        UserMessageContent::ToolResult {
+          id: "foo".into(),
+          result: ToolResult {
+            content: Some("bar".into()),
+            ..Default::default()
+          },
+        },
+      ]),
+      Message::Agent(vec![AgentMessageContent::Text("qux".into())]),
+    ];
+
+    for message in &messages {
+      state.handle_event(Event::Agent {
+        event: AgentEvent::Message(message.clone()),
+        run_id: 0,
+      });
+    }
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
+
+    let session = state
+      .database
+      .load_session(state.session.id.unwrap())
+      .unwrap();
+
+    assert_eq!(session.transcript.entries, state.session.transcript.entries);
+    assert_eq!(session.title.as_deref(), Some("foo"));
+
+    let mut state =
+      State::with_session(&settings, state.database, session).unwrap();
+
+    let messages =
+      once(Message::User(vec![UserMessageContent::Text("foo".into())]))
+        .chain(messages)
+        .chain(once(Message::User(vec![UserMessageContent::Text(
+          "foo".into(),
+        )])))
+        .collect();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      [Effect::RunAgent {
+        messages,
+        run_id: 0
+      }]
+    );
+  }
+
+  #[test]
   fn error_is_not_included_in_next_request() {
     let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
@@ -1215,7 +1327,7 @@ mod tests {
     });
 
     assert_eq!(
-      state.transcript.messages(),
+      state.session.transcript.messages(),
       [Message::User(vec![UserMessageContent::Text("foo".into())])]
     );
 
@@ -1278,7 +1390,7 @@ mod tests {
       ]
     );
 
-    assert!(state.transcript.is_agent_active());
+    assert!(state.session.transcript.is_agent_active());
 
     assert_eq!(state.composer.input_text(), "");
     assert_eq!(state.queued_inputs(), &VecDeque::from(["baz".into()]));
@@ -1296,7 +1408,7 @@ mod tests {
       run_id: 0,
     });
 
-    assert!(state.transcript.is_agent_active());
+    assert!(state.session.transcript.is_agent_active());
   }
 
   #[test]
@@ -1327,7 +1439,7 @@ mod tests {
     );
 
     assert!(state.queued_inputs().is_empty());
-    assert!(state.transcript.is_agent_active());
+    assert!(state.session.transcript.is_agent_active());
   }
 
   #[test]
@@ -1354,7 +1466,7 @@ mod tests {
       vec![Effect::InterruptAgent]
     );
 
-    assert!(!state.transcript.is_agent_active());
+    assert!(!state.session.transcript.is_agent_active());
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Interrupt)),
@@ -1485,10 +1597,16 @@ mod tests {
 
     let mut session = Session::new(&settings).unwrap();
 
-    session.entries = vec![
-      TranscriptEntry::User("foo".into()),
-      TranscriptEntry::Agent("bar".into()),
-      TranscriptEntry::User("baz\nqux".into()),
+    session.transcript.entries = vec![
+      TranscriptEntry::Message(Message::User(vec![UserMessageContent::Text(
+        "foo".into(),
+      )])),
+      TranscriptEntry::Message(Message::Agent(vec![
+        AgentMessageContent::Text("bar".into()),
+      ])),
+      TranscriptEntry::Message(Message::User(vec![UserMessageContent::Text(
+        "baz\nqux".into(),
+      )])),
     ];
 
     let mut state =
@@ -1644,7 +1762,7 @@ mod tests {
     );
 
     assert_eq!(
-      state.transcript.messages(),
+      state.session.transcript.messages(),
       [
         Message::User(vec![UserMessageContent::Text("first".into())]),
         Message::User(vec![UserMessageContent::Text("second".into())]),
@@ -1678,7 +1796,7 @@ mod tests {
     );
 
     assert!(!state.should_quit);
-    assert!(!state.transcript.is_agent_active());
+    assert!(!state.session.transcript.is_agent_active());
 
     assert_eq!(state.handle_event(Event::Action(Action::Quit)), Vec::new());
 
@@ -1717,7 +1835,7 @@ mod tests {
     );
 
     assert!(!state.should_quit);
-    assert!(!state.transcript.is_agent_active());
+    assert!(!state.session.transcript.is_agent_active());
 
     assert_matches!(state.input_mode, InputMode::Compose);
     assert!(response_receiver.await.is_err());
@@ -1760,14 +1878,18 @@ mod tests {
     for event in [
       AgentEvent::Delta("stale".into()),
       AgentEvent::ReasoningDelta("stale".into()),
-      AgentEvent::ToolCall(invocation),
-      AgentEvent::ToolResult {
-        id: "stale".into(),
-        result: ToolResult {
-          content: Some("stale".into()),
-          ..Default::default()
+      AgentEvent::Message(Message::Agent(vec![AgentMessageContent::ToolCall(
+        invocation,
+      )])),
+      AgentEvent::Message(Message::User(vec![
+        UserMessageContent::ToolResult {
+          id: "stale".into(),
+          result: ToolResult {
+            content: Some("stale".into()),
+            ..Default::default()
+          },
         },
-      },
+      ])),
       AgentEvent::ToolApprovalRequest(request),
       AgentEvent::Error("stale".into()),
       AgentEvent::Done,
@@ -1782,7 +1904,7 @@ mod tests {
 
     assert_matches!(state.input_mode, InputMode::Compose);
 
-    assert!(state.transcript.is_agent_active());
+    assert!(state.session.transcript.is_agent_active());
 
     state.handle_event(Event::Agent {
       event: AgentEvent::Delta("current".into()),
@@ -1795,7 +1917,7 @@ mod tests {
     });
 
     assert_eq!(
-      state.transcript.messages(),
+      state.session.transcript.messages(),
       [
         Message::User(vec![UserMessageContent::Text("old".into())]),
         Message::User(vec![UserMessageContent::Text("new".into())]),
@@ -1839,7 +1961,7 @@ mod tests {
     assert_eq!(state.queued_inputs().len(), 1);
 
     assert_eq!(
-      state.transcript.messages(),
+      state.session.transcript.messages(),
       vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
     );
 
@@ -1904,13 +2026,13 @@ mod tests {
     state.handle_event(Event::Action(Action::Submit));
 
     assert_matches!(
-      &state.transcript.entries[..],
+      &state.session.transcript.entries[..],
       [TranscriptEntry::Notice(notice)]
         if notice
           == "Unrecognized command '/foobar'. Type \"/\" for a list of supported commands."
     );
 
-    assert_eq!(state.transcript.messages(), Vec::new());
+    assert_eq!(state.session.transcript.messages(), Vec::new());
 
     assert_eq!(state.composer.input_text(), "");
   }

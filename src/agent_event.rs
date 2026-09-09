@@ -5,8 +5,7 @@ pub(crate) enum AgentEvent {
   Delta(String),
   Done,
   Error(String),
+  Message(Message),
   ReasoningDelta(String),
   ToolApprovalRequest(ApprovalRequest),
-  ToolCall(ToolInvocation),
-  ToolResult { id: String, result: ToolResult },
 }
