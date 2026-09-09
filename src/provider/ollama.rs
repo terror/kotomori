@@ -1,7 +1,4 @@
-use {
-  super::{rig::Rig, *},
-  ::rig::{client::CompletionClient, providers::ollama},
-};
+use {super::*, ::rig::providers::ollama};
 
 pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
   let api_key = env::var("OLLAMA_API_KEY").unwrap_or_default();
@@ -17,11 +14,5 @@ pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
     .base_url(base_url)
     .build()?;
 
-  let completion_model =
-    CompletionClient::completion_model(&client, &model.name);
-
-  Ok(Arc::new(Rig {
-    model: completion_model,
-    provider: "ollama",
-  }))
+  Ok(Rig::build(&client, model))
 }

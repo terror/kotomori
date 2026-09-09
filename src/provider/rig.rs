@@ -1,12 +1,30 @@
 use {
   super::*,
-  ::rig::{completion::CompletionModel, streaming::StreamedAssistantContent},
+  ::rig::{
+    client::CompletionClient, completion::CompletionModel,
+    streaming::StreamedAssistantContent,
+  },
 };
 
 #[derive(Clone)]
 pub(super) struct Rig<M> {
-  pub(super) model: M,
-  pub(super) provider: &'static str,
+  model: M,
+  provider: String,
+}
+
+impl<M> Rig<M>
+where
+  M: CompletionModel + 'static,
+{
+  pub(super) fn build(
+    client: &impl CompletionClient<CompletionModel = M>,
+    model: &Model,
+  ) -> Arc<dyn Provider> {
+    Arc::new(Self {
+      model: client.completion_model(&model.name),
+      provider: model.provider.clone(),
+    })
+  }
 }
 
 impl<M> Debug for Rig<M> {

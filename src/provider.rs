@@ -1,4 +1,4 @@
-use super::*;
+use {super::*, ::rig::client::ProviderClient, rig::Rig};
 
 mod anthropic;
 mod azure;
