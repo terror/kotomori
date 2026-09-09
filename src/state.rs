@@ -495,8 +495,10 @@ mod tests {
       }),
     });
 
+    let invocation = request.invocation.clone();
+
     state.run = Some(Run {
-      approval: Some(request.clone()),
+      approval: Some(request),
       ..Run::new(0)
     });
 
@@ -505,7 +507,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.approval(), Some(&request));
+    assert_eq!(state.approval().unwrap().invocation, invocation);
   }
 
   #[tokio::test]
@@ -627,8 +629,10 @@ mod tests {
       }),
     });
 
+    let invocation = request.invocation.clone();
+
     state.run = Some(Run {
-      approval: Some(request.clone()),
+      approval: Some(request),
       ..Run::new(0)
     });
 
@@ -640,7 +644,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.approval(), Some(&request));
+    assert_eq!(state.approval().unwrap().invocation, invocation);
   }
 
   #[test]
@@ -660,8 +664,10 @@ mod tests {
       }),
     });
 
+    let invocation = request.invocation.clone();
+
     state.run = Some(Run {
-      approval: Some(request.clone()),
+      approval: Some(request),
       ..Run::new(0)
     });
 
@@ -670,7 +676,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.approval(), Some(&request));
+    assert_eq!(state.approval().unwrap().invocation, invocation);
   }
 
   #[test]
@@ -690,8 +696,10 @@ mod tests {
       }),
     });
 
+    let invocation = request.invocation.clone();
+
     state.run = Some(Run {
-      approval: Some(request.clone()),
+      approval: Some(request),
       ..Run::new(0)
     });
 
@@ -700,7 +708,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.approval(), Some(&request));
+    assert_eq!(state.approval().unwrap().invocation, invocation);
   }
 
   #[test]
@@ -720,8 +728,10 @@ mod tests {
       }),
     });
 
+    let invocation = request.invocation.clone();
+
     state.run = Some(Run {
-      approval: Some(request.clone()),
+      approval: Some(request),
       ..Run::new(0)
     });
 
@@ -730,7 +740,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.approval(), Some(&request));
+    assert_eq!(state.approval().unwrap().invocation, invocation);
   }
 
   #[tokio::test]

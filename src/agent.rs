@@ -371,7 +371,7 @@ mod tests {
       event => panic!("expected approval request, got {event:?}"),
     };
 
-    request.deny();
+    request.respond(ToolApproval::Denied);
 
     task.await.unwrap();
 
