@@ -33,7 +33,7 @@ impl Database {
         model: row.get(3)?,
         title: row.get(4)?,
         transcript: Transcript::default(),
-        updated_at: row.get_u64(1)?,
+        updated_at: row.get(1)?,
       })
     })?;
 
@@ -50,7 +50,7 @@ impl Database {
         [id],
         |row| {
           Ok(Session {
-            created_at: row.get_u64(1)?,
+            created_at: row.get(1)?,
             directory: row.get::<_, String>(3)?.into(),
             id: Some(row.get(0)?),
             model: row.get(4)?,
@@ -64,7 +64,7 @@ impl Database {
                   Box::new(error),
                 )
               })?,
-            updated_at: row.get_u64(2)?,
+            updated_at: row.get(2)?,
           })
         },
       )
@@ -104,12 +104,6 @@ impl Database {
     let entries = serde_json::to_string(&session.transcript.entries)
       .context("failed to serialize session transcript")?;
 
-    let created_at = i64::try_from(session.created_at)
-      .context("session creation time exceeds SQLite integer range")?;
-
-    let updated_at = i64::try_from(session.updated_at)
-      .context("session update time exceeds SQLite integer range")?;
-
     if let Some(id) = session.id {
       let updated = self.connection.execute(
         "UPDATE sessions SET
@@ -120,7 +114,7 @@ impl Database {
            entries = ?5
          WHERE id = ?6",
         params![
-          updated_at,
+          session.updated_at,
           directory,
           session.model,
           session.title,
@@ -139,8 +133,8 @@ impl Database {
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          RETURNING id",
         params![
-          created_at,
-          updated_at,
+          session.created_at,
+          session.updated_at,
           directory,
           session.model,
           session.title,
@@ -249,12 +243,44 @@ mod tests {
   }
 
   #[test]
-  fn save_session_assigns_and_reuses_integer_id() {
+  fn save_session_rejects_out_of_range_timestamps() {
+    let database = Database::new().unwrap();
+
+    let timestamp = u64::try_from(i64::MAX).unwrap() + 1;
+
+    for (id, created_at, updated_at) in [
+      (None, timestamp, 0),
+      (None, 0, timestamp),
+      (Some(1), 0, timestamp),
+    ] {
+      let mut session = Session {
+        created_at,
+        directory: env::current_dir().unwrap(),
+        id,
+        model: "foo".into(),
+        title: None,
+        transcript: Transcript::default(),
+        updated_at,
+      };
+
+      assert_eq!(
+        database.save_session(&mut session).unwrap_err().to_string(),
+        "out of range integral type conversion attempted",
+      );
+
+      assert_eq!(session.id, id);
+    }
+  }
+
+  #[test]
+  fn save_session_round_trips() {
     let database =
       Database::try_from(Connection::open_in_memory().unwrap()).unwrap();
 
+    let timestamp = u64::try_from(i64::MAX).unwrap();
+
     let mut session = Session {
-      created_at: 0,
+      created_at: timestamp,
       directory: env::current_dir().unwrap(),
       id: None,
       model: "mock:local".into(),
@@ -267,17 +293,66 @@ mod tests {
 
     assert_eq!(session.id, Some(1));
 
+    session.updated_at = timestamp;
+
     database.save_session(&mut session).unwrap();
+
+    let loaded = database.load_session(1).unwrap();
+
+    assert_eq!(
+      (loaded.created_at, loaded.updated_at),
+      (timestamp, timestamp),
+    );
 
     assert_eq!(
       database
-        .connection
-        .query_row("SELECT COUNT(*) FROM sessions", [], |row| {
-          row.get::<_, u32>(0)
-        })
-        .unwrap(),
-      1,
+        .get_sessions()
+        .unwrap()
+        .iter()
+        .map(|session| session.updated_at)
+        .collect::<Vec<_>>(),
+      [timestamp],
     );
+  }
+
+  #[test]
+  fn session_reads_reject_negative_timestamps() {
+    for (created_at, updated_at, index) in [(-1, 0, 1), (0, -1, 2)] {
+      let database = Database::new().unwrap();
+
+      database
+        .connection
+        .pragma_update(None, "ignore_check_constraints", true)
+        .unwrap();
+
+      database
+        .connection
+        .execute(
+          "INSERT INTO sessions (
+             created_at, updated_at, directory, model, entries
+           ) VALUES (?1, ?2, ?3, 'foo', '[]')",
+          params![
+            created_at,
+            updated_at,
+            env::current_dir().unwrap().to_str().unwrap(),
+          ],
+        )
+        .unwrap();
+
+      assert_eq!(
+        format!("{:#}", database.load_session(1).unwrap_err()),
+        format!(
+          "failed to load session `1`: Integer -1 out of range at index {index}"
+        ),
+      );
+
+      if updated_at < 0 {
+        assert_eq!(
+          database.get_sessions().unwrap_err().to_string(),
+          "Integer -1 out of range at index 1",
+        );
+      }
+    }
   }
 
   #[test]

@@ -64,7 +64,6 @@ use {
     },
     message::{Reasoning, ToolResultContent, UserContent},
   },
-  row_ext::RowExt,
   run::Run,
   rusqlite::{Connection, TransactionBehavior, params},
   schemars::JsonSchema,
@@ -178,7 +177,6 @@ mod renderer;
 mod request;
 mod resume_picker;
 mod resume_picker_action;
-mod row_ext;
 mod run;
 mod screen;
 mod session;
