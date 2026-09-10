@@ -37,19 +37,15 @@ mod tests {
 
   #[test]
   fn render_preserves_blank_lines_and_wide_characters_at_narrow_widths() {
-    for width in [0, 1, 2, 3] {
+    for width in 0..=3 {
       assert_eq!(
         GutteredLinesComponent::raw(["", "界"]).render(width),
-        [
+        ["", "界"].map(|text| {
           LineComponent::from([
             Span::styled("│ ", Style::Accent),
-            Span::raw(""),
-          ]),
-          LineComponent::from([
-            Span::styled("│ ", Style::Accent),
-            Span::raw("界"),
-          ]),
-        ],
+            Span::raw(text),
+          ])
+        }),
       );
     }
   }

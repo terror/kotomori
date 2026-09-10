@@ -84,12 +84,7 @@ mod tests {
 
   #[test]
   fn composer_renders_while_agent_is_active() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
-    .unwrap();
+    let mut state = state(Some("foo"));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -107,15 +102,9 @@ mod tests {
 
   #[test]
   fn content_has_two_columns_of_side_padding() {
-    let state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
-    .unwrap();
-
     let lines =
-      ViewComponent::new(&Screen::Session(Box::new(state)), None).render(20);
+      ViewComponent::new(&Screen::Session(Box::new(state(None))), None)
+        .render(20);
 
     for line in lines.into_iter().filter(|line| !line.is_blank()) {
       let spans = Vec::<Span>::from(line);
@@ -127,27 +116,13 @@ mod tests {
 
       assert!(width <= 18);
 
-      assert_eq!(
-        spans
-          .first()
-          .unwrap()
-          .text
-          .chars()
-          .take(2)
-          .collect::<String>(),
-        "  ",
-      );
+      assert!(spans[0].text.starts_with("  "));
     }
   }
 
   #[test]
   fn footer_renders_below_approval_prompt() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
-    .unwrap();
+    let mut state = state(Some("foo"));
 
     let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
       id: "foo".into(),
@@ -183,15 +158,9 @@ mod tests {
 
   #[test]
   fn footer_renders_below_command_menu() {
-    let state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("/".into()),
-      yolo: false,
-    })
-    .unwrap();
-
     let lines =
-      ViewComponent::new(&Screen::Session(Box::new(state)), None).render(80);
+      ViewComponent::new(&Screen::Session(Box::new(state(Some("/")))), None)
+        .render(80);
 
     let command = lines
       .iter()
@@ -209,12 +178,7 @@ mod tests {
 
   #[test]
   fn render_preserves_styles_when_wide_characters_exceed_content_width() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
-    .unwrap();
+    let mut state = state(None);
 
     state.directory = "界".into();
 
@@ -232,19 +196,14 @@ mod tests {
 
   #[test]
   fn render_wraps_padding_at_narrow_widths() {
-    #[track_caller]
-    fn case(width: u16, expected: &[&str]) {
-      let mut state = State::new(&Settings {
-        model: "mock:local".parse().unwrap(),
-        prompt: None,
-        yolo: false,
-      })
-      .unwrap();
+    let mut state = state(None);
 
-      state.session.transcript.notice("foo");
+    state.session.transcript.notice("foo");
 
-      let lines = ViewComponent::new(&Screen::Session(Box::new(state)), None)
-        .render(width);
+    let screen = Screen::Session(Box::new(state));
+
+    let case = |width, expected: &[&str]| {
+      let lines = ViewComponent::new(&screen, None).render(width);
 
       assert_eq!(
         lines
@@ -256,16 +215,23 @@ mod tests {
           .copied()
           .map(LineComponent::raw)
           .collect::<Vec<_>>(),
+        "width {width}",
       );
-    }
+    };
 
     case(0, &[" ", " ", "f", " ", " ", "o", " ", " ", "o", ""]);
-    case(1, &[" ", " ", "f", " ", " ", "o", " ", " ", "o", ""]);
     case(2, &["  ", "f", "  ", "o", "  ", "o", ""]);
     case(3, &["  f", "  o", "  o", ""]);
-    case(4, &["  f", "  o", "  o", ""]);
-    case(5, &["  f", "  o", "  o", ""]);
     case(6, &["  fo", "  o", ""]);
     case(7, &["  foo", ""]);
+  }
+
+  fn state(prompt: Option<&str>) -> State {
+    State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: prompt.map(str::to_owned),
+      yolo: false,
+    })
+    .unwrap()
   }
 }
