@@ -7,22 +7,6 @@ pub(crate) struct ViewComponent<'a> {
 }
 
 impl<'a> ViewComponent<'a> {
-  fn layout(lines: Vec<LineComponent>, width: u16) -> Vec<LineComponent> {
-    let content_width = width.saturating_sub(4).max(1);
-
-    lines
-      .into_iter()
-      .flat_map(|line| {
-        if line.is_blank() {
-          vec![line]
-        } else {
-          line.render_prefixed(content_width, &Span::raw("  "))
-        }
-      })
-      .flat_map(|line| line.render(width))
-      .collect()
-  }
-
   pub(crate) fn new(
     screen: &'a Screen,
     first_draw_duration: Option<Duration>,
@@ -80,7 +64,17 @@ impl Component for ViewComponent<'_> {
         .collect(),
     };
 
-    Self::layout(lines, width)
+    lines
+      .into_iter()
+      .flat_map(|line| {
+        if line.is_blank() {
+          vec![line]
+        } else {
+          line.render_prefixed(content_width, &Span::raw("  "))
+        }
+      })
+      .flat_map(|line| line.render(width))
+      .collect()
   }
 }
 
@@ -214,28 +208,49 @@ mod tests {
   }
 
   #[test]
-  fn layout_preserves_styles_when_wide_characters_exceed_content_width() {
+  fn render_preserves_styles_when_wide_characters_exceed_content_width() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    })
+    .unwrap();
+
+    state.directory = "界".into();
+
+    let lines =
+      ViewComponent::new(&Screen::Session(Box::new(state)), None).render(3);
+
     assert_eq!(
-      ViewComponent::layout(
-        vec![LineComponent::from([Span::styled("界", Style::Accent)])],
-        3,
-      ),
+      lines[lines.len() - 2..],
       [
         LineComponent::raw("  "),
-        LineComponent::from([Span::styled("界", Style::Accent)]),
+        LineComponent::from([Span::styled("界", Style::Muted)]),
       ],
     );
   }
 
   #[test]
-  fn layout_wraps_padding_at_narrow_widths() {
+  fn render_wraps_padding_at_narrow_widths() {
     #[track_caller]
     fn case(width: u16, expected: &[&str]) {
+      let mut state = State::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      })
+      .unwrap();
+
+      state.session.transcript.notice("foo");
+
+      let lines = ViewComponent::new(&Screen::Session(Box::new(state)), None)
+        .render(width);
+
       assert_eq!(
-        ViewComponent::layout(
-          vec![LineComponent::blank(), LineComponent::raw("foo")],
-          width,
-        ),
+        lines
+          .split_inclusive(LineComponent::is_blank)
+          .nth(3)
+          .unwrap(),
         expected
           .iter()
           .copied()
@@ -244,13 +259,13 @@ mod tests {
       );
     }
 
-    case(0, &["", " ", " ", "f", " ", " ", "o", " ", " ", "o"]);
-    case(1, &["", " ", " ", "f", " ", " ", "o", " ", " ", "o"]);
-    case(2, &["", "  ", "f", "  ", "o", "  ", "o"]);
-    case(3, &["", "  f", "  o", "  o"]);
-    case(4, &["", "  f", "  o", "  o"]);
-    case(5, &["", "  f", "  o", "  o"]);
-    case(6, &["", "  fo", "  o"]);
-    case(7, &["", "  foo"]);
+    case(0, &[" ", " ", "f", " ", " ", "o", " ", " ", "o", ""]);
+    case(1, &[" ", " ", "f", " ", " ", "o", " ", " ", "o", ""]);
+    case(2, &["  ", "f", "  ", "o", "  ", "o", ""]);
+    case(3, &["  f", "  o", "  o", ""]);
+    case(4, &["  f", "  o", "  o", ""]);
+    case(5, &["  f", "  o", "  o", ""]);
+    case(6, &["  fo", "  o", ""]);
+    case(7, &["  foo", ""]);
   }
 }
