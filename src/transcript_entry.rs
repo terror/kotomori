@@ -1,7 +1,8 @@
 use super::*;
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) enum TranscriptEntry {
+  Draft(MessageBuffer),
   Error(String),
   Interrupted,
   Message(Message),
@@ -12,7 +13,9 @@ impl TranscriptEntry {
   pub(crate) fn message(&self) -> Option<&Message> {
     match self {
       Self::Message(message) => Some(message),
-      Self::Error(_) | Self::Interrupted | Self::Notice(_) => None,
+      Self::Draft(_) | Self::Error(_) | Self::Interrupted | Self::Notice(_) => {
+        None
+      }
     }
   }
 }

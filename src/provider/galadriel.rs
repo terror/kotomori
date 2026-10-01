@@ -1,15 +1,20 @@
-use {super::*, ::rig::providers::galadriel};
+use {
+  super::*,
+  ::rig::providers::openai::{OpenAIConfig, wire::Dialect},
+};
 
-pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
+pub(super) fn build(model: &Model) -> Arc<dyn Provider> {
   let api_key = env::var("GALADRIEL_API_KEY").unwrap_or_default();
 
-  let mut builder = galadriel::Client::builder().api_key(api_key);
+  let client = OpenAIConfig::with_key(
+    &Dialect::gateway(
+      "galadriel",
+      "https://api.galadriel.com/v1/verified",
+      "GALADRIEL_API_KEY",
+    ),
+    api_key,
+  )
+  .client();
 
-  if let Ok(fine_tune_api_key) = env::var("GALADRIEL_FINE_TUNE_API_KEY") {
-    builder = builder.fine_tune_api_key(fine_tune_api_key);
-  }
-
-  let client = builder.build()?;
-
-  Ok(Rig::build(&client, model))
+  Rig::build(client.chat(&model.name))
 }

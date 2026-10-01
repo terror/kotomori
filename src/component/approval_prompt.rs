@@ -39,13 +39,14 @@ mod tests {
 
   #[test]
   fn escapes_control_characters_in_command() {
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "echo safe\r\x1b[2J\n? y approve".into(),
-        cwd: None,
-      }),
-    });
+    let (request, _response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "echo safe\r\x1b[2J\n? y approve".into(),
+          cwd: None,
+        }),
+      ));
 
     let line = ApprovalPromptComponent::new(&request).render(200).remove(0);
 

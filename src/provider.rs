@@ -1,4 +1,4 @@
-use {super::*, ::rig::client::ProviderClient, rig::Rig};
+use {super::*, rig::Rig};
 
 mod anthropic;
 mod azure;
@@ -36,30 +36,30 @@ impl TryFrom<Model> for Arc<dyn Provider> {
 
   fn try_from(model: Model) -> Result<Self> {
     match model.provider.as_str() {
-      "anthropic" => anthropic::build(&model),
+      "anthropic" => Ok(anthropic::build(&model)),
       "azure" => azure::build(&model),
       "chatgpt" => chatgpt::build(&model),
-      "cohere" => cohere::build(&model),
-      "copilot" => copilot::build(&model),
-      "deepseek" => deepseek::build(&model),
-      "galadriel" => galadriel::build(&model),
-      "gemini" => gemini::build(&model),
-      "groq" => groq::build(&model),
-      "huggingface" => huggingface::build(&model),
-      "llamacpp" => llamacpp::build(&model),
-      "llamafile" => llamafile::build(&model),
-      "minimax" => minimax::build(&model),
-      "mistral" => mistral::build(&model),
+      "cohere" => Ok(cohere::build(&model)),
+      "copilot" => Ok(copilot::build(&model)),
+      "deepseek" => Ok(deepseek::build(&model)),
+      "galadriel" => Ok(galadriel::build(&model)),
+      "gemini" => Ok(gemini::build(&model)),
+      "groq" => Ok(groq::build(&model)),
+      "huggingface" => Ok(huggingface::build(&model)),
+      "llamacpp" => Ok(llamacpp::build(&model)),
+      "llamafile" => Ok(llamafile::build(&model)),
+      "minimax" => Ok(minimax::build(&model)),
+      "mistral" => Ok(mistral::build(&model)),
       "mock" => Ok(Arc::new(mock::Mock)),
-      "moonshot" => moonshot::build(&model),
-      "ollama" => ollama::build(&model),
-      "openai" => openai::build(&model),
-      "openrouter" => openrouter::build(&model),
-      "perplexity" => perplexity::build(&model),
-      "together" => together::build(&model),
-      "xai" => xai::build(&model),
-      "xiaomimimo" => xiaomimimo::build(&model),
-      "zai" => zai::build(&model),
+      "moonshot" => Ok(moonshot::build(&model)),
+      "ollama" => Ok(ollama::build(&model)),
+      "openai" => Ok(openai::build(&model)),
+      "openrouter" => Ok(openrouter::build(&model)),
+      "perplexity" => Ok(perplexity::build(&model)),
+      "together" => Ok(together::build(&model)),
+      "xai" => Ok(xai::build(&model)),
+      "xiaomimimo" => Ok(xiaomimimo::build(&model)),
+      "zai" => Ok(zai::build(&model)),
       provider => bail!("unknown provider `{provider}`"),
     }
   }

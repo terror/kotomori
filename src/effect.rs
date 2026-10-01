@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Effect {
   InterruptAgent,
   RunAgent { messages: Vec<Message>, run_id: u64 },

@@ -1,6 +1,6 @@
 use {super::*, ::rig::providers::ollama};
 
-pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
+pub(super) fn build(model: &Model) -> Arc<dyn Provider> {
   let api_key = env::var("OLLAMA_API_KEY").unwrap_or_default();
 
   let base_url = env::var("OLLAMA_API_BASE_URL")
@@ -9,10 +9,10 @@ pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
     .trim_end_matches('/')
     .to_string();
 
-  let client = ollama::Client::builder()
-    .api_key(api_key)
-    .base_url(base_url)
-    .build()?;
+  let client = ollama::OllamaConfig::new()
+    .with_api_key(api_key)
+    .with_base_url(base_url)
+    .client();
 
-  Ok(Rig::build(&client, model))
+  Rig::build(client.completion(&model.name))
 }

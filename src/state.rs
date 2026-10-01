@@ -23,8 +23,8 @@ impl State {
   }
 
   fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
-    if let Some(message) = self.run.take().and_then(Run::finish) {
-      self.session.transcript.push_message(message);
+    if let Some(entry) = self.run.take().and_then(Run::finish) {
+      self.session.transcript.entries.push(entry);
     }
 
     self.session.transcript.entries.extend(entry);
@@ -131,11 +131,8 @@ impl State {
             self.finish_run(None);
             return self.run_next_queued();
           }
-          AgentEvent::Delta(delta) => {
-            run.push_delta(&delta);
-          }
-          AgentEvent::ReasoningDelta(delta) => {
-            run.push_reasoning_delta(&delta);
+          AgentEvent::Update(update) => {
+            run.update(update);
           }
           AgentEvent::Message(message) => {
             run.reset_message();
@@ -342,27 +339,33 @@ mod tests {
     );
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::ReasoningDelta("bar".into()),
+      event: AgentEvent::Update(MessageUpdate::ReasoningDelta {
+        delta: "bar".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
     state.handle_event(Event::Agent {
-      event: AgentEvent::Delta("baz".into()),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "baz".into(),
+        index: 1,
+      }),
       run_id: 0,
     });
 
-    let invocation = ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
+    let invocation = ToolInvocation::new(
+      "foo",
+      ToolInvocationKind::Command(CommandTool {
         command: "bar".into(),
         cwd: None,
       }),
-    };
+    );
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Message(Message::Agent(vec![
-        AgentMessageContent::Reasoning("bar".into()),
-        AgentMessageContent::Text("baz".into()),
-        AgentMessageContent::ToolCall(invocation.clone()),
+      event: AgentEvent::Message(Message::agent(vec![
+        AssistantContent::reasoning("foo", "bar"),
+        AssistantContent::text("baz"),
+        AssistantContent::ToolCall(invocation.protocol.clone()),
       ])),
       run_id: 0,
     });
@@ -377,7 +380,8 @@ mod tests {
     state.handle_event(Event::Agent {
       event: AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          id: "foo".into(),
+          call: CallId::from_wire("foo"),
+          name: ToolName::new("command").unwrap(),
           result: result.clone(),
         },
       ])),
@@ -395,13 +399,14 @@ mod tests {
       state.session.transcript.messages(),
       vec![
         Message::User(vec![UserMessageContent::Text("foo".into())]),
-        Message::Agent(vec![
-          AgentMessageContent::Reasoning("bar".into()),
-          AgentMessageContent::Text("baz".into()),
-          AgentMessageContent::ToolCall(invocation),
+        Message::agent(vec![
+          AssistantContent::reasoning("foo", "bar"),
+          AssistantContent::text("baz"),
+          AssistantContent::ToolCall(invocation.protocol),
         ]),
         Message::User(vec![UserMessageContent::ToolResult {
-          id: "foo".into(),
+          call: CallId::from_wire("foo"),
+          name: ToolName::new("command").unwrap(),
           result,
         }]),
       ],
@@ -417,13 +422,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     state.run = Some(Run {
       approval: Some(request),
@@ -452,13 +458,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     state.run = Some(Run {
       approval: Some(request),
@@ -487,13 +494,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, _response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     let invocation = request.invocation.clone();
 
@@ -519,13 +527,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     state.run = Some(Run {
       approval: Some(request),
@@ -551,13 +560,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     state.run = Some(Run {
       approval: Some(request),
@@ -586,13 +596,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     state.run = Some(Run {
       approval: Some(request),
@@ -621,13 +632,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, _response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     let invocation = request.invocation.clone();
 
@@ -656,13 +668,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, _response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     let invocation = request.invocation.clone();
 
@@ -688,13 +701,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, _response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     let invocation = request.invocation.clone();
 
@@ -720,13 +734,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, _response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     let invocation = request.invocation.clone();
 
@@ -752,13 +767,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     state.run = Some(Run {
       approval: Some(request),
@@ -768,7 +784,8 @@ mod tests {
     state.handle_event(Event::Agent {
       event: AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          id: "foo".into(),
+          call: CallId::from_wire("foo"),
+          name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("bar".into()),
             ..Default::default()
@@ -791,13 +808,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     state.run = Some(Run {
       approval: Some(request),
@@ -900,7 +918,10 @@ mod tests {
     );
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Delta("bar".into()),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
     state.handle_event(Event::Agent {
@@ -943,7 +964,10 @@ mod tests {
     );
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Delta("bar".into()),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
     state.handle_event(Event::Agent {
@@ -952,6 +976,54 @@ mod tests {
     });
 
     for c in "/clear".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Vec::new()
+    );
+
+    assert!(state.session.transcript.messages().is_empty());
+
+    assert_eq!(state.composer.input_text(), "");
+  }
+
+  #[test]
+  fn command_clear_from_prefix() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])],
+        run_id: 0,
+      }]
+    );
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      }),
+      run_id: 0,
+    });
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
+
+    for c in "/c".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
         key: Key::Char(c),
         ..Default::default()
@@ -995,17 +1067,17 @@ mod tests {
 
     assert!(state.session.transcript.messages().is_empty());
 
-    let invocation = ToolInvocation {
-      id: "late".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
+    let invocation = ToolInvocation::new(
+      "late",
+      ToolInvocationKind::Command(CommandTool {
         command: "echo late".into(),
         cwd: None,
       }),
-    };
+    );
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Message(Message::Agent(vec![
-        AgentMessageContent::ToolCall(invocation),
+      event: AgentEvent::Message(Message::agent(vec![
+        AssistantContent::ToolCall(invocation.protocol),
       ])),
       run_id: 0,
     });
@@ -1013,7 +1085,8 @@ mod tests {
     state.handle_event(Event::Agent {
       event: AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          id: "late".into(),
+          call: CallId::from_wire("late"),
+          name: ToolName::new("command").unwrap(),
           result: ToolResult::default(),
         },
       ])),
@@ -1026,51 +1099,6 @@ mod tests {
     });
 
     assert!(state.session.transcript.messages().is_empty());
-  }
-
-  #[test]
-  fn command_clear_from_prefix() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
-    .unwrap();
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
-    );
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Delta("bar".into()),
-      run_id: 0,
-    });
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
-      run_id: 0,
-    });
-
-    for c in "/c".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      Vec::new()
-    );
-
-    assert!(state.session.transcript.messages().is_empty());
-
-    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -1123,7 +1151,10 @@ mod tests {
     state.handle_event(Event::Action(Action::Submit));
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Delta("partial response".into()),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "partial response".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
 
@@ -1155,9 +1186,9 @@ mod tests {
         TranscriptEntry::Message(Message::User(vec![
           UserMessageContent::Text("foo".into())
         ])),
-        TranscriptEntry::Message(Message::Agent(vec![
-          AgentMessageContent::Text("partial response".into())
-        ])),
+        TranscriptEntry::Message(Message::agent(vec![AssistantContent::text(
+          "partial response"
+        )])),
         TranscriptEntry::Interrupted,
       ],
     );
@@ -1205,52 +1236,66 @@ mod tests {
     state.handle_event(Event::Action(Action::Submit));
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Delta("bar".into()),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::ReasoningDelta("baz".into()),
+      event: AgentEvent::Update(MessageUpdate::ReasoningDelta {
+        delta: "baz".into(),
+        index: 1,
+      }),
       run_id: 0,
     });
 
     let messages = vec![
-      Message::Agent(vec![
-        AgentMessageContent::Reasoning("foo".into()),
-        AgentMessageContent::Text("bar".into()),
-        AgentMessageContent::ToolCall(ToolInvocation {
-          id: "foo".into(),
-          kind: ToolInvocationKind::Command(CommandTool {
-            command: "bar".into(),
-            cwd: None,
-          }),
-        }),
-        AgentMessageContent::Text("baz".into()),
-        AgentMessageContent::ToolCall(ToolInvocation {
-          id: "bar".into(),
-          kind: ToolInvocationKind::Command(CommandTool {
-            command: "qux".into(),
-            cwd: None,
-          }),
-        }),
+      Message::agent(vec![
+        AssistantContent::reasoning("foo", "foo"),
+        AssistantContent::text("bar"),
+        AssistantContent::ToolCall(
+          ToolInvocation::new(
+            "foo",
+            ToolInvocationKind::Command(CommandTool {
+              command: "bar".into(),
+              cwd: None,
+            }),
+          )
+          .protocol,
+        ),
+        AssistantContent::text("baz"),
+        AssistantContent::ToolCall(
+          ToolInvocation::new(
+            "bar",
+            ToolInvocationKind::Command(CommandTool {
+              command: "qux".into(),
+              cwd: None,
+            }),
+          )
+          .protocol,
+        ),
       ]),
       Message::User(vec![
         UserMessageContent::ToolResult {
-          id: "bar".into(),
+          call: CallId::from_wire("bar"),
+          name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("foo".into()),
             ..Default::default()
           },
         },
         UserMessageContent::ToolResult {
-          id: "foo".into(),
+          call: CallId::from_wire("foo"),
+          name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("bar".into()),
             ..Default::default()
           },
         },
       ]),
-      Message::Agent(vec![AgentMessageContent::Text("qux".into())]),
+      Message::agent(vec![AssistantContent::text("qux")]),
     ];
 
     for message in &messages {
@@ -1350,9 +1395,13 @@ mod tests {
     })
     .unwrap();
 
-    state.run = Some(Run {
-      activity: AgentActivity::Streaming("foo".into()),
-      ..Run::new(0)
+    state.run = Some({
+      let mut run = Run::new(0);
+      run.update(MessageUpdate::Text {
+        delta: "foo".into(),
+        index: 0,
+      });
+      run
     });
 
     state.session.id = Some(0);
@@ -1361,9 +1410,13 @@ mod tests {
 
     assert_eq!(
       state.run,
-      Some(Run {
-        activity: AgentActivity::Streaming("foo".into()),
-        ..Run::new(0)
+      Some({
+        let mut run = Run::new(0);
+        run.update(MessageUpdate::Text {
+          delta: "foo".into(),
+          index: 0,
+        });
+        run
       })
     );
     assert_eq!(
@@ -1383,9 +1436,13 @@ mod tests {
     })
     .unwrap();
 
-    state.run = Some(Run {
-      activity: AgentActivity::Streaming("foo".into()),
-      ..Run::new(0)
+    state.run = Some({
+      let mut run = Run::new(0);
+      run.update(MessageUpdate::Text {
+        delta: "foo".into(),
+        index: 0,
+      });
+      run
     });
 
     state.finish_run(None);
@@ -1398,9 +1455,7 @@ mod tests {
     assert_eq!(state.run, None);
     assert_eq!(
       state.session.transcript.messages(),
-      [Message::Agent(vec![AgentMessageContent::Text(
-        "foo".into()
-      )])]
+      [Message::agent(vec![AssistantContent::text("foo")])]
     );
     assert_eq!(session.transcript, state.session.transcript);
   }
@@ -1417,7 +1472,10 @@ mod tests {
     state.handle_event(Event::Action(Action::Submit));
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Delta("partial".into()),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "partial".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
 
@@ -1437,7 +1495,7 @@ mod tests {
         Effect::RunAgent {
           messages: vec![
             Message::User(vec![UserMessageContent::Text("foo".into())]),
-            Message::Agent(vec![AgentMessageContent::Text("partial".into())]),
+            Message::agent(vec![AssistantContent::text("partial")]),
             Message::User(vec![UserMessageContent::Text("bar".into())]),
           ],
           run_id: 1,
@@ -1526,6 +1584,81 @@ mod tests {
     assert_eq!(
       state.handle_event(Event::Action(Action::Interrupt)),
       Vec::new()
+    );
+  }
+
+  #[test]
+  fn interruption_preserves_streamed_protocol() {
+    let mut state = State::new(&Settings {
+      model: "mock:foo".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    })
+    .unwrap();
+
+    state.run = Some(Run::new(0));
+
+    let (event_sender, mut events) = mpsc::unbounded_channel();
+
+    let mut sink = ProviderSink {
+      event_sender,
+      ..Default::default()
+    };
+
+    let reasoning = Reasoning::new_with_signature("foo", Some("bar".into()))
+      .with_id("baz".into())
+      .sealed("foo");
+
+    let encrypted = Reasoning::encrypted("qux")
+      .with_id("quux".into())
+      .sealed("foo");
+
+    for update in [
+      MessageUpdate::ReasoningDelta {
+        delta: "foo".into(),
+        index: 0,
+      },
+      MessageUpdate::Content {
+        index: 0,
+        content: AssistantContent::Reasoning(reasoning.clone()),
+      },
+      MessageUpdate::Content {
+        index: 1,
+        content: AssistantContent::Reasoning(encrypted.clone()),
+      },
+      MessageUpdate::Text {
+        delta: "quuz".into(),
+        index: 2,
+      },
+    ] {
+      sink.update(update).unwrap();
+    }
+
+    while let Ok(event) = events.try_recv() {
+      state.handle_event(event);
+    }
+
+    let content = vec![
+      AssistantContent::Reasoning(reasoning),
+      AssistantContent::Reasoning(encrypted),
+      AssistantContent::text("quuz"),
+    ];
+
+    assert_eq!(sink.finish(), AgentMessage::from(content.clone()));
+
+    state.handle_event(Event::Action(Action::Interrupt));
+
+    let session = state
+      .database
+      .load_session(state.session.id.unwrap())
+      .unwrap();
+
+    assert_eq!(
+      session.transcript.entries,
+      [
+        TranscriptEntry::Message(Message::agent(content)),
+        TranscriptEntry::Interrupted,
+      ]
     );
   }
 
@@ -1656,9 +1789,9 @@ mod tests {
       TranscriptEntry::Message(Message::User(vec![UserMessageContent::Text(
         "foo".into(),
       )])),
-      TranscriptEntry::Message(Message::Agent(vec![
-        AgentMessageContent::Text("bar".into()),
-      ])),
+      TranscriptEntry::Message(Message::agent(vec![AssistantContent::text(
+        "bar",
+      )])),
       TranscriptEntry::Message(Message::User(vec![UserMessageContent::Text(
         "baz\nqux".into(),
       )])),
@@ -1869,13 +2002,14 @@ mod tests {
 
     state.handle_event(Event::Action(Action::Submit));
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     state.handle_event(Event::Agent {
       event: AgentEvent::ToolApprovalRequest(request),
@@ -1907,9 +2041,13 @@ mod tests {
 
     state.session.transcript.send("foo".into());
 
-    state.run = Some(Run {
-      activity: AgentActivity::Streaming("bar".into()),
-      ..Run::new(0)
+    state.run = Some({
+      let mut run = Run::new(0);
+      run.update(MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      });
+      run
     });
 
     state.save_session();
@@ -1949,25 +2087,32 @@ mod tests {
       [Effect::RunAgent { run_id: 1, .. }]
     );
 
-    let invocation = ToolInvocation {
-      id: "stale".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
+    let invocation = ToolInvocation::new(
+      "stale",
+      ToolInvocationKind::Command(CommandTool {
         command: "echo".into(),
         cwd: None,
       }),
-    };
+    );
 
     let (request, response_receiver) = ApprovalRequest::new(invocation.clone());
 
     for event in [
-      AgentEvent::Delta("stale".into()),
-      AgentEvent::ReasoningDelta("stale".into()),
-      AgentEvent::Message(Message::Agent(vec![AgentMessageContent::ToolCall(
-        invocation,
+      AgentEvent::Update(MessageUpdate::Text {
+        delta: "stale".into(),
+        index: 0,
+      }),
+      AgentEvent::Update(MessageUpdate::ReasoningDelta {
+        delta: "stale".into(),
+        index: 0,
+      }),
+      AgentEvent::Message(Message::agent(vec![AssistantContent::ToolCall(
+        invocation.protocol,
       )])),
       AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          id: "stale".into(),
+          call: CallId::from_wire("stale"),
+          name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("stale".into()),
             ..Default::default()
@@ -1991,7 +2136,10 @@ mod tests {
     assert_eq!(state.run, Some(Run::new(1)));
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Delta("current".into()),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "current".into(),
+        index: 0,
+      }),
       run_id: 1,
     });
 
@@ -2005,7 +2153,7 @@ mod tests {
       [
         Message::User(vec![UserMessageContent::Text("old".into())]),
         Message::User(vec![UserMessageContent::Text("new".into())]),
-        Message::Agent(vec![AgentMessageContent::Text("current".into())]),
+        Message::agent(vec![AssistantContent::text("current")]),
       ]
     );
   }
@@ -2134,6 +2282,85 @@ mod tests {
     assert_eq!(
       state.session.transcript.entries,
       [TranscriptEntry::Error("foo".into())]
+    );
+  }
+
+  #[test]
+  fn unfinished_reasoning_survives_without_entering_requests() {
+    #[track_caller]
+    fn case(event: Event, entry: TranscriptEntry) {
+      let settings = Settings {
+        model: "mock:foo".parse().unwrap(),
+        prompt: Some("qux".into()),
+        yolo: false,
+      };
+
+      let mut state = State::new(&settings).unwrap();
+
+      let reasoning =
+        Reasoning::new_with_signature("foo", Some("bar".into())).sealed("foo");
+
+      let mut run = Run::new(0);
+
+      run.update_many(&[
+        MessageUpdate::Content {
+          index: 0,
+          content: AssistantContent::Reasoning(reasoning.clone()),
+        },
+        MessageUpdate::Text {
+          delta: "baz".into(),
+          index: 1,
+        },
+        MessageUpdate::ReasoningDelta {
+          delta: "quux".into(),
+          index: 2,
+        },
+      ]);
+
+      let draft = run.message.clone();
+
+      state.run = Some(run);
+      state.handle_event(event);
+
+      let session = state
+        .database
+        .load_session(state.session.id.unwrap())
+        .unwrap();
+
+      assert_eq!(
+        session.transcript.entries,
+        [TranscriptEntry::Draft(draft), entry]
+      );
+
+      let mut state =
+        State::with_session(&settings, state.database, session).unwrap();
+
+      assert_eq!(
+        state.handle_event(Event::Action(Action::Submit)),
+        [Effect::RunAgent {
+          messages: vec![
+            Message::agent(vec![
+              AssistantContent::Reasoning(reasoning),
+              AssistantContent::text("baz"),
+            ]),
+            Message::User(vec![UserMessageContent::Text("qux".into())]),
+          ],
+          run_id: 0,
+        }]
+      );
+    }
+
+    case(
+      Event::Action(Action::Interrupt),
+      TranscriptEntry::Interrupted,
+    );
+
+    case(
+      Event::Agent {
+        event: AgentEvent::Error("foo".into()),
+        run_id: 0,
+      },
+      TranscriptEntry::Error("foo".into()),
     );
   }
 

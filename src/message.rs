@@ -1,12 +1,17 @@
 use super::*;
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) enum Message {
-  Agent(Vec<AgentMessageContent>),
+  Agent(AgentMessage),
   User(Vec<UserMessageContent>),
 }
 
 impl Message {
+  #[cfg(test)]
+  pub(crate) fn agent(content: Vec<AssistantContent>) -> Self {
+    Self::Agent(content.into())
+  }
+
   pub(crate) fn user_content(&self) -> Option<&str> {
     match self {
       Self::User(content) => content.iter().find_map(UserMessageContent::text),
@@ -18,36 +23,24 @@ impl Message {
 impl From<&Message> for RigMessage {
   fn from(message: &Message) -> Self {
     match message {
-      Message::Agent(content) => Self::Assistant {
-        content: OneOrMany::many(content.iter().map(|content| match content {
-          AgentMessageContent::Reasoning(reasoning) => {
-            AssistantContent::reasoning(reasoning.clone())
-          }
-          AgentMessageContent::Text(text) => {
-            AssistantContent::text(text.clone())
-          }
-          AgentMessageContent::ToolCall(invocation) => {
-            AssistantContent::tool_call(
-              invocation.id.clone(),
-              invocation.kind.name(),
-              invocation.kind.arguments(),
-            )
-          }
-        }))
-        .unwrap_or_else(|_| OneOrMany::one(AssistantContent::text(""))),
-        id: None,
+      Message::Agent(message) => Self::Assistant {
+        content: message.content.clone(),
+        id: message.id.clone(),
       },
       Message::User(content) => Self::User {
-        content: OneOrMany::many(content.iter().map(|content| match content {
-          UserMessageContent::Text(text) => UserContent::text(text.clone()),
-          UserMessageContent::ToolResult { id, result } => {
-            UserContent::tool_result(
-              id.clone(),
-              OneOrMany::one(ToolResultContent::text(result.message_content())),
-            )
-          }
-        }))
-        .unwrap_or_else(|_| OneOrMany::one(UserContent::text(String::new()))),
+        content: content
+          .iter()
+          .map(|content| match content {
+            UserMessageContent::Text(text) => UserContent::text(text.clone()),
+            UserMessageContent::ToolResult { call, name, result } => {
+              UserContent::tool_result(
+                call.clone(),
+                name.clone(),
+                vec![ToolResultContent::text(result.message_content())],
+              )
+            }
+          })
+          .collect(),
       },
     }
   }
@@ -58,82 +51,72 @@ mod tests {
   use {super::*, serde_json::json};
 
   #[test]
-  fn rig_ordered_agent_content() {
-    let invocation = ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "echo bar".into(),
-        cwd: None,
-      }),
-    };
+  fn rig_agent_protocol_survives_serialization() {
+    let content = vec![
+      AssistantContent::Reasoning(
+        Reasoning::new_with_signature("foo", Some("bar".into()))
+          .with_id("baz".into())
+          .sealed("foo"),
+      ),
+      AssistantContent::text("qux"),
+      AssistantContent::ToolCall(
+        ::rig::message::ToolCall::from_dual_wire(
+          "quux",
+          "quuz",
+          ToolFunction {
+            arguments: json!({"foo": null, "bar": ["baz"]}),
+            name: ToolName::new("qux").unwrap(),
+          },
+        )
+        .with_signature(Some("corge".into()))
+        .with_additional_params(Some(json!({"foo": "bar"}))),
+      ),
+      AssistantContent::Reasoning(
+        Reasoning::encrypted("grault")
+          .with_id("garply".into())
+          .sealed("foo"),
+      ),
+      AssistantContent::text("waldo"),
+    ];
 
-    let message = Message::Agent(vec![
-      AgentMessageContent::Reasoning("qux".into()),
-      AgentMessageContent::Text("foo".into()),
-      AgentMessageContent::ToolCall(invocation),
-      AgentMessageContent::Text("baz".into()),
-    ]);
+    let message = Message::Agent(AgentMessage {
+      content: content.clone(),
+      id: Some("fred".into()),
+    });
+
+    let message =
+      serde_json::from_value::<Message>(serde_json::to_value(message).unwrap())
+        .unwrap();
 
     assert_eq!(
       RigMessage::from(&message),
       RigMessage::Assistant {
-        content: OneOrMany::many(vec![
-          AssistantContent::reasoning("qux"),
-          AssistantContent::text("foo"),
-          AssistantContent::tool_call(
-            "foo",
-            "command",
-            json!({"command": "echo bar"})
-          ),
-          AssistantContent::text("baz"),
-        ])
-        .unwrap(),
-        id: None,
+        content,
+        id: Some("fred".into()),
       },
     );
   }
 
   #[test]
-  fn rig_tool_messages() {
-    let invocation = ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "echo bar".into(),
-        cwd: None,
-      }),
-    };
-
-    let tool_use =
-      RigMessage::from(&Message::Agent(vec![AgentMessageContent::ToolCall(
-        invocation,
-      )]));
-
-    assert_eq!(
-      tool_use,
-      RigMessage::Assistant {
-        content: OneOrMany::one(AssistantContent::tool_call(
-          "foo",
-          "command",
-          json!({"command": "echo bar"}),
-        ),),
-        id: None,
-      },
-    );
-
+  fn rig_tool_result() {
     let result = ToolResult {
       content: Some("bar".into()),
       ..Default::default()
     };
 
-    let tool_result =
-      RigMessage::from(&Message::User(vec![UserMessageContent::ToolResult {
-        id: "foo".into(),
-        result: result.clone(),
-      }]));
+    let message = Message::User(vec![UserMessageContent::ToolResult {
+      call: CallId::from_dual_wire("foo", "baz"),
+      name: ToolName::new("qux").unwrap(),
+      result: result.clone(),
+    }]);
 
     assert_eq!(
-      tool_result,
-      RigMessage::tool_result("foo", serde_json::to_string(&result).unwrap())
+      RigMessage::from(&message),
+      RigMessage::tool_result(
+        CallId::from_dual_wire("foo", "baz"),
+        ToolName::new("qux").unwrap(),
+        result.message_content()
+      )
     );
   }
 }

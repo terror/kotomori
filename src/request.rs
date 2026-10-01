@@ -15,22 +15,26 @@ impl Request {
 
 impl From<&Request> for CompletionRequest {
   fn from(request: &Request) -> Self {
+    let chat_history = request
+      .system
+      .as_deref()
+      .map(RigMessage::system)
+      .into_iter()
+      .chain(request.messages.iter().map(Into::into))
+      .collect::<Vec<_>>();
+
     Self {
       additional_params: None,
-      chat_history: OneOrMany::many(
-        request
-          .system
-          .as_deref()
-          .map(RigMessage::system)
-          .into_iter()
-          .chain(request.messages.iter().map(Into::into)),
-      )
-      .unwrap_or_else(|_| OneOrMany::one(RigMessage::user(""))),
+      chat_history: if chat_history.is_empty() {
+        vec![RigMessage::user("")]
+      } else {
+        chat_history
+      },
       documents: Vec::new(),
       max_tokens: None,
       model: Some(request.model.name.clone()),
       output_schema: None,
-      preamble: None,
+      record_telemetry_content: false,
       temperature: None,
       tool_choice: None,
       tools: ToolInvocationKind::definitions(),
@@ -64,7 +68,7 @@ mod tests {
     let request = CompletionRequest::from(&Request {
       messages: vec![
         Message::User(vec![UserMessageContent::Text("bar".into())]),
-        Message::Agent(vec![AgentMessageContent::Text("qux".into())]),
+        Message::agent(vec![AssistantContent::text("qux")]),
       ],
       model: Model {
         name: "foo".into(),
@@ -110,12 +114,13 @@ mod tests {
   fn last_user_text_returns_latest_text() {
     let request = Request {
       messages: vec![
-        Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
+        Message::agent(vec![AssistantContent::text("bar")]),
         Message::User(vec![UserMessageContent::Text("foo".into())]),
         Message::User(vec![UserMessageContent::Text("baz".into())]),
-        Message::Agent(vec![AgentMessageContent::Text("qux".into())]),
+        Message::agent(vec![AssistantContent::text("qux")]),
         Message::User(vec![UserMessageContent::ToolResult {
-          id: "quux".into(),
+          call: CallId::from_wire("quux"),
+          name: ToolName::new("corge").unwrap(),
           result: ToolResult::default(),
         }]),
       ],
@@ -133,9 +138,10 @@ mod tests {
   fn last_user_text_returns_none_without_user_text() {
     let request = Request {
       messages: vec![
-        Message::Agent(vec![AgentMessageContent::Text("foo".into())]),
+        Message::agent(vec![AssistantContent::text("foo")]),
         Message::User(vec![UserMessageContent::ToolResult {
-          id: "bar".into(),
+          call: CallId::from_wire("bar"),
+          name: ToolName::new("baz").unwrap(),
           result: ToolResult::default(),
         }]),
       ],

@@ -3,7 +3,11 @@ use super::*;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) enum UserMessageContent {
   Text(String),
-  ToolResult { id: String, result: ToolResult },
+  ToolResult {
+    call: CallId,
+    name: ToolName,
+    result: ToolResult,
+  },
 }
 
 impl UserMessageContent {

@@ -1,86 +1,75 @@
 use {
   super::*,
   ::rig::{
-    client::CompletionClient, completion::CompletionModel,
-    streaming::StreamedAssistantContent,
+    DynModel,
+    operation::Completion,
+    streaming::{Item, StreamEvent},
   },
 };
 
-#[derive(Clone)]
-pub(super) struct Rig<M> {
-  model: M,
-  provider: String,
+#[derive(Clone, Debug)]
+pub(super) struct Rig {
+  model: DynModel<Completion>,
 }
 
-impl<M> Rig<M>
-where
-  M: CompletionModel + 'static,
-{
+impl Rig {
   pub(super) fn build(
-    client: &impl CompletionClient<CompletionModel = M>,
-    model: &Model,
+    model: impl Into<DynModel<Completion>>,
   ) -> Arc<dyn Provider> {
     Arc::new(Self {
-      model: client.completion_model(&model.name),
-      provider: model.provider.clone(),
+      model: model.into(),
     })
   }
 }
 
-impl<M> Debug for Rig<M> {
-  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-    f.debug_struct("Rig")
-      .field("provider", &self.provider)
-      .finish_non_exhaustive()
-  }
-}
-
 #[async_trait]
-impl<M> Provider for Rig<M>
-where
-  M: CompletionModel + 'static,
-{
+impl Provider for Rig {
   async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result {
-    let request = CompletionRequest::from(&request);
+    let mut stream = self.model.stream(CompletionRequest::from(&request))?;
 
-    let mut stream = self.model.stream(request).await?;
+    let mut message_id = None;
 
-    while let Some(chunk) = stream.next().await {
-      match chunk? {
-        StreamedAssistantContent::Text(text) if !text.text.is_empty() => {
-          sink.delta(text.text)?;
-        }
-        StreamedAssistantContent::Reasoning(reasoning) => {
-          sink.reasoning(reasoning)?;
-        }
-        StreamedAssistantContent::ReasoningDelta { id, reasoning }
-          if !reasoning.is_empty() =>
-        {
-          sink.reasoning_delta(id, reasoning)?;
-        }
-        StreamedAssistantContent::ToolCall {
-          internal_call_id,
-          tool_call,
-        } => {
-          let id = if tool_call.id.is_empty() {
-            internal_call_id
-          } else {
-            tool_call.id
-          };
+    while let Some(item) = stream.next().await {
+      let id = stream.message_id();
 
-          sink.tool_call(RawToolCall {
-            arguments: tool_call.function.arguments,
-            id,
-            name: tool_call.function.name,
-          })?;
+      if id != message_id {
+        if let Some(id) = &id {
+          sink.update(MessageUpdate::MessageId(id.clone()))?;
         }
-        StreamedAssistantContent::Final(_)
-        | StreamedAssistantContent::ReasoningDelta { .. }
-        | StreamedAssistantContent::Text(_)
-        | StreamedAssistantContent::ToolCallDelta { .. } => {}
+
+        message_id = id;
       }
+
+      let Item::Event(event) = item? else {
+        continue;
+      };
+
+      let update = match event {
+        StreamEvent::Text { part, text } => MessageUpdate::Text {
+          delta: text,
+          index: part.index(),
+        },
+        StreamEvent::Reasoning { part, text } => {
+          MessageUpdate::ReasoningDelta {
+            delta: text,
+            index: part.index(),
+          }
+        }
+        StreamEvent::End { part, content } => MessageUpdate::Content {
+          content,
+          index: part.index(),
+        },
+        StreamEvent::Start { .. } | StreamEvent::Arguments { .. } => continue,
+      };
+
+      sink.update(update)?;
     }
 
-    Ok(())
+    let response = stream.finish().await?;
+
+    sink.update(MessageUpdate::Complete(AgentMessage {
+      content: response.choice,
+      id: response.message_id,
+    }))
   }
 }
