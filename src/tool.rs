@@ -6,8 +6,7 @@ pub(crate) use command::CommandTool;
 
 macro_rules! define_tools {
   ($( $variant:ident($tool:ty), )*) => {
-    #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-    #[serde(tag = "name", content = "arguments", rename_all = "snake_case")]
+    #[derive(Clone, Debug, Eq, PartialEq)]
     pub(crate) enum ToolInvocationKind {
       $(
         $variant($tool),
@@ -27,6 +26,7 @@ macro_rules! define_tools {
         }
       }
 
+      #[cfg(test)]
       pub(crate) fn arguments(&self) -> Value {
         match self {
           $(Self::$variant(tool) => serde_json::to_value(tool),)*
@@ -34,19 +34,19 @@ macro_rules! define_tools {
         .expect("failed to serialize tool arguments")
       }
 
-      pub(crate) fn decode(call: RawToolCall) -> Result<ToolInvocation> {
-        let kind = match call.name.as_str() {
+      pub(crate) fn decode(call: ::rig::message::ToolCall) -> Result<ToolInvocation> {
+        let kind = match call.function.name.as_str() {
           $(
             <$tool>::NAME => Self::$variant(
-              serde_json::from_value(call.arguments).with_context(|| {
-                format!("failed to decode `{}` arguments", call.name)
+              serde_json::from_value(call.function.arguments.clone()).with_context(|| {
+                format!("failed to decode `{}` arguments", call.function.name)
               })?,
             ),
           )*
-          _ => bail!("unknown tool `{}`", call.name),
+          _ => bail!("unknown tool `{}`", call.function.name),
         };
 
-        Ok(ToolInvocation { id: call.id, kind })
+        Ok(ToolInvocation { kind, protocol: call })
       }
 
       pub(crate) fn definitions() -> Vec<ToolDefinition> {
@@ -72,6 +72,7 @@ macro_rules! define_tools {
         }
       }
 
+      #[cfg(test)]
       pub(crate) fn name(&self) -> &'static str {
         match self {
           $(Self::$variant(_) => <$tool>::NAME,)*

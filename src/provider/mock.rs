@@ -19,32 +19,37 @@ impl Provider for Mock {
         if has_tool_result {
           sink.delta("done")?;
         } else {
-          sink.tool_call(RawToolCall {
-            arguments: serde_json::json!({
-              "command": "echo bar",
-              "cwd": null,
-            }),
-            id: "foo".into(),
-            name: "command".into(),
-          })?;
+          sink.tool_call(::rig::message::ToolCall::new(
+            "foo".into(),
+            ToolFunction {
+              arguments: serde_json::json!({
+                "command": "echo bar",
+              }),
+              name: "command".into(),
+            },
+          ));
         }
       }
       "error" if request.messages.len() == 1 => {
         bail!("mock provider error");
       }
       "malformed-tool-arguments" if request.messages.len() == 1 => {
-        sink.tool_call(RawToolCall {
-          arguments: serde_json::json!({}),
-          id: "foo".into(),
-          name: "command".into(),
-        })?;
+        sink.tool_call(::rig::message::ToolCall::new(
+          "foo".into(),
+          ToolFunction {
+            arguments: serde_json::json!({}),
+            name: "command".into(),
+          },
+        ));
       }
       "unknown-tool" if request.messages.len() == 1 => {
-        sink.tool_call(RawToolCall {
-          arguments: serde_json::json!({}),
-          id: "foo".into(),
-          name: "unknown".into(),
-        })?;
+        sink.tool_call(::rig::message::ToolCall::new(
+          "foo".into(),
+          ToolFunction {
+            arguments: serde_json::json!({}),
+            name: "unknown".into(),
+          },
+        ));
       }
       model => {
         let input = request.last_user_text().unwrap_or_default();

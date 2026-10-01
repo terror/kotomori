@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub(crate) struct Transcript {
   pub(crate) entries: Vec<TranscriptEntry>,
 }
@@ -22,8 +22,17 @@ impl Transcript {
     self
       .entries
       .iter()
-      .filter_map(TranscriptEntry::message)
-      .cloned()
+      .filter_map(|entry| match entry {
+        TranscriptEntry::Draft(buffer) => {
+          let message = buffer.message();
+
+          (!message.content.is_empty()).then_some(Message::Agent(message))
+        }
+        TranscriptEntry::Message(message) => Some(message.clone()),
+        TranscriptEntry::Error(_)
+        | TranscriptEntry::Interrupted
+        | TranscriptEntry::Notice(_) => None,
+      })
       .collect()
   }
 
@@ -67,23 +76,27 @@ mod tests {
   fn messages_preserve_completed_content_and_boundaries() {
     let messages = vec![
       Message::User(vec![UserMessageContent::Text("foo".into())]),
-      Message::Agent(vec![
-        AgentMessageContent::Text("bar".into()),
-        AgentMessageContent::ToolCall(ToolInvocation {
-          id: "foo".into(),
-          kind: ToolInvocationKind::Command(CommandTool {
-            command: "bar".into(),
-            cwd: None,
-          }),
-        }),
-        AgentMessageContent::Text("baz".into()),
+      Message::agent(vec![
+        AssistantContent::text("bar"),
+        AssistantContent::ToolCall(
+          ToolInvocation::new(
+            "foo",
+            ToolInvocationKind::Command(CommandTool {
+              command: "bar".into(),
+              cwd: None,
+            }),
+          )
+          .protocol,
+        ),
+        AssistantContent::text("baz"),
       ]),
       Message::User(vec![UserMessageContent::ToolResult {
+        call_id: None,
         id: "foo".into(),
         result: ToolResult::default(),
       }]),
-      Message::Agent(vec![AgentMessageContent::Reasoning("qux".into())]),
-      Message::Agent(vec![AgentMessageContent::Text("quux".into())]),
+      Message::agent(vec![AssistantContent::Reasoning(Reasoning::new("qux"))]),
+      Message::agent(vec![AssistantContent::text("quux")]),
     ];
 
     let transcript = Transcript::with_entries(
@@ -109,6 +122,21 @@ mod tests {
     assert_eq!(
       transcript.messages(),
       [Message::User(vec![UserMessageContent::Text("foo".into())])]
+    );
+  }
+
+  #[test]
+  fn messages_skip_unfinished_reasoning() {
+    let mut buffer = MessageBuffer::default();
+
+    buffer.apply(MessageUpdate::ReasoningDelta {
+      delta: "foo".into(),
+      id: None,
+    });
+
+    assert_eq!(
+      Transcript::with_entries(vec![TranscriptEntry::Draft(buffer)]).messages(),
+      Vec::new()
     );
   }
 }

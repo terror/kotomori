@@ -1,11 +1,10 @@
 use super::*;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum AgentEvent {
-  Delta(String),
   Done,
   Error(String),
   Message(Message),
-  ReasoningDelta(String),
   ToolApprovalRequest(ApprovalRequest),
+  Update(MessageUpdate),
 }

@@ -3,7 +3,7 @@ use {
   agent::Agent,
   agent_activity::AgentActivity,
   agent_event::AgentEvent,
-  agent_message_content::AgentMessageContent,
+  agent_message::AgentMessage,
   anyhow::{Context, Error, bail},
   app::App,
   approval_policy::ApprovalPolicy,
@@ -43,14 +43,17 @@ use {
   lexiclean::Lexiclean,
   loader::Loader,
   message::Message,
+  message_buffer::MessageBuffer,
+  message_draft::MessageDraft,
+  message_update::MessageUpdate,
   model::Model,
   options::Options,
   patch::Patch,
   provider::Provider,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
-  raw_tool_call::RawToolCall,
-  reasoning_buffer::ReasoningBuffer,
+  reasoning_draft::ReasoningDraft,
+  reasoning_ext::ReasoningExt,
   render_plan::RenderPlan,
   renderer::Renderer,
   request::Request,
@@ -62,14 +65,15 @@ use {
       AssistantContent, CompletionRequest, Message as RigMessage,
       ToolDefinition,
     },
-    message::{Reasoning, ToolResultContent, UserContent},
+    message::{
+      Reasoning, ReasoningContent, ToolFunction, ToolResultContent, UserContent,
+    },
   },
   run::Run,
   rusqlite::{Connection, TransactionBehavior, params},
   schemars::JsonSchema,
   screen::Screen,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
-  serde_json::Value,
   session::Session,
   settings::Settings,
   smallvec::SmallVec,
@@ -138,13 +142,20 @@ macro_rules! assert_matches {
 }
 
 #[cfg(test)]
-use {std::sync::Mutex, tool::CommandTool};
+use {
+  serde_json::Value,
+  std::{
+    future::{self, Future},
+    sync::Mutex,
+  },
+  tool::CommandTool,
+};
 
 mod action;
 mod agent;
 mod agent_activity;
 mod agent_event;
-mod agent_message_content;
+mod agent_message;
 mod app;
 mod approval_policy;
 mod approval_request;
@@ -165,13 +176,16 @@ mod execution_limit;
 mod frame;
 mod loader;
 mod message;
+mod message_buffer;
+mod message_draft;
+mod message_update;
 mod model;
 mod options;
 mod patch;
 mod provider;
 mod provider_sink;
-mod raw_tool_call;
-mod reasoning_buffer;
+mod reasoning_draft;
+mod reasoning_ext;
 mod render_plan;
 mod renderer;
 mod request;

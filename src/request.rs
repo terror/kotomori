@@ -64,7 +64,7 @@ mod tests {
     let request = CompletionRequest::from(&Request {
       messages: vec![
         Message::User(vec![UserMessageContent::Text("bar".into())]),
-        Message::Agent(vec![AgentMessageContent::Text("qux".into())]),
+        Message::agent(vec![AssistantContent::text("qux")]),
       ],
       model: Model {
         name: "foo".into(),
@@ -110,11 +110,12 @@ mod tests {
   fn last_user_text_returns_latest_text() {
     let request = Request {
       messages: vec![
-        Message::Agent(vec![AgentMessageContent::Text("bar".into())]),
+        Message::agent(vec![AssistantContent::text("bar")]),
         Message::User(vec![UserMessageContent::Text("foo".into())]),
         Message::User(vec![UserMessageContent::Text("baz".into())]),
-        Message::Agent(vec![AgentMessageContent::Text("qux".into())]),
+        Message::agent(vec![AssistantContent::text("qux")]),
         Message::User(vec![UserMessageContent::ToolResult {
+          call_id: None,
           id: "quux".into(),
           result: ToolResult::default(),
         }]),
@@ -133,8 +134,9 @@ mod tests {
   fn last_user_text_returns_none_without_user_text() {
     let request = Request {
       messages: vec![
-        Message::Agent(vec![AgentMessageContent::Text("foo".into())]),
+        Message::agent(vec![AssistantContent::text("foo")]),
         Message::User(vec![UserMessageContent::ToolResult {
+          call_id: None,
           id: "bar".into(),
           result: ToolResult::default(),
         }]),

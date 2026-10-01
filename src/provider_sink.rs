@@ -2,67 +2,30 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ProviderSink {
-  pub(super) content: Vec<AgentMessageContent>,
   pub(super) event_sender: UnboundedSender<Event>,
-  pub(super) reasoning_buffer: ReasoningBuffer,
+  pub(super) message: MessageBuffer,
   pub(super) run_id: u64,
 }
 
 impl ProviderSink {
   pub(crate) fn delta(&mut self, delta: impl Into<String>) -> Result {
-    let delta = delta.into();
-
-    if !delta.is_empty() {
-      match self.content.last_mut() {
-        Some(AgentMessageContent::Text(text)) => text.push_str(&delta),
-        Some(
-          AgentMessageContent::Reasoning(_) | AgentMessageContent::ToolCall(_),
-        )
-        | None => {
-          self.content.push(AgentMessageContent::Text(delta.clone()));
-        }
-      }
-    }
-
-    Ok(self.event_sender.send(Event::Agent {
-      event: AgentEvent::Delta(delta),
-      run_id: self.run_id,
-    })?)
+    self.update(MessageUpdate::Text(delta.into()))
   }
 
-  pub(crate) fn finish(self) -> Vec<AgentMessageContent> {
-    self.content
+  pub(crate) fn finish(self) -> AgentMessage {
+    self.message.finish()
   }
 
-  fn push_reasoning_delta(&mut self, delta: &str) {
-    if delta.is_empty() {
-      return;
-    }
-
-    match self.content.last_mut() {
-      Some(AgentMessageContent::Reasoning(reasoning)) => {
-        reasoning.push_str(delta);
-      }
-      Some(AgentMessageContent::Text(_) | AgentMessageContent::ToolCall(_))
-      | None => {
-        self
-          .content
-          .push(AgentMessageContent::Reasoning(delta.to_owned()));
-      }
-    }
+  pub(crate) fn message_id(&mut self, id: String) -> Result {
+    self.update(MessageUpdate::MessageId(id))
   }
 
   pub(crate) fn reasoning(&mut self, reasoning: Reasoning) -> Result {
-    if let Some(delta) = self.reasoning_buffer.push_reasoning(reasoning) {
-      self.push_reasoning_delta(&delta);
+    self.update(MessageUpdate::Reasoning(reasoning))
+  }
 
-      self.event_sender.send(Event::Agent {
-        event: AgentEvent::ReasoningDelta(delta),
-        run_id: self.run_id,
-      })?;
-    }
-
-    Ok(())
+  pub(crate) fn reasoning_append(&mut self, reasoning: Reasoning) -> Result {
+    self.update(MessageUpdate::ReasoningAppend(reasoning))
   }
 
   pub(crate) fn reasoning_delta(
@@ -70,24 +33,23 @@ impl ProviderSink {
     id: Option<String>,
     delta: impl Into<String>,
   ) -> Result {
-    if let Some(delta) = self.reasoning_buffer.push_delta(id, delta) {
-      self.push_reasoning_delta(&delta);
-
-      self.event_sender.send(Event::Agent {
-        event: AgentEvent::ReasoningDelta(delta),
-        run_id: self.run_id,
-      })?;
-    }
-
-    Ok(())
+    self.update(MessageUpdate::ReasoningDelta {
+      delta: delta.into(),
+      id,
+    })
   }
 
-  pub(crate) fn tool_call(&mut self, tool_call: RawToolCall) -> Result {
-    self.content.push(AgentMessageContent::ToolCall(
-      ToolInvocationKind::decode(tool_call)?,
-    ));
+  pub(crate) fn tool_call(&mut self, tool_call: ::rig::message::ToolCall) {
+    self.message.apply(MessageUpdate::ToolCall(tool_call));
+  }
 
-    Ok(())
+  fn update(&mut self, update: MessageUpdate) -> Result {
+    self.message.apply(update.clone());
+
+    Ok(self.event_sender.send(Event::Agent {
+      event: AgentEvent::Update(update),
+      run_id: self.run_id,
+    })?)
   }
 }
 
@@ -96,9 +58,8 @@ impl Default for ProviderSink {
     let (sender, _) = mpsc::unbounded_channel();
 
     Self {
-      content: Vec::new(),
       event_sender: sender,
-      reasoning_buffer: ReasoningBuffer::default(),
+      message: MessageBuffer::default(),
       run_id: 0,
     }
   }

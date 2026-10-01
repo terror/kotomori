@@ -142,13 +142,14 @@ mod tests {
     })
     .unwrap();
 
-    let (request, _response_receiver) = ApprovalRequest::new(ToolInvocation {
-      id: "foo".into(),
-      kind: ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: None,
-      }),
-    });
+    let (request, _response_receiver) =
+      ApprovalRequest::new(ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      ));
 
     state.handle_event(Event::Action(Action::Submit));
     state.handle_event(Event::Agent {

@@ -1,12 +1,25 @@
 use super::*;
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ToolInvocation {
-  pub(crate) id: String,
   pub(crate) kind: ToolInvocationKind,
+  pub(crate) protocol: ::rig::message::ToolCall,
 }
 
 impl ToolInvocation {
+  #[cfg(test)]
+  pub(crate) fn new(id: &str, kind: ToolInvocationKind) -> Self {
+    let protocol = ::rig::message::ToolCall::new(
+      id.into(),
+      ToolFunction {
+        arguments: kind.arguments(),
+        name: kind.name().into(),
+      },
+    );
+
+    Self { kind, protocol }
+  }
+
   pub(crate) fn title(&self, tense: ToolActionTense) -> String {
     format!("{} {}", self.kind.action(tense), self.kind)
   }
@@ -24,52 +37,40 @@ mod tests {
 
   #[test]
   fn decodes_command_tool_call() {
-    let invocation = ToolInvocationKind::decode(RawToolCall {
-      arguments: json!({"command": "bar baz", "cwd": null}),
-      id: "foo".into(),
-      name: "command".into(),
-    })
-    .unwrap();
+    let protocol = ::rig::message::ToolCall::new(
+      "foo".into(),
+      ToolFunction {
+        arguments: json!({"command": "bar baz", "cwd": null}),
+        name: "command".into(),
+      },
+    )
+    .with_call_id("qux".into())
+    .with_signature(Some("quux".into()))
+    .with_additional_params(Some(json!({"foo": "baz"})));
+
+    let invocation = ToolInvocationKind::decode(protocol.clone()).unwrap();
 
     assert_eq!(
       invocation,
       ToolInvocation {
-        id: "foo".into(),
         kind: ToolInvocationKind::Command(CommandTool {
           command: "bar baz".into(),
           cwd: None,
         }),
+        protocol,
       },
     );
   }
 
   #[test]
-  fn tagged_kind_round_trips() {
-    let kind = ToolInvocationKind::Command(CommandTool {
-      command: "echo hello".into(),
-      cwd: None,
-    });
-
-    let value = json!({
-      "name": "command",
-      "arguments": {"command": "echo hello"},
-    });
-
-    assert_eq!(serde_json::to_value(&kind).unwrap(), value);
-
-    assert_eq!(
-      serde_json::from_value::<ToolInvocationKind>(value).unwrap(),
-      kind
-    );
-  }
-
-  #[test]
   fn unknown_tool_errors() {
-    let error = ToolInvocationKind::decode(RawToolCall {
-      arguments: json!({}),
-      id: "foo".into(),
-      name: "bar".into(),
-    })
+    let error = ToolInvocationKind::decode(::rig::message::ToolCall::new(
+      "foo".into(),
+      ToolFunction {
+        arguments: json!({}),
+        name: "bar".into(),
+      },
+    ))
     .unwrap_err();
 
     assert_eq!(error.to_string(), "unknown tool `bar`");
