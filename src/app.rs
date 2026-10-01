@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct App {
   agent: Option<Agent>,
+  dimensions: Dimensions,
   event_receiver: UnboundedReceiver<Event>,
   event_sender: UnboundedSender<Event>,
   screen: Screen,
@@ -36,6 +37,11 @@ impl App {
   }
 
   fn handle_event(&mut self, event: Event) -> Result {
+    if let Event::Resize(dimensions) = event {
+      self.dimensions = dimensions;
+      return Ok(());
+    }
+
     match &mut self.screen {
       Screen::Quit => {}
       Screen::Resume(picker) => match event {
@@ -50,7 +56,7 @@ impl App {
           }
         }
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
-        Event::Agent { .. } | Event::Tick(_) => {}
+        Event::Agent { .. } | Event::Resize(_) | Event::Tick(_) => {}
       },
       Screen::Session(state) => {
         let effects = state.handle_event(event);
@@ -77,17 +83,11 @@ impl App {
           }
         };
 
-        let CrosstermEvent::Key(key) = event else {
+        let Some(event) = Event::from_terminal(&event) else {
           continue;
         };
 
-        if key.kind != KeyEventKind::Press {
-          continue;
-        }
-
-        let action = Action::from_key(&key);
-
-        if sender.send(Event::Action(action)).is_err() {
+        if sender.send(event).is_err() {
           return;
         }
       }
@@ -125,10 +125,21 @@ impl App {
 
     self.listen_for_input();
 
+    let (width, height) =
+      crossterm_terminal::size().context("failed to read terminal size")?;
+
+    self.dimensions = Dimensions {
+      height: usize::from(height),
+      width,
+    };
+
     let mut tick_interval = interval(Self::TICK_INTERVAL);
 
     while !self.screen.should_quit() {
-      renderer.draw(&ViewComponent::new(&self.screen, first_draw_duration))?;
+      renderer.draw(
+        &ViewComponent::new(&self.screen, first_draw_duration),
+        self.dimensions,
+      )?;
 
       if let Some(started_at) = first_draw_started_at.take() {
         first_draw_duration = Some(started_at.elapsed());
@@ -168,10 +179,42 @@ impl App {
 
     Ok(Self {
       agent,
+      dimensions: Dimensions {
+        height: 0,
+        width: 0,
+      },
       event_receiver,
       event_sender,
       screen,
       settings: settings.clone(),
     })
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn resize_events_update_dimensions() {
+    let mut app = App::with_screen(
+      &Settings {
+        model: "mock:foo".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      },
+      Screen::Resume(ResumePicker::new(Vec::new())),
+    )
+    .unwrap();
+
+    let dimensions = Dimensions {
+      height: 24,
+      width: 80,
+    };
+
+    app.event_sender.send(Event::Resize(dimensions)).unwrap();
+    app.drain_pending_events().unwrap();
+
+    assert_eq!(app.dimensions, dimensions);
   }
 }
