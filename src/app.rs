@@ -97,28 +97,22 @@ impl App {
   pub(crate) fn new(settings: &Settings) -> Result<Self> {
     Self::with_screen(
       settings,
-      Screen::Session(Box::new(State::new(settings)?)),
+      Screen::Session(Box::new(State::new(
+        Database::new()?,
+        Session::new(settings)?,
+      )?)),
     )
   }
 
   pub(crate) fn resume(&mut self, id: i64) -> Result {
     let database = Database::new()?;
 
-    let session = database.load_session(id)?;
+    let session = database.load_session(id, &self.settings)?;
 
-    let mut settings = self.settings.clone();
+    self.agent =
+      Some(Agent::new(self.event_sender.clone(), &session.settings)?);
 
-    settings.model = session.model.parse().with_context(|| {
-      format!("failed to parse session model {}", session.model)
-    })?;
-
-    self.agent = Some(Agent::new(self.event_sender.clone(), &settings)?);
-
-    self.screen = Screen::Session(Box::new(State::with_session(
-      &settings, database, session,
-    )?));
-
-    self.settings = settings;
+    self.screen = Screen::Session(Box::new(State::new(database, session)?));
 
     Ok(())
   }

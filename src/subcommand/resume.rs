@@ -8,7 +8,7 @@ pub(crate) struct Resume {
 
 impl Resume {
   pub(crate) async fn run(self, settings: Settings) -> Result {
-    let sessions = Database::new()?.get_sessions()?;
+    let sessions = Database::new()?.get_sessions(&settings)?;
 
     if sessions.is_empty() {
       println!("No saved sessions.");

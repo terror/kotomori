@@ -42,6 +42,15 @@ impl Display for Model {
   }
 }
 
+impl FromSql for Model {
+  fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+    value
+      .as_str()?
+      .parse::<Self>()
+      .map_err(|error| FromSqlError::Other(error.into()))
+  }
+}
+
 impl FromStr for Model {
   type Err = Error;
 

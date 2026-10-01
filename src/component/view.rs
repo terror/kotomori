@@ -83,11 +83,15 @@ mod tests {
 
   #[test]
   fn composer_renders_while_agent_is_active() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -106,11 +110,15 @@ mod tests {
 
   #[test]
   fn content_has_two_columns_of_side_padding() {
-    let state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
+    let state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let lines =
@@ -132,11 +140,15 @@ mod tests {
 
   #[test]
   fn footer_renders_below_approval_prompt() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, _response_receiver) =
@@ -174,11 +186,15 @@ mod tests {
 
   #[test]
   fn footer_renders_below_command_menu() {
-    let state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("/".into()),
-      yolo: false,
-    })
+    let state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("/".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let lines =

@@ -10,7 +10,10 @@ impl Database {
   const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
   const SCHEMA_VERSION: usize = Self::MIGRATIONS.len();
 
-  pub(crate) fn get_sessions(&self) -> Result<Vec<Session>> {
+  pub(crate) fn get_sessions(
+    &self,
+    settings: &Settings,
+  ) -> Result<Vec<Session>> {
     let directory =
       env::current_dir().context("failed to read current directory")?;
 
@@ -30,7 +33,10 @@ impl Database {
         created_at: 0,
         directory: row.get::<_, String>(2)?.into(),
         id: Some(row.get(0)?),
-        model: row.get(3)?,
+        settings: Settings {
+          model: row.get(3)?,
+          ..settings.clone()
+        },
         title: row.get(4)?,
         transcript: Transcript::default(),
         updated_at: row.get(1)?,
@@ -40,7 +46,11 @@ impl Database {
     rows.collect::<rusqlite::Result<_>>().map_err(Into::into)
   }
 
-  pub(crate) fn load_session(&self, id: i64) -> Result<Session> {
+  pub(crate) fn load_session(
+    &self,
+    id: i64,
+    settings: &Settings,
+  ) -> Result<Session> {
     self
       .connection
       .query_row(
@@ -53,7 +63,10 @@ impl Database {
             created_at: row.get(1)?,
             directory: row.get::<_, String>(3)?.into(),
             id: Some(row.get(0)?),
-            model: row.get(4)?,
+            settings: Settings {
+              model: row.get(4)?,
+              ..settings.clone()
+            },
             title: row.get(5)?,
             transcript: serde_json::from_str(&row.get::<_, String>(6)?)
               .map(Transcript::with_entries)
@@ -116,7 +129,7 @@ impl Database {
         params![
           session.updated_at,
           directory,
-          session.model,
+          session.settings.model.to_string(),
           session.title,
           entries,
           id,
@@ -136,7 +149,7 @@ impl Database {
           session.created_at,
           session.updated_at,
           directory,
-          session.model,
+          session.settings.model.to_string(),
           session.title,
           entries,
         ],
@@ -257,7 +270,11 @@ mod tests {
         created_at,
         directory: env::current_dir().unwrap(),
         id,
-        model: "foo".into(),
+        settings: Settings {
+          model: "mock:foo".parse().unwrap(),
+          prompt: None,
+          yolo: false,
+        },
         title: None,
         transcript: Transcript::default(),
         updated_at,
@@ -288,7 +305,11 @@ mod tests {
       created_at: timestamp,
       directory: env::current_dir().unwrap(),
       id: None,
-      model: "mock:local".into(),
+      settings: Settings {
+        model: "mock:foo".parse().unwrap(),
+        prompt: Some("bar".into()),
+        yolo: true,
+      },
       title: None,
       transcript: Transcript::default(),
       updated_at: 0,
@@ -298,30 +319,90 @@ mod tests {
 
     assert_eq!(session.id, Some(1));
 
+    assert_eq!(
+      database
+        .load_session(1, &session.settings)
+        .unwrap()
+        .settings,
+      session.settings,
+    );
+
+    session.settings.model = "mock:bar".parse().unwrap();
     session.updated_at = timestamp;
 
     database.save_session(&mut session).unwrap();
 
-    let loaded = database.load_session(1).unwrap();
+    let settings = Settings {
+      model: "mock:baz".parse().unwrap(),
+      prompt: Some("qux".into()),
+      yolo: false,
+    };
+
+    let loaded = database.load_session(1, &settings).unwrap();
+
+    assert_eq!(
+      loaded.settings,
+      Settings {
+        model: "mock:bar".parse().unwrap(),
+        ..settings.clone()
+      },
+    );
 
     assert_eq!(
       (loaded.created_at, loaded.updated_at),
       (timestamp, timestamp),
     );
 
+    let sessions = database.get_sessions(&settings).unwrap();
+
     assert_eq!(
-      database
-        .get_sessions()
-        .unwrap()
+      sessions
         .iter()
-        .map(|session| session.updated_at)
+        .map(|session| (&session.settings, session.updated_at))
         .collect::<Vec<_>>(),
-      [timestamp],
+      [(&loaded.settings, timestamp)],
+    );
+  }
+
+  #[test]
+  fn session_reads_reject_invalid_models() {
+    let database = Database::new().unwrap();
+
+    let settings = Settings {
+      model: "mock:foo".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    };
+
+    database
+      .connection
+      .execute(
+        "INSERT INTO sessions (
+           created_at, updated_at, directory, model, entries
+         ) VALUES (0, 0, ?1, 'foo', '[]')",
+        [env::current_dir().unwrap().to_str().unwrap()],
+      )
+      .unwrap();
+
+    assert_eq!(
+      format!("{:#}", database.load_session(1, &settings).unwrap_err()),
+      "failed to load session `1`: Conversion error from type Text at index: 4, model must be PROVIDER:MODEL: model must be PROVIDER:MODEL",
+    );
+
+    assert_eq!(
+      database.get_sessions(&settings).unwrap_err().to_string(),
+      "Conversion error from type Text at index: 3, model must be PROVIDER:MODEL",
     );
   }
 
   #[test]
   fn session_reads_reject_negative_timestamps() {
+    let settings = Settings {
+      model: "mock:foo".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    };
+
     for (created_at, updated_at, index) in [(-1, 0, 1), (0, -1, 2)] {
       let database = Database::new().unwrap();
 
@@ -335,7 +416,7 @@ mod tests {
         .execute(
           "INSERT INTO sessions (
              created_at, updated_at, directory, model, entries
-           ) VALUES (?1, ?2, ?3, 'foo', '[]')",
+           ) VALUES (?1, ?2, ?3, 'mock:foo', '[]')",
           params![
             created_at,
             updated_at,
@@ -345,7 +426,7 @@ mod tests {
         .unwrap();
 
       assert_eq!(
-        format!("{:#}", database.load_session(1).unwrap_err()),
+        format!("{:#}", database.load_session(1, &settings).unwrap_err()),
         format!(
           "failed to load session `1`: Integer -1 out of range at index {index}"
         ),
@@ -353,7 +434,7 @@ mod tests {
 
       if updated_at < 0 {
         assert_eq!(
-          database.get_sessions().unwrap_err().to_string(),
+          database.get_sessions(&settings).unwrap_err().to_string(),
           "Integer -1 out of range at index 1",
         );
       }
@@ -367,6 +448,12 @@ mod tests {
 
     let directory = env::current_dir().unwrap();
 
+    let settings = Settings {
+      model: "mock:foo".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    };
+
     database
       .connection
       .execute(
@@ -377,11 +464,11 @@ mod tests {
       )
       .unwrap();
 
-    assert_eq!(database.get_sessions().unwrap().len(), 1);
+    assert_eq!(database.get_sessions(&settings).unwrap().len(), 1);
 
     assert_eq!(
       database
-        .load_session(1)
+        .load_session(1, &settings)
         .unwrap_err()
         .chain()
         .map(ToString::to_string)
