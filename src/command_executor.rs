@@ -25,42 +25,94 @@ impl CommandExecutor {
     command.stderr(Stdio::piped());
     command.stdout(Stdio::piped());
 
-    let mut child = command.spawn()?;
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
 
-    let stdout = child.stdout.take().expect("stdout is piped");
-    let stdout = task::spawn(self.read_pipe(stdout));
+    let status = timeout(self.limits.timeout, async {
+      let mut child = command.spawn()?;
 
-    let stderr = child.stderr.take().expect("stderr is piped");
-    let stderr = task::spawn(self.read_pipe(stderr));
+      let (stdout_pipe, stderr_pipe) = (
+        child.stdout.take().expect("stdout is piped"),
+        child.stderr.take().expect("stderr is piped"),
+      );
 
-    let status = timeout(self.limits.timeout, child.wait()).await;
+      tokio::try_join!(
+        child.wait(),
+        self.read_pipe(stdout_pipe, &mut stdout),
+        self.read_pipe(stderr_pipe, &mut stderr),
+      )
+    })
+    .await;
 
-    let status = match status {
-      Ok(status) => status?,
-      Err(_) => return Ok(self.timeout_result(child, stdout, stderr).await),
+    let (stdout, stderr) = (self.pipe_output(stdout), self.pipe_output(stderr));
+
+    let (exit_status, outcome, stderr) = if let Ok(status) = status {
+      let (status, (), ()) = status?;
+
+      (
+        status.code(),
+        if status.success() {
+          ToolOutcome::Success
+        } else {
+          ToolOutcome::Failure
+        },
+        stderr,
+      )
+    } else {
+      let timeout = format!(
+        "tool timed out after {} seconds",
+        self.limits.timeout.as_secs()
+      );
+
+      (
+        None,
+        ToolOutcome::Failure,
+        if stderr.is_empty() {
+          timeout
+        } else {
+          format!("{timeout}\n{stderr}")
+        },
+      )
     };
 
-    let stdout = stdout.await??;
-    let stderr = stderr.await??;
-
     Ok(ToolResult {
-      exit_status: status.code(),
-      outcome: if status.success() {
-        ToolOutcome::Success
-      } else {
-        ToolOutcome::Failure
-      },
+      exit_status,
+      outcome,
       stderr: (!stderr.is_empty()).then_some(stderr),
       stdout: (!stdout.is_empty()).then_some(stdout),
       ..Default::default()
     })
   }
 
-  async fn read_pipe<R>(self, mut reader: R) -> io::Result<String>
+  fn pipe_output(self, mut bytes: Vec<u8>) -> String {
+    let truncated = bytes.len() > self.limits.output_limit;
+
+    if truncated {
+      bytes.truncate(
+        self
+          .limits
+          .output_limit
+          .saturating_sub(self.limits.truncated_marker.len()),
+      );
+    }
+
+    let mut output = String::from_utf8_lossy(&bytes).into_owned();
+
+    if truncated {
+      output.push_str(self.limits.truncated_marker);
+    }
+
+    output
+  }
+
+  async fn read_pipe<R>(
+    self,
+    mut reader: R,
+    bytes: &mut Vec<u8>,
+  ) -> io::Result<()>
   where
-    R: AsyncRead + Send + Unpin + 'static,
+    R: AsyncRead + Unpin,
   {
-    let (mut bytes, mut buffer) = (Vec::new(), [0; 8192]);
+    let mut buffer = vec![0; 8192];
 
     let maximum = self.limits.output_limit.saturating_add(1);
 
@@ -84,82 +136,7 @@ impl CommandExecutor {
       }
     }
 
-    let truncated = bytes.len() > self.limits.output_limit;
-
-    if truncated {
-      bytes.truncate(
-        self
-          .limits
-          .output_limit
-          .saturating_sub(self.limits.truncated_marker.len()),
-      );
-    }
-
-    let mut output = String::from_utf8_lossy(&bytes).into_owned();
-
-    if truncated {
-      output.push_str(self.limits.truncated_marker);
-    }
-
-    Ok(output)
-  }
-
-  async fn timeout_result(
-    &self,
-    mut child: tokio::process::Child,
-    stdout: OutputTask,
-    stderr: OutputTask,
-  ) -> ToolResult {
-    let kill = child.start_kill();
-
-    let stdout = timeout(Duration::from_secs(1), stdout)
-      .await
-      .ok()
-      .and_then(Result::ok)
-      .and_then(Result::ok)
-      .unwrap_or_default();
-
-    let stderr = timeout(Duration::from_secs(1), stderr)
-      .await
-      .ok()
-      .and_then(Result::ok)
-      .and_then(Result::ok)
-      .unwrap_or_default();
-
-    let wait = timeout(Duration::from_secs(1), child.wait()).await;
-
-    let timeout = format!(
-      "tool timed out after {} seconds",
-      self.limits.timeout.as_secs()
-    );
-
-    let mut stderr = if stderr.is_empty() {
-      timeout
-    } else {
-      format!("{timeout}\n{stderr}")
-    };
-
-    if let Err(error) = kill {
-      stderr.push_str("\nfailed to kill process: ");
-      stderr.push_str(&error.to_string());
-    }
-
-    match wait {
-      Ok(Ok(_)) => {}
-      Ok(Err(error)) => {
-        stderr.push_str("\nfailed to wait for process: ");
-        stderr.push_str(&error.to_string());
-      }
-      Err(_) => {
-        stderr.push_str("\nfailed to wait for process: timed out");
-      }
-    }
-
-    ToolResult {
-      stderr: Some(stderr),
-      stdout: (!stdout.is_empty()).then_some(stdout),
-      ..Default::default()
-    }
+    Ok(())
   }
 }
 
@@ -239,9 +216,14 @@ mod tests {
       },
     };
 
-    assert_eq!(
-      executor.read_pipe(&b"foo bar baz"[..]).await.unwrap(),
-      "foo b..."
-    );
+    let mut bytes = Vec::new();
+
+    executor
+      .read_pipe(&b"foo bar baz"[..], &mut bytes)
+      .await
+      .unwrap();
+
+    assert_eq!(bytes, b"foo bar b");
+    assert_eq!(executor.pipe_output(bytes), "foo b...");
   }
 }
