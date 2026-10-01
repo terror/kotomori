@@ -29,7 +29,7 @@ unreachable_pub = "deny"
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
-arbitrary-source-item-ordering = "deny"
+arbitrary_source_item_ordering = "deny"
 wildcard_imports = "allow"
 
 [lints]
