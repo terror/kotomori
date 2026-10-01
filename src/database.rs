@@ -263,9 +263,14 @@ mod tests {
         updated_at,
       };
 
-      assert_eq!(
-        database.save_session(&mut session).unwrap_err().to_string(),
-        "out of range integral type conversion attempted",
+      assert_matches!(
+        database
+          .save_session(&mut session)
+          .unwrap_err()
+          .downcast::<rusqlite::Error>()
+          .unwrap(),
+        rusqlite::Error::ToSqlConversionFailure(error)
+          if error.is::<std::num::TryFromIntError>(),
       );
 
       assert_eq!(session.id, id);
