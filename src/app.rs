@@ -6,6 +6,7 @@ pub(crate) struct App {
   dimensions: Dimensions,
   event_receiver: UnboundedReceiver<Event>,
   event_sender: UnboundedSender<Event>,
+  redraw: bool,
   screen: Screen,
   settings: Settings,
 }
@@ -19,6 +20,23 @@ impl App {
     }
 
     Ok(())
+  }
+
+  fn draw(
+    &mut self,
+    renderer: &mut Renderer<impl Write>,
+    first_draw_duration: Option<Duration>,
+  ) -> Result<bool> {
+    if !mem::take(&mut self.redraw) {
+      return Ok(false);
+    }
+
+    renderer.draw(
+      &ViewComponent::new(&self.screen, first_draw_duration),
+      self.dimensions,
+    )?;
+
+    Ok(true)
   }
 
   fn handle_effect(&mut self, effect: Effect) {
@@ -38,6 +56,7 @@ impl App {
 
   fn handle_event(&mut self, event: Event) -> Result {
     if let Event::Resize(dimensions) = event {
+      self.redraw |= self.dimensions != dimensions;
       self.dimensions = dimensions;
       return Ok(());
     }
@@ -46,7 +65,10 @@ impl App {
       Screen::Quit => {}
       Screen::Resume(picker) => match event {
         Event::Action(action) => {
-          let Some(action) = picker.handle_action(action) else {
+          let action = picker.handle_action(action);
+          self.redraw |= picker.take_redraw();
+
+          let Some(action) = action else {
             return Ok(());
           };
 
@@ -60,6 +82,7 @@ impl App {
       },
       Screen::Session(state) => {
         let effects = state.handle_event(event);
+        self.redraw |= state.take_redraw();
 
         for effect in effects {
           self.handle_effect(effect);
@@ -94,6 +117,15 @@ impl App {
     });
   }
 
+  fn needs_animation(&self) -> bool {
+    match &self.screen {
+      Screen::Session(state) => {
+        state.active_run().is_some_and(Run::needs_animation)
+      }
+      Screen::Quit | Screen::Resume(_) => false,
+    }
+  }
+
   pub(crate) fn new(settings: &Settings) -> Result<Self> {
     Self::with_screen(
       settings,
@@ -113,6 +145,7 @@ impl App {
       Some(Agent::new(self.event_sender.clone(), &session.settings)?);
 
     self.screen = Screen::Session(Box::new(State::new(database, session)?));
+    self.redraw = true;
 
     Ok(())
   }
@@ -134,15 +167,24 @@ impl App {
     };
 
     let mut tick_interval = interval(Self::TICK_INTERVAL);
+    tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+    let mut animating = false;
 
     while !self.screen.should_quit() {
-      renderer.draw(
-        &ViewComponent::new(&self.screen, first_draw_duration),
-        self.dimensions,
-      )?;
+      let needs_animation = self.needs_animation();
 
-      if let Some(started_at) = first_draw_started_at.take() {
+      if needs_animation && !animating {
+        tick_interval.reset();
+      }
+
+      animating = needs_animation;
+
+      if self.draw(&mut renderer, first_draw_duration)?
+        && let Some(started_at) = first_draw_started_at.take()
+      {
         first_draw_duration = Some(started_at.elapsed());
+        self.redraw = true;
         continue;
       }
 
@@ -154,8 +196,8 @@ impl App {
 
           self.handle_event(event)?;
         }
-        _ = tick_interval.tick() => {
-          self.handle_event(Event::Tick(Self::TICK_INTERVAL))?;
+        _ = tick_interval.tick(), if animating => {
+          self.handle_event(Event::Tick(Instant::now()))?;
         }
       }
 
@@ -185,6 +227,7 @@ impl App {
       },
       event_receiver,
       event_sender,
+      redraw: true,
       screen,
       settings: settings.clone(),
     })
@@ -194,6 +237,142 @@ impl App {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn draws_only_after_visible_events_and_coalesces_pending_events() {
+    let settings = Settings {
+      model: "mock:foo".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    };
+
+    for screen in [
+      Screen::Resume(ResumePicker::new(Vec::new())),
+      Screen::Session(Box::new(
+        State::new(Database::new().unwrap(), Session::new(&settings).unwrap())
+          .unwrap(),
+      )),
+    ] {
+      let mut app = App::with_screen(&settings, screen).unwrap();
+      let mut renderer = Renderer::<Vec<u8>>::default();
+      let dimensions = Dimensions {
+        height: 24,
+        width: 80,
+      };
+
+      app.handle_event(Event::Resize(dimensions)).unwrap();
+      assert!(app.draw(&mut renderer, None).unwrap());
+      assert!(!app.draw(&mut renderer, None).unwrap());
+      assert!(!app.needs_animation());
+
+      for event in [
+        Event::Tick(Instant::now()),
+        Event::Resize(dimensions),
+        Event::Action(Action::Edit(Input {
+          key: Key::Backspace,
+          ..Default::default()
+        })),
+        Event::Action(Action::Submit),
+        Event::Agent {
+          event: AgentEvent::Done,
+          run_id: 0,
+        },
+      ] {
+        app.handle_event(event).unwrap();
+        assert!(!app.draw(&mut renderer, None).unwrap());
+      }
+
+      for c in "foo".chars() {
+        app
+          .event_sender
+          .send(Event::Action(Action::Edit(Input {
+            key: Key::Char(c),
+            ..Default::default()
+          })))
+          .unwrap();
+      }
+
+      app.drain_pending_events().unwrap();
+      assert!(app.draw(&mut renderer, None).unwrap());
+      assert!(!app.draw(&mut renderer, None).unwrap());
+
+      app
+        .handle_event(Event::Resize(Dimensions {
+          width: 40,
+          ..dimensions
+        }))
+        .unwrap();
+      assert!(app.draw(&mut renderer, None).unwrap());
+      assert!(!app.draw(&mut renderer, None).unwrap());
+    }
+  }
+
+  #[test]
+  fn ticks_draw_only_visible_animation() {
+    let settings = Settings {
+      model: "mock:foo".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    };
+    let mut state =
+      State::new(Database::new().unwrap(), Session::new(&settings).unwrap())
+        .unwrap();
+    state.handle_event(Event::Action(Action::Submit));
+    state.take_redraw();
+    let mut app =
+      App::with_screen(&settings, Screen::Session(Box::new(state))).unwrap();
+    let mut renderer = Renderer::<Vec<u8>>::default();
+    app
+      .handle_event(Event::Resize(Dimensions {
+        height: 24,
+        width: 80,
+      }))
+      .unwrap();
+
+    for (event, animating) in [
+      (Event::Tick(Instant::now()), true),
+      (
+        Event::Agent {
+          event: AgentEvent::Update(MessageUpdate::Text {
+            index: 0,
+            delta: "bar".into(),
+          }),
+          run_id: 0,
+        },
+        false,
+      ),
+      (
+        Event::Agent {
+          event: AgentEvent::Update(MessageUpdate::ReasoningDelta {
+            index: 1,
+            delta: "baz".into(),
+          }),
+          run_id: 0,
+        },
+        true,
+      ),
+      (
+        Event::Agent {
+          event: AgentEvent::Done,
+          run_id: 0,
+        },
+        false,
+      ),
+    ] {
+      app.handle_event(event).unwrap();
+      assert_eq!(app.needs_animation(), animating);
+      assert!(app.draw(&mut renderer, None).unwrap());
+      app
+        .handle_event(Event::Agent {
+          event: AgentEvent::Update(MessageUpdate::MessageId("foo".into())),
+          run_id: 0,
+        })
+        .unwrap();
+      assert!(!app.draw(&mut renderer, None).unwrap());
+      app.handle_event(Event::Tick(Instant::now())).unwrap();
+      assert_eq!(app.draw(&mut renderer, None).unwrap(), animating);
+    }
+  }
 
   #[test]
   fn resize_events_update_dimensions() {

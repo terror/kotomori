@@ -6,13 +6,13 @@ pub(crate) struct Composer {
   history: Vec<String>,
   history_draft: Option<String>,
   history_index: Option<usize>,
+  redraw: bool,
   textarea: TextArea<'static>,
 }
 
 impl Composer {
   pub(crate) fn clear(&mut self) {
-    self.textarea = TextArea::default();
-    self.command_index = 0;
+    self.set_input("");
     self.history_draft = None;
     self.history_index = None;
   }
@@ -56,11 +56,16 @@ impl Composer {
   }
 
   pub(crate) fn input(&mut self, input: Input) {
+    let cursor = self.cursor();
+
     if self.textarea.input(input) {
+      self.redraw = true;
       self.command_index = 0;
       self.history_draft = None;
       self.history_index = None;
     }
+
+    self.redraw |= cursor != self.cursor();
   }
 
   pub(crate) fn input_text(&self) -> String {
@@ -77,6 +82,7 @@ impl Composer {
       history,
       history_draft: None,
       history_index: None,
+      redraw: false,
       textarea: Self::textarea(input),
     }
   }
@@ -101,11 +107,14 @@ impl Composer {
   }
 
   fn select_next_command(&mut self) {
+    let selected = self.selected_command_index();
     let len = self.commands().count();
 
     if len > 0 {
       self.command_index = self.command_index.saturating_add(1) % len;
     }
+
+    self.redraw |= selected != self.selected_command_index();
   }
 
   fn select_next_history(&mut self) {
@@ -139,6 +148,7 @@ impl Composer {
   }
 
   fn select_previous_command(&mut self) {
+    let selected = self.selected_command_index();
     let len = self.commands().count();
 
     if len > 0 {
@@ -148,6 +158,8 @@ impl Composer {
         self.command_index.saturating_sub(1)
       };
     }
+
+    self.redraw |= selected != self.selected_command_index();
   }
 
   fn select_previous_history(&mut self) {
@@ -187,8 +199,20 @@ impl Composer {
   }
 
   fn set_input(&mut self, input: &str) {
-    self.textarea = Self::textarea(input);
+    let textarea = Self::textarea(input);
+
+    self.redraw |= self.textarea.lines() != textarea.lines()
+      || self.textarea.cursor() != textarea.cursor()
+      || self
+        .selected_command_index()
+        .is_some_and(|index| index != 0);
+
+    self.textarea = textarea;
     self.command_index = 0;
+  }
+
+  pub(crate) fn take_redraw(&mut self) -> bool {
+    mem::take(&mut self.redraw)
   }
 
   fn textarea(input: &str) -> TextArea<'static> {
@@ -203,5 +227,54 @@ impl Composer {
     textarea.move_cursor(CursorMove::End);
 
     textarea
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn redraw_tracks_text_cursor_and_selection_changes() {
+    let mut composer = Composer::new("foo", vec!["bar".into()]);
+    assert!(!composer.take_redraw());
+
+    for (key, redraw) in [
+      (Key::Left, true),
+      (Key::Left, true),
+      (Key::Left, true),
+      (Key::Left, false),
+      (Key::Backspace, false),
+    ] {
+      composer.input(Input {
+        key,
+        ..Default::default()
+      });
+      assert_eq!(composer.take_redraw(), redraw);
+    }
+
+    composer.select_previous();
+    assert!(composer.take_redraw());
+    composer.select_previous();
+    assert!(!composer.take_redraw());
+    composer.select_next();
+    assert!(composer.take_redraw());
+    composer.select_next();
+    assert!(!composer.take_redraw());
+
+    composer.set_input("/");
+    assert!(composer.take_redraw());
+    composer.select_next();
+    assert!(composer.take_redraw());
+    composer.select_previous();
+    assert!(composer.take_redraw());
+    assert!(composer.complete_command());
+    assert!(composer.take_redraw());
+    assert!(composer.complete_command());
+    assert!(!composer.take_redraw());
+    composer.clear();
+    assert!(composer.take_redraw());
+    composer.clear();
+    assert!(!composer.take_redraw());
   }
 }

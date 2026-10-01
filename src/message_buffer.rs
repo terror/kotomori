@@ -7,22 +7,31 @@ pub(crate) struct MessageBuffer {
 }
 
 impl MessageBuffer {
-  pub(crate) fn apply(&mut self, update: MessageUpdate) {
+  pub(crate) fn apply(&mut self, update: MessageUpdate) -> bool {
     match update {
       MessageUpdate::Complete(message) => {
-        self.blocks = message
+        let blocks = message
           .content
           .into_iter()
           .enumerate()
           .map(|(index, content)| (index, MessageDraft::Content(content)))
           .collect();
 
+        let changed = self.blocks != blocks;
+        self.blocks = blocks;
         self.id = message.id;
+        changed
       }
       MessageUpdate::Content { index, content } => {
-        self.blocks.insert(index, MessageDraft::Content(content));
+        let block = MessageDraft::Content(content);
+        let changed = self.blocks.get(&index) != Some(&block);
+        self.blocks.insert(index, block);
+        changed
       }
-      MessageUpdate::MessageId(id) => self.id = Some(id),
+      MessageUpdate::MessageId(id) => {
+        self.id = Some(id);
+        false
+      }
       MessageUpdate::ReasoningDelta { delta, index } if !delta.is_empty() => {
         if let MessageDraft::Reasoning(text) = self
           .blocks
@@ -30,6 +39,9 @@ impl MessageBuffer {
           .or_insert_with(|| MessageDraft::Reasoning(String::new()))
         {
           text.push_str(&delta);
+          true
+        } else {
+          false
         }
       }
       MessageUpdate::Text { delta, index } if !delta.is_empty() => {
@@ -39,9 +51,14 @@ impl MessageBuffer {
           .or_insert_with(|| MessageDraft::Content(AssistantContent::text("")))
         {
           text.text.push_str(&delta);
+          true
+        } else {
+          false
         }
       }
-      MessageUpdate::ReasoningDelta { .. } | MessageUpdate::Text { .. } => {}
+      MessageUpdate::ReasoningDelta { .. } | MessageUpdate::Text { .. } => {
+        false
+      }
     }
   }
 
@@ -93,6 +110,80 @@ mod tests {
     rig::message::{AdditionalParams, Text},
     serde_json::json,
   };
+
+  #[test]
+  fn updates_report_content_changes() {
+    let mut buffer = MessageBuffer::default();
+
+    for (update, changed) in [
+      (MessageUpdate::MessageId("foo".into()), false),
+      (
+        MessageUpdate::Text {
+          index: 0,
+          delta: String::new(),
+        },
+        false,
+      ),
+      (
+        MessageUpdate::ReasoningDelta {
+          index: 0,
+          delta: String::new(),
+        },
+        false,
+      ),
+      (
+        MessageUpdate::Text {
+          index: 0,
+          delta: "foo".into(),
+        },
+        true,
+      ),
+      (
+        MessageUpdate::Content {
+          index: 0,
+          content: AssistantContent::text("foo"),
+        },
+        false,
+      ),
+      (
+        MessageUpdate::ReasoningDelta {
+          index: 0,
+          delta: "bar".into(),
+        },
+        false,
+      ),
+      (
+        MessageUpdate::ReasoningDelta {
+          index: 1,
+          delta: "bar".into(),
+        },
+        true,
+      ),
+      (
+        MessageUpdate::Text {
+          index: 1,
+          delta: "baz".into(),
+        },
+        false,
+      ),
+      (
+        MessageUpdate::Complete(AgentMessage {
+          content: vec![AssistantContent::text("foo")],
+          id: None,
+        }),
+        true,
+      ),
+      (
+        MessageUpdate::Complete(AgentMessage {
+          content: vec![AssistantContent::text("foo")],
+          id: Some("bar".into()),
+        }),
+        false,
+      ),
+    ] {
+      assert_eq!(buffer.apply(update), changed);
+    }
+  }
 
   #[test]
   fn interleaved_parts_preserve_final_content() {

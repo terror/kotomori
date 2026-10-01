@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct ResumePicker {
   pub(crate) query: String,
+  redraw: bool,
   pub(crate) selected: usize,
   sessions: Vec<Session>,
 }
@@ -38,12 +39,15 @@ impl ResumePicker {
     &mut self,
     action: Action,
   ) -> Option<ResumePickerAction> {
+    let selected = self.selected;
+
     match action {
       Action::Edit(input) if input.key == Key::Backspace => {
-        self.query.pop();
+        self.redraw |= self.query.pop().is_some();
         self.clamp_selection();
       }
       Action::Edit(input) if input.key == Key::Char('u') && input.ctrl => {
+        self.redraw |= !self.query.is_empty();
         self.query.clear();
         self.clamp_selection();
       }
@@ -54,6 +58,7 @@ impl ResumePicker {
         ..
       }) => {
         self.query.push(c);
+        self.redraw = true;
         self.clamp_selection();
       }
       Action::SelectNext => {
@@ -85,12 +90,15 @@ impl ResumePicker {
       Action::CompleteCommand | Action::Edit(_) => {}
     }
 
+    self.redraw |= selected != self.selected;
+
     None
   }
 
   pub(crate) fn new(sessions: Vec<Session>) -> Self {
     Self {
       query: String::new(),
+      redraw: false,
       selected: 0,
       sessions,
     }
@@ -101,6 +109,10 @@ impl ResumePicker {
       .filtered()
       .get(self.selected)
       .and_then(|session| session.id)
+  }
+
+  pub(crate) fn take_redraw(&mut self) -> bool {
+    mem::take(&mut self.redraw)
   }
 }
 
