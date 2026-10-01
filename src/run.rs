@@ -55,26 +55,25 @@ impl Run {
 
   pub(crate) fn update(&mut self, update: MessageUpdate) {
     match &update {
-      MessageUpdate::Text(text) if !text.is_empty() => {
+      MessageUpdate::Text { delta, .. } if !delta.is_empty() => {
         self.activity = AgentActivity::Streaming;
       }
       MessageUpdate::ReasoningDelta { delta, .. } if !delta.is_empty() => {
         self.activity = AgentActivity::Reasoning;
       }
-      MessageUpdate::Reasoning(reasoning)
-      | MessageUpdate::ReasoningAppend(reasoning)
-        if !reasoning.text().is_empty() =>
-      {
+      MessageUpdate::Content {
+        content: AssistantContent::Reasoning(reasoning),
+        ..
+      } if !reasoning.text().is_empty() => {
         self.activity = AgentActivity::Reasoning;
       }
-      MessageUpdate::ToolCall(_) => {
+      MessageUpdate::Content {
+        content: AssistantContent::ToolCall(_),
+        ..
+      } => {
         self.activity = AgentActivity::Waiting;
       }
-      MessageUpdate::MessageId(_)
-      | MessageUpdate::Reasoning(_)
-      | MessageUpdate::ReasoningAppend(_)
-      | MessageUpdate::ReasoningDelta { .. }
-      | MessageUpdate::Text(_) => {}
+      _ => {}
     }
 
     self.message.apply(update);
@@ -108,9 +107,12 @@ mod tests {
     run.update_many(&[
       MessageUpdate::ReasoningDelta {
         delta: "bar".into(),
-        id: Some("foo".into()),
+        index: 0,
       },
-      MessageUpdate::Text("baz".into()),
+      MessageUpdate::Text {
+        delta: "baz".into(),
+        index: 1,
+      },
     ]);
 
     run.reset_message();

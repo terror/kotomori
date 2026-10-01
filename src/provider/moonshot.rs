@@ -1,15 +1,18 @@
-use {super::*, ::rig::providers::moonshot};
+use {
+  super::*,
+  ::rig::providers::openai::{OpenAIConfig, wire::MOONSHOT},
+};
 
-pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
+pub(super) fn build(model: &Model) -> Arc<dyn Provider> {
   let api_key = env::var("MOONSHOT_API_KEY").unwrap_or_default();
 
-  let mut builder = moonshot::Client::builder().api_key(api_key);
+  let config = OpenAIConfig::with_key(&MOONSHOT, api_key);
 
-  if let Ok(base_url) = env::var("MOONSHOT_API_BASE") {
-    builder = builder.base_url(base_url);
-  }
+  let config = if let Ok(base_url) = env::var("MOONSHOT_API_BASE") {
+    config.with_base_url(base_url)
+  } else {
+    config
+  };
 
-  let client = builder.build()?;
-
-  Ok(Rig::build(&client, model))
+  Rig::build(config.client().completion(&model.name))
 }

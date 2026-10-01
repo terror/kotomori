@@ -4,8 +4,8 @@ use super::*;
 pub(crate) enum UserMessageContent {
   Text(String),
   ToolResult {
-    call_id: Option<String>,
-    id: String,
+    call: CallId,
+    name: ToolName,
     result: ToolResult,
   },
 }

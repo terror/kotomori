@@ -156,8 +156,8 @@ impl Agent {
         };
 
         let message = Message::User(vec![UserMessageContent::ToolResult {
-          call_id: tool_call.protocol.call_id,
-          id: tool_call.protocol.id,
+          call: tool_call.protocol.id,
+          name: tool_call.protocol.function.name,
           result,
         }]);
 
@@ -224,9 +224,15 @@ mod tests {
     MalformedToolCall,
     MessageId(&'static str),
     ProtocolToolCall(::rig::message::ToolCall),
-    Reasoning(Reasoning),
+    Reasoning(Sealed<Reasoning>),
     ReasoningDelta(&'static str),
     ToolCall,
+  }
+
+  #[derive(Clone, Copy, Eq, PartialEq)]
+  enum OutputPart {
+    Reasoning,
+    Text,
   }
 
   #[derive(Debug)]
@@ -244,36 +250,72 @@ mod tests {
     ) -> Result {
       self.requests.lock().unwrap().push(request.messages);
 
+      let mut index = 0;
+      let mut pending = None;
+
       for output in self.outputs.lock().unwrap().pop_front().unwrap() {
-        match output {
-          Output::Delta(delta) => sink.delta(delta)?,
-          Output::MalformedToolCall => {
-            sink.tool_call(::rig::message::ToolCall::new(
-              "malformed".into(),
-              ToolFunction {
-                arguments: json!({}),
-                name: "command".into(),
-              },
-            ));
+        let part = match &output {
+          Output::Delta(_) => Some(OutputPart::Text),
+          Output::MessageId(_) => pending,
+          Output::Reasoning(_) | Output::ReasoningDelta(_) => {
+            Some(OutputPart::Reasoning)
           }
-          Output::MessageId(id) => sink.message_id(id.into())?,
-          Output::ReasoningDelta(delta) => {
-            sink.reasoning_delta(None, delta)?;
-          }
-          Output::Reasoning(reasoning) => {
-            sink.reasoning(reasoning)?;
-          }
-          Output::ProtocolToolCall(tool_call) => sink.tool_call(tool_call),
-          Output::ToolCall => sink.tool_call(::rig::message::ToolCall::new(
-            "foo".into(),
-            ToolFunction {
-              arguments: json!({
-                "command": "echo bar",
-              }),
-              name: "command".into(),
-            },
-          )),
+          _ => None,
+        };
+
+        if pending.is_some() && pending != part {
+          index += 1;
         }
+
+        let update = match output {
+          Output::Delta(delta) => MessageUpdate::Text {
+            delta: delta.into(),
+            index,
+          },
+          Output::MalformedToolCall => MessageUpdate::Content {
+            index,
+            content: AssistantContent::ToolCall(
+              ::rig::message::ToolCall::from_wire(
+                "malformed",
+                ToolFunction {
+                  arguments: json!({}),
+                  name: ToolName::new("command").unwrap(),
+                },
+              ),
+            ),
+          },
+          Output::MessageId(id) => MessageUpdate::MessageId(id.into()),
+          Output::ReasoningDelta(delta) => MessageUpdate::ReasoningDelta {
+            delta: delta.into(),
+            index,
+          },
+          Output::Reasoning(reasoning) => MessageUpdate::Content {
+            index,
+            content: AssistantContent::Reasoning(reasoning),
+          },
+          Output::ProtocolToolCall(tool_call) => MessageUpdate::Content {
+            index,
+            content: AssistantContent::ToolCall(tool_call),
+          },
+          Output::ToolCall => MessageUpdate::Content {
+            index,
+            content: AssistantContent::tool_call(
+              "foo",
+              ToolName::new("command").unwrap(),
+              json!({"command": "echo bar"}),
+            ),
+          },
+        };
+
+        let complete = matches!(update, MessageUpdate::Content { .. });
+
+        sink.update(update)?;
+
+        if complete {
+          index += 1;
+        }
+
+        pending = if complete { None } else { part };
       }
 
       Ok(())
@@ -348,7 +390,7 @@ mod tests {
         event: AgentEvent::Message(Message::agent(vec![
           AssistantContent::tool_call(
             "foo",
-            "command",
+            ToolName::new("command").unwrap(),
             json!({"command": "echo bar"})
           )
         ])),
@@ -378,8 +420,8 @@ mod tests {
       Event::Agent {
         event: AgentEvent::Message(Message::User(vec![
           UserMessageContent::ToolResult {
-            call_id: None,
-            id: "foo".into(),
+            call: CallId::from_wire("foo"),
+            name: ToolName::new("command").unwrap(),
             result: tool_result.clone(),
           }
         ])),
@@ -397,12 +439,12 @@ mod tests {
           Message::User(vec![UserMessageContent::Text("foo".into())]),
           Message::agent(vec![AssistantContent::tool_call(
             "foo",
-            "command",
+            ToolName::new("command").unwrap(),
             json!({"command": "echo bar"})
           )]),
           Message::User(vec![UserMessageContent::ToolResult {
-            call_id: None,
-            id: "foo".into(),
+            call: CallId::from_wire("foo"),
+            name: ToolName::new("command").unwrap(),
             result: tool_result.clone(),
           }]),
         ],
@@ -529,12 +571,12 @@ mod tests {
           Message::User(vec![UserMessageContent::Text("foo".into())]),
           Message::agent(vec![AssistantContent::tool_call(
             "foo",
-            "command",
+            ToolName::new("command").unwrap(),
             json!({"command": "echo bar"})
           )]),
           Message::User(vec![UserMessageContent::ToolResult {
-            call_id: None,
-            id: "foo".into(),
+            call: CallId::from_wire("foo"),
+            name: ToolName::new("command").unwrap(),
             result: tool_result.clone(),
           }]),
         ],
@@ -554,7 +596,7 @@ mod tests {
           event: AgentEvent::Message(Message::agent(vec![
             AssistantContent::tool_call(
               "foo",
-              "command",
+              ToolName::new("command").unwrap(),
               json!({"command": "echo bar"})
             )
           ])),
@@ -563,15 +605,18 @@ mod tests {
         Event::Agent {
           event: AgentEvent::Message(Message::User(vec![
             UserMessageContent::ToolResult {
-              call_id: None,
-              id: "foo".into(),
+              call: CallId::from_wire("foo"),
+              name: ToolName::new("command").unwrap(),
               result: tool_result,
             }
           ])),
           run_id: 0,
         },
         Event::Agent {
-          event: AgentEvent::Update(MessageUpdate::Text("done".into())),
+          event: AgentEvent::Update(MessageUpdate::Text {
+            delta: "done".into(),
+            index: 0
+          }),
           run_id: 0,
         },
         Event::Agent {
@@ -626,14 +671,14 @@ mod tests {
             AssistantContent::text("foo"),
             AssistantContent::tool_call(
               "foo",
-              "command",
+              ToolName::new("command").unwrap(),
               json!({"command": "echo bar"})
             ),
             AssistantContent::text("baz"),
           ]),
           Message::User(vec![UserMessageContent::ToolResult {
-            call_id: None,
-            id: "foo".into(),
+            call: CallId::from_wire("foo"),
+            name: ToolName::new("command").unwrap(),
             result: tool_result,
           }]),
         ],
@@ -645,7 +690,11 @@ mod tests {
   async fn preserves_reasoning_with_tool_calls() {
     let test_agent = TestAgent::new(
       vec![
-        vec![Output::ReasoningDelta("baz"), Output::ToolCall],
+        vec![
+          Output::ReasoningDelta("baz"),
+          Output::Reasoning(Reasoning::new("baz").sealed("mock")),
+          Output::ToolCall,
+        ],
         vec![Output::Delta("done")],
       ],
       true,
@@ -676,16 +725,16 @@ mod tests {
         vec![
           Message::User(vec![UserMessageContent::Text("foo".into())]),
           Message::agent(vec![
-            AssistantContent::Reasoning(Reasoning::new("baz")),
+            AssistantContent::Reasoning(Reasoning::new("baz").sealed("mock")),
             AssistantContent::tool_call(
               "foo",
-              "command",
+              ToolName::new("command").unwrap(),
               json!({"command": "echo bar"})
             ),
           ]),
           Message::User(vec![UserMessageContent::ToolResult {
-            call_id: None,
-            id: "foo".into(),
+            call: CallId::from_wire("foo"),
+            name: ToolName::new("command").unwrap(),
             result: tool_result,
           }]),
         ],
@@ -695,16 +744,18 @@ mod tests {
 
   #[tokio::test]
   async fn preserves_protocol_in_subsequent_requests() {
-    let reasoning = Reasoning::encrypted("foo").with_id("bar".into());
+    let reasoning = Reasoning::encrypted("foo")
+      .with_id("bar".into())
+      .sealed("mock");
 
-    let tool_call = ::rig::message::ToolCall::new(
-      "baz".into(),
+    let tool_call = ::rig::message::ToolCall::from_dual_wire(
+      "baz",
+      "qux",
       ToolFunction {
         arguments: json!({"command": "echo bar", "cwd": null}),
-        name: "command".into(),
+        name: ToolName::new("command").unwrap(),
       },
     )
-    .with_call_id("qux".into())
     .with_signature(Some("quux".into()))
     .with_additional_params(Some(json!({"foo": "bar"})));
 
@@ -751,23 +802,21 @@ mod tests {
 
     assert_eq!(
       request.chat_history,
-      OneOrMany::many([
+      vec![
         RigMessage::user("foo"),
         RigMessage::Assistant {
-          content: OneOrMany::many([
+          content: vec![
             AssistantContent::Reasoning(reasoning),
             AssistantContent::ToolCall(tool_call),
-          ])
-          .unwrap(),
+          ],
           id: Some("quuz".into()),
         },
-        RigMessage::tool_result_with_call_id(
-          "baz",
-          Some("qux".into()),
+        RigMessage::tool_result(
+          CallId::from_dual_wire("baz", "qux"),
+          ToolName::new("command").unwrap(),
           result.message_content()
         ),
-      ])
-      .unwrap()
+      ]
     );
   }
 
@@ -776,7 +825,7 @@ mod tests {
     let mut test_agent = TestAgent::new(
       vec![vec![
         Output::ReasoningDelta("foo"),
-        Output::Reasoning(Reasoning::new("foo")),
+        Output::Reasoning(Reasoning::new("foo").sealed("mock")),
         Output::Delta("bar"),
       ]],
       true,
@@ -803,23 +852,29 @@ mod tests {
         Event::Agent {
           event: AgentEvent::Update(MessageUpdate::ReasoningDelta {
             delta: "foo".into(),
-            id: None
+            index: 0,
           }),
           run_id: 0,
         },
         Event::Agent {
-          event: AgentEvent::Update(MessageUpdate::Reasoning(Reasoning::new(
-            "foo"
-          ))),
+          event: AgentEvent::Update(MessageUpdate::Content {
+            index: 0,
+            content: AssistantContent::Reasoning(
+              Reasoning::new("foo").sealed("mock"),
+            ),
+          }),
           run_id: 0,
         },
         Event::Agent {
-          event: AgentEvent::Update(MessageUpdate::Text("bar".into())),
+          event: AgentEvent::Update(MessageUpdate::Text {
+            delta: "bar".into(),
+            index: 1
+          }),
           run_id: 0,
         },
         Event::Agent {
           event: AgentEvent::Message(Message::agent(vec![
-            AssistantContent::Reasoning(Reasoning::new("foo")),
+            AssistantContent::Reasoning(Reasoning::new("foo").sealed("mock")),
             AssistantContent::text("bar")
           ])),
           run_id: 0,

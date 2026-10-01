@@ -24,26 +24,23 @@ impl From<&Message> for RigMessage {
   fn from(message: &Message) -> Self {
     match message {
       Message::Agent(message) => Self::Assistant {
-        content: OneOrMany::many(message.content.clone())
-          .unwrap_or_else(|_| OneOrMany::one(AssistantContent::text(""))),
+        content: message.content.clone(),
         id: message.id.clone(),
       },
       Message::User(content) => Self::User {
-        content: OneOrMany::many(content.iter().map(|content| match content {
-          UserMessageContent::Text(text) => UserContent::text(text.clone()),
-          UserMessageContent::ToolResult {
-            call_id,
-            id,
-            result,
-          } => UserContent::ToolResult(::rig::message::ToolResult {
-            call_id: call_id.clone(),
-            id: id.clone(),
-            content: OneOrMany::one(ToolResultContent::text(
-              result.message_content(),
-            )),
-          }),
-        }))
-        .unwrap_or_else(|_| OneOrMany::one(UserContent::text(String::new()))),
+        content: content
+          .iter()
+          .map(|content| match content {
+            UserMessageContent::Text(text) => UserContent::text(text.clone()),
+            UserMessageContent::ToolResult { call, name, result } => {
+              UserContent::tool_result(
+                call.clone(),
+                name.clone(),
+                vec![ToolResultContent::text(result.message_content())],
+              )
+            }
+          })
+          .collect(),
       },
     }
   }
@@ -58,23 +55,26 @@ mod tests {
     let content = vec![
       AssistantContent::Reasoning(
         Reasoning::new_with_signature("foo", Some("bar".into()))
-          .with_id("baz".into()),
+          .with_id("baz".into())
+          .sealed("foo"),
       ),
       AssistantContent::text("qux"),
       AssistantContent::ToolCall(
-        ::rig::message::ToolCall::new(
-          "quux".into(),
+        ::rig::message::ToolCall::from_dual_wire(
+          "quux",
+          "quuz",
           ToolFunction {
             arguments: json!({"foo": null, "bar": ["baz"]}),
-            name: "qux".into(),
+            name: ToolName::new("qux").unwrap(),
           },
         )
-        .with_call_id("quuz".into())
         .with_signature(Some("corge".into()))
         .with_additional_params(Some(json!({"foo": "bar"}))),
       ),
       AssistantContent::Reasoning(
-        Reasoning::encrypted("grault").with_id("garply".into()),
+        Reasoning::encrypted("grault")
+          .with_id("garply".into())
+          .sealed("foo"),
       ),
       AssistantContent::text("waldo"),
     ];
@@ -90,7 +90,7 @@ mod tests {
     assert_eq!(
       RigMessage::from(&message),
       RigMessage::Assistant {
-        content: OneOrMany::many(content).unwrap(),
+        content,
         id: Some("fred".into()),
       },
     );
@@ -104,16 +104,16 @@ mod tests {
     };
 
     let message = Message::User(vec![UserMessageContent::ToolResult {
-      call_id: Some("baz".into()),
-      id: "foo".into(),
+      call: CallId::from_dual_wire("foo", "baz"),
+      name: ToolName::new("qux").unwrap(),
       result: result.clone(),
     }]);
 
     assert_eq!(
       RigMessage::from(&message),
-      RigMessage::tool_result_with_call_id(
-        "foo",
-        Some("baz".into()),
+      RigMessage::tool_result(
+        CallId::from_dual_wire("foo", "baz"),
+        ToolName::new("qux").unwrap(),
         result.message_content()
       )
     );

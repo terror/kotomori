@@ -9,11 +9,11 @@ pub(crate) struct ToolInvocation {
 impl ToolInvocation {
   #[cfg(test)]
   pub(crate) fn new(id: &str, kind: ToolInvocationKind) -> Self {
-    let protocol = ::rig::message::ToolCall::new(
-      id.into(),
+    let protocol = ::rig::message::ToolCall::from_wire(
+      id,
       ToolFunction {
         arguments: kind.arguments(),
-        name: kind.name().into(),
+        name: ToolName::new(kind.name()).unwrap(),
       },
     );
 
@@ -37,14 +37,14 @@ mod tests {
 
   #[test]
   fn decodes_command_tool_call() {
-    let protocol = ::rig::message::ToolCall::new(
-      "foo".into(),
+    let protocol = ::rig::message::ToolCall::from_dual_wire(
+      "foo",
+      "qux",
       ToolFunction {
         arguments: json!({"command": "bar baz", "cwd": null}),
-        name: "command".into(),
+        name: ToolName::new("command").unwrap(),
       },
     )
-    .with_call_id("qux".into())
     .with_signature(Some("quux".into()))
     .with_additional_params(Some(json!({"foo": "baz"})));
 
@@ -64,14 +64,15 @@ mod tests {
 
   #[test]
   fn unknown_tool_errors() {
-    let error = ToolInvocationKind::decode(::rig::message::ToolCall::new(
-      "foo".into(),
-      ToolFunction {
-        arguments: json!({}),
-        name: "bar".into(),
-      },
-    ))
-    .unwrap_err();
+    let error =
+      ToolInvocationKind::decode(::rig::message::ToolCall::from_wire(
+        "foo",
+        ToolFunction {
+          arguments: json!({}),
+          name: ToolName::new("bar").unwrap(),
+        },
+      ))
+      .unwrap_err();
 
     assert_eq!(error.to_string(), "unknown tool `bar`");
   }

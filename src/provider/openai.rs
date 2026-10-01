@@ -1,15 +1,17 @@
 use {super::*, ::rig::providers::openai};
 
-pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
+pub(super) fn build(model: &Model) -> Arc<dyn Provider> {
   let api_key = env::var("OPENAI_API_KEY").unwrap_or_default();
 
-  let mut builder = openai::CompletionsClient::builder().api_key(api_key);
+  let config = openai::OpenAIConfig::new(api_key);
 
-  if let Ok(base_url) = env::var("OPENAI_BASE_URL") {
-    builder = builder.base_url(base_url);
-  }
+  let config = if let Ok(base_url) = env::var("OPENAI_BASE_URL") {
+    config.with_base_url(base_url)
+  } else {
+    config
+  };
 
-  let client = builder.build()?;
+  let client = config.client();
 
-  Ok(Rig::build(&client, model))
+  Rig::build(client.chat(&model.name))
 }

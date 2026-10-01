@@ -341,12 +341,15 @@ mod tests {
     state.handle_event(Event::Agent {
       event: AgentEvent::Update(MessageUpdate::ReasoningDelta {
         delta: "bar".into(),
-        id: None,
+        index: 0,
       }),
       run_id: 0,
     });
     state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text("baz".into())),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "baz".into(),
+        index: 1,
+      }),
       run_id: 0,
     });
 
@@ -360,7 +363,7 @@ mod tests {
 
     state.handle_event(Event::Agent {
       event: AgentEvent::Message(Message::agent(vec![
-        AssistantContent::Reasoning(Reasoning::new("bar")),
+        AssistantContent::reasoning("foo", "bar"),
         AssistantContent::text("baz"),
         AssistantContent::ToolCall(invocation.protocol.clone()),
       ])),
@@ -377,8 +380,8 @@ mod tests {
     state.handle_event(Event::Agent {
       event: AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          call_id: None,
-          id: "foo".into(),
+          call: CallId::from_wire("foo"),
+          name: ToolName::new("command").unwrap(),
           result: result.clone(),
         },
       ])),
@@ -397,13 +400,13 @@ mod tests {
       vec![
         Message::User(vec![UserMessageContent::Text("foo".into())]),
         Message::agent(vec![
-          AssistantContent::Reasoning(Reasoning::new("bar")),
+          AssistantContent::reasoning("foo", "bar"),
           AssistantContent::text("baz"),
           AssistantContent::ToolCall(invocation.protocol),
         ]),
         Message::User(vec![UserMessageContent::ToolResult {
-          call_id: None,
-          id: "foo".into(),
+          call: CallId::from_wire("foo"),
+          name: ToolName::new("command").unwrap(),
           result,
         }]),
       ],
@@ -781,8 +784,8 @@ mod tests {
     state.handle_event(Event::Agent {
       event: AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          call_id: None,
-          id: "foo".into(),
+          call: CallId::from_wire("foo"),
+          name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("bar".into()),
             ..Default::default()
@@ -915,7 +918,10 @@ mod tests {
     );
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text("bar".into())),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
     state.handle_event(Event::Agent {
@@ -958,7 +964,10 @@ mod tests {
     );
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text("bar".into())),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
     state.handle_event(Event::Agent {
@@ -1028,8 +1037,8 @@ mod tests {
     state.handle_event(Event::Agent {
       event: AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          call_id: None,
-          id: "late".into(),
+          call: CallId::from_wire("late"),
+          name: ToolName::new("command").unwrap(),
           result: ToolResult::default(),
         },
       ])),
@@ -1064,7 +1073,10 @@ mod tests {
     );
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text("bar".into())),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
     state.handle_event(Event::Agent {
@@ -1139,7 +1151,10 @@ mod tests {
     state.handle_event(Event::Action(Action::Submit));
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text("partial response".into())),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "partial response".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
 
@@ -1221,21 +1236,24 @@ mod tests {
     state.handle_event(Event::Action(Action::Submit));
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text("bar".into())),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
 
     state.handle_event(Event::Agent {
       event: AgentEvent::Update(MessageUpdate::ReasoningDelta {
         delta: "baz".into(),
-        id: None,
+        index: 1,
       }),
       run_id: 0,
     });
 
     let messages = vec![
       Message::agent(vec![
-        AssistantContent::Reasoning(Reasoning::new("foo")),
+        AssistantContent::reasoning("foo", "foo"),
         AssistantContent::text("bar"),
         AssistantContent::ToolCall(
           ToolInvocation::new(
@@ -1261,16 +1279,16 @@ mod tests {
       ]),
       Message::User(vec![
         UserMessageContent::ToolResult {
-          call_id: None,
-          id: "bar".into(),
+          call: CallId::from_wire("bar"),
+          name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("foo".into()),
             ..Default::default()
           },
         },
         UserMessageContent::ToolResult {
-          call_id: None,
-          id: "foo".into(),
+          call: CallId::from_wire("foo"),
+          name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("bar".into()),
             ..Default::default()
@@ -1379,7 +1397,10 @@ mod tests {
 
     state.run = Some({
       let mut run = Run::new(0);
-      run.update(MessageUpdate::Text("foo".into()));
+      run.update(MessageUpdate::Text {
+        delta: "foo".into(),
+        index: 0,
+      });
       run
     });
 
@@ -1391,7 +1412,10 @@ mod tests {
       state.run,
       Some({
         let mut run = Run::new(0);
-        run.update(MessageUpdate::Text("foo".into()));
+        run.update(MessageUpdate::Text {
+          delta: "foo".into(),
+          index: 0,
+        });
         run
       })
     );
@@ -1414,7 +1438,10 @@ mod tests {
 
     state.run = Some({
       let mut run = Run::new(0);
-      run.update(MessageUpdate::Text("foo".into()));
+      run.update(MessageUpdate::Text {
+        delta: "foo".into(),
+        index: 0,
+      });
       run
     });
 
@@ -1445,7 +1472,10 @@ mod tests {
     state.handle_event(Event::Action(Action::Submit));
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text("partial".into())),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "partial".into(),
+        index: 0,
+      }),
       run_id: 0,
     });
 
@@ -1543,13 +1573,32 @@ mod tests {
     };
 
     let reasoning = Reasoning::new_with_signature("foo", Some("bar".into()))
-      .with_id("baz".into());
-    let encrypted = Reasoning::encrypted("qux").with_id("quux".into());
+      .with_id("baz".into())
+      .sealed("foo");
+    let encrypted = Reasoning::encrypted("qux")
+      .with_id("quux".into())
+      .sealed("foo");
 
-    sink.reasoning_delta(Some("baz".into()), "foo").unwrap();
-    sink.reasoning(reasoning.clone()).unwrap();
-    sink.reasoning(encrypted.clone()).unwrap();
-    sink.delta("quuz").unwrap();
+    for update in [
+      MessageUpdate::ReasoningDelta {
+        delta: "foo".into(),
+        index: 0,
+      },
+      MessageUpdate::Content {
+        index: 0,
+        content: AssistantContent::Reasoning(reasoning.clone()),
+      },
+      MessageUpdate::Content {
+        index: 1,
+        content: AssistantContent::Reasoning(encrypted.clone()),
+      },
+      MessageUpdate::Text {
+        delta: "quuz".into(),
+        index: 2,
+      },
+    ] {
+      sink.update(update).unwrap();
+    }
 
     while let Ok(event) = events.try_recv() {
       state.handle_event(event);
@@ -1992,7 +2041,10 @@ mod tests {
 
     state.run = Some({
       let mut run = Run::new(0);
-      run.update(MessageUpdate::Text("bar".into()));
+      run.update(MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      });
       run
     });
 
@@ -2044,18 +2096,21 @@ mod tests {
     let (request, response_receiver) = ApprovalRequest::new(invocation.clone());
 
     for event in [
-      AgentEvent::Update(MessageUpdate::Text("stale".into())),
+      AgentEvent::Update(MessageUpdate::Text {
+        delta: "stale".into(),
+        index: 0,
+      }),
       AgentEvent::Update(MessageUpdate::ReasoningDelta {
         delta: "stale".into(),
-        id: None,
+        index: 0,
       }),
       AgentEvent::Message(Message::agent(vec![AssistantContent::ToolCall(
         invocation.protocol,
       )])),
       AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          call_id: None,
-          id: "stale".into(),
+          call: CallId::from_wire("stale"),
+          name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("stale".into()),
             ..Default::default()
@@ -2079,7 +2134,10 @@ mod tests {
     assert_eq!(state.run, Some(Run::new(1)));
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text("current".into())),
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "current".into(),
+        index: 0,
+      }),
       run_id: 1,
     });
 
@@ -2236,15 +2294,22 @@ mod tests {
       };
 
       let mut state = State::new(&settings).unwrap();
-      let reasoning = Reasoning::new_with_signature("foo", Some("bar".into()));
+      let reasoning =
+        Reasoning::new_with_signature("foo", Some("bar".into())).sealed("foo");
       let mut run = Run::new(0);
 
       run.update_many(&[
-        MessageUpdate::Reasoning(reasoning.clone()),
-        MessageUpdate::Text("baz".into()),
+        MessageUpdate::Content {
+          index: 0,
+          content: AssistantContent::Reasoning(reasoning.clone()),
+        },
+        MessageUpdate::Text {
+          delta: "baz".into(),
+          index: 1,
+        },
         MessageUpdate::ReasoningDelta {
           delta: "quux".into(),
-          id: None,
+          index: 2,
         },
       ]);
 

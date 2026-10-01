@@ -2,10 +2,18 @@ use super::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum MessageUpdate {
+  Complete(AgentMessage),
+  Content {
+    index: usize,
+    content: AssistantContent,
+  },
   MessageId(String),
-  Reasoning(Reasoning),
-  ReasoningAppend(Reasoning),
-  ReasoningDelta { delta: String, id: Option<String> },
-  Text(String),
-  ToolCall(::rig::message::ToolCall),
+  ReasoningDelta {
+    delta: String,
+    index: usize,
+  },
+  Text {
+    delta: String,
+    index: usize,
+  },
 }

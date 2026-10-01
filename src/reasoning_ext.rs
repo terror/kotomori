@@ -18,3 +18,9 @@ impl ReasoningExt for Reasoning {
       .join("\n")
   }
 }
+
+impl ReasoningExt for Sealed<Reasoning> {
+  fn text(&self) -> String {
+    self.open(self.issuer()).unwrap().text()
+  }
+}

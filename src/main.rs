@@ -52,7 +52,6 @@ use {
   provider::Provider,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
-  reasoning_draft::ReasoningDraft,
   reasoning_ext::ReasoningExt,
   render_plan::RenderPlan,
   renderer::Renderer,
@@ -60,13 +59,13 @@ use {
   resume_picker::ResumePicker,
   resume_picker_action::ResumePickerAction,
   rig::{
-    OneOrMany,
     completion::{
       AssistantContent, CompletionRequest, Message as RigMessage,
       ToolDefinition,
     },
     message::{
-      Reasoning, ReasoningContent, ToolFunction, ToolResultContent, UserContent,
+      CallId, Reasoning, ReasoningContent, Sealed, ToolFunction, ToolName,
+      ToolResultContent, UserContent,
     },
   },
   run::Run,
@@ -81,7 +80,7 @@ use {
   state::State,
   std::{
     backtrace::BacktraceStatus,
-    collections::VecDeque,
+    collections::{BTreeMap, VecDeque},
     env,
     fmt::{self, Debug, Display, Formatter},
     fs,
@@ -90,6 +89,7 @@ use {
     mem,
     path::{Path, PathBuf},
     process::{self, Stdio},
+    slice,
     str::{self, FromStr},
     sync::{Arc, LazyLock, OnceLock},
     thread,
@@ -142,14 +142,7 @@ macro_rules! assert_matches {
 }
 
 #[cfg(test)]
-use {
-  serde_json::Value,
-  std::{
-    future::{self, Future},
-    sync::Mutex,
-  },
-  tool::CommandTool,
-};
+use {serde_json::Value, std::sync::Mutex, tool::CommandTool};
 
 mod action;
 mod agent;
@@ -184,7 +177,6 @@ mod options;
 mod patch;
 mod provider;
 mod provider_sink;
-mod reasoning_draft;
 mod reasoning_ext;
 mod render_plan;
 mod renderer;

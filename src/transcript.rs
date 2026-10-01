@@ -91,11 +91,11 @@ mod tests {
         AssistantContent::text("baz"),
       ]),
       Message::User(vec![UserMessageContent::ToolResult {
-        call_id: None,
-        id: "foo".into(),
+        call: CallId::from_wire("foo"),
+        name: ToolName::new("command").unwrap(),
         result: ToolResult::default(),
       }]),
-      Message::agent(vec![AssistantContent::Reasoning(Reasoning::new("qux"))]),
+      Message::agent(vec![AssistantContent::reasoning("foo", "qux")]),
       Message::agent(vec![AssistantContent::text("quux")]),
     ];
 
@@ -131,7 +131,7 @@ mod tests {
 
     buffer.apply(MessageUpdate::ReasoningDelta {
       delta: "foo".into(),
-      id: None,
+      index: 0,
     });
 
     assert_eq!(

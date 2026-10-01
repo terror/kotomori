@@ -17,39 +17,57 @@ impl Provider for Mock {
           });
 
         if has_tool_result {
-          sink.delta("done")?;
+          sink.update(MessageUpdate::Text {
+            delta: "done".into(),
+            index: 0,
+          })?;
         } else {
-          sink.tool_call(::rig::message::ToolCall::new(
-            "foo".into(),
-            ToolFunction {
-              arguments: serde_json::json!({
-                "command": "echo bar",
-              }),
-              name: "command".into(),
-            },
-          ));
+          sink.update(MessageUpdate::Content {
+            content: AssistantContent::ToolCall(
+              ::rig::message::ToolCall::from_wire(
+                "foo",
+                ToolFunction {
+                  arguments: serde_json::json!({
+                    "command": "echo bar",
+                  }),
+                  name: ToolName::new("command")?,
+                },
+              ),
+            ),
+            index: 0,
+          })?;
         }
       }
       "error" if request.messages.len() == 1 => {
         bail!("mock provider error");
       }
       "malformed-tool-arguments" if request.messages.len() == 1 => {
-        sink.tool_call(::rig::message::ToolCall::new(
-          "foo".into(),
-          ToolFunction {
-            arguments: serde_json::json!({}),
-            name: "command".into(),
-          },
-        ));
+        sink.update(MessageUpdate::Content {
+          content: AssistantContent::ToolCall(
+            ::rig::message::ToolCall::from_wire(
+              "foo",
+              ToolFunction {
+                arguments: serde_json::json!({}),
+                name: ToolName::new("command")?,
+              },
+            ),
+          ),
+          index: 0,
+        })?;
       }
       "unknown-tool" if request.messages.len() == 1 => {
-        sink.tool_call(::rig::message::ToolCall::new(
-          "foo".into(),
-          ToolFunction {
-            arguments: serde_json::json!({}),
-            name: "unknown".into(),
-          },
-        ));
+        sink.update(MessageUpdate::Content {
+          content: AssistantContent::ToolCall(
+            ::rig::message::ToolCall::from_wire(
+              "foo",
+              ToolFunction {
+                arguments: serde_json::json!({}),
+                name: ToolName::new("unknown")?,
+              },
+            ),
+          ),
+          index: 0,
+        })?;
       }
       model => {
         let input = request.last_user_text().unwrap_or_default();
@@ -58,11 +76,17 @@ impl Provider for Mock {
 
         if model == "slow-streaming" {
           for c in response.chars() {
-            sink.delta(c.to_string())?;
+            sink.update(MessageUpdate::Text {
+              delta: c.to_string(),
+              index: 0,
+            })?;
             sleep(Duration::from_millis(20)).await;
           }
         } else {
-          sink.delta(response)?;
+          sink.update(MessageUpdate::Text {
+            delta: response,
+            index: 0,
+          })?;
         }
       }
     }

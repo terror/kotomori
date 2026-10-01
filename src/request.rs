@@ -15,22 +15,26 @@ impl Request {
 
 impl From<&Request> for CompletionRequest {
   fn from(request: &Request) -> Self {
+    let chat_history = request
+      .system
+      .as_deref()
+      .map(RigMessage::system)
+      .into_iter()
+      .chain(request.messages.iter().map(Into::into))
+      .collect::<Vec<_>>();
+
     Self {
       additional_params: None,
-      chat_history: OneOrMany::many(
-        request
-          .system
-          .as_deref()
-          .map(RigMessage::system)
-          .into_iter()
-          .chain(request.messages.iter().map(Into::into)),
-      )
-      .unwrap_or_else(|_| OneOrMany::one(RigMessage::user(""))),
+      chat_history: if chat_history.is_empty() {
+        vec![RigMessage::user("")]
+      } else {
+        chat_history
+      },
       documents: Vec::new(),
       max_tokens: None,
       model: Some(request.model.name.clone()),
       output_schema: None,
-      preamble: None,
+      record_telemetry_content: false,
       temperature: None,
       tool_choice: None,
       tools: ToolInvocationKind::definitions(),
@@ -115,8 +119,8 @@ mod tests {
         Message::User(vec![UserMessageContent::Text("baz".into())]),
         Message::agent(vec![AssistantContent::text("qux")]),
         Message::User(vec![UserMessageContent::ToolResult {
-          call_id: None,
-          id: "quux".into(),
+          call: CallId::from_wire("quux"),
+          name: ToolName::new("corge").unwrap(),
           result: ToolResult::default(),
         }]),
       ],
@@ -136,8 +140,8 @@ mod tests {
       messages: vec![
         Message::agent(vec![AssistantContent::text("foo")]),
         Message::User(vec![UserMessageContent::ToolResult {
-          call_id: None,
-          id: "bar".into(),
+          call: CallId::from_wire("bar"),
+          name: ToolName::new("baz").unwrap(),
           result: ToolResult::default(),
         }]),
       ],

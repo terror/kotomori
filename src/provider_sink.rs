@@ -8,48 +8,32 @@ pub(crate) struct ProviderSink {
 }
 
 impl ProviderSink {
-  pub(crate) fn delta(&mut self, delta: impl Into<String>) -> Result {
-    self.update(MessageUpdate::Text(delta.into()))
-  }
-
   pub(crate) fn finish(self) -> AgentMessage {
     self.message.finish()
   }
 
-  pub(crate) fn message_id(&mut self, id: String) -> Result {
-    self.update(MessageUpdate::MessageId(id))
-  }
-
-  pub(crate) fn reasoning(&mut self, reasoning: Reasoning) -> Result {
-    self.update(MessageUpdate::Reasoning(reasoning))
-  }
-
-  pub(crate) fn reasoning_append(&mut self, reasoning: Reasoning) -> Result {
-    self.update(MessageUpdate::ReasoningAppend(reasoning))
-  }
-
-  pub(crate) fn reasoning_delta(
-    &mut self,
-    id: Option<String>,
-    delta: impl Into<String>,
-  ) -> Result {
-    self.update(MessageUpdate::ReasoningDelta {
-      delta: delta.into(),
-      id,
-    })
-  }
-
-  pub(crate) fn tool_call(&mut self, tool_call: ::rig::message::ToolCall) {
-    self.message.apply(MessageUpdate::ToolCall(tool_call));
-  }
-
-  fn update(&mut self, update: MessageUpdate) -> Result {
+  pub(crate) fn update(&mut self, mut update: MessageUpdate) -> Result {
     self.message.apply(update.clone());
 
-    Ok(self.event_sender.send(Event::Agent {
+    match &mut update {
+      MessageUpdate::Complete(message) => {
+        message
+          .content
+          .retain(|content| !matches!(content, AssistantContent::ToolCall(_)));
+      }
+      MessageUpdate::Content {
+        content: AssistantContent::ToolCall(_),
+        ..
+      } => return Ok(()),
+      _ => {}
+    }
+
+    self.event_sender.send(Event::Agent {
       event: AgentEvent::Update(update),
       run_id: self.run_id,
-    })?)
+    })?;
+
+    Ok(())
   }
 }
 
@@ -62,5 +46,87 @@ impl Default for ProviderSink {
       message: MessageBuffer::default(),
       run_id: 0,
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn completion_replaces_drafts_without_publishing_tools() {
+    let mut run = Run::new(0);
+
+    run.update_many(&[
+      MessageUpdate::Content {
+        content: AssistantContent::reasoning("foo", "bar"),
+        index: 2,
+      },
+      MessageUpdate::ReasoningDelta {
+        delta: "baz".into(),
+        index: 4,
+      },
+      MessageUpdate::Text {
+        delta: "qux".into(),
+        index: 5,
+      },
+    ]);
+
+    let (event_sender, mut events) = mpsc::unbounded_channel();
+
+    let mut sink = ProviderSink {
+      event_sender,
+      message: run.message.clone(),
+      ..Default::default()
+    };
+
+    let reasoning = AssistantContent::Reasoning(
+      Reasoning::new_with_signature("bar", Some("baz".into())).sealed("qux"),
+    );
+
+    let message = AgentMessage {
+      content: vec![
+        reasoning.clone(),
+        AssistantContent::tool_call(
+          "foo",
+          ToolName::new("command").unwrap(),
+          serde_json::json!({"command": "bar"}),
+        ),
+      ],
+      id: Some("quux".into()),
+    };
+
+    sink
+      .update(MessageUpdate::Complete(message.clone()))
+      .unwrap();
+
+    let Event::Agent {
+      event: AgentEvent::Update(update),
+      run_id: 0,
+    } = events.try_recv().unwrap()
+    else {
+      panic!();
+    };
+
+    let preview = AgentMessage {
+      content: vec![reasoning],
+      id: Some("quux".into()),
+    };
+
+    assert_eq!(update, MessageUpdate::Complete(preview.clone()));
+
+    run.update(update);
+
+    assert_eq!(
+      run.finish(),
+      Some(TranscriptEntry::Message(Message::Agent(preview)))
+    );
+
+    assert_eq!(sink.finish(), message);
+
+    assert_eq!(
+      events.try_recv(),
+      Err(mpsc::error::TryRecvError::Disconnected)
+    );
   }
 }
