@@ -16,6 +16,7 @@ impl MessageBuffer {
           .enumerate()
           .map(|(index, content)| (index, MessageDraft::Content(content)))
           .collect();
+
         self.id = message.id;
       }
       MessageUpdate::Content { index, content } => {

@@ -83,6 +83,7 @@ mod tests {
       content: content.clone(),
       id: Some("fred".into()),
     });
+
     let message =
       serde_json::from_value::<Message>(serde_json::to_value(message).unwrap())
         .unwrap();
