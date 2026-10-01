@@ -194,6 +194,7 @@ mod tests {
     };
 
     assert!(!buffer.has_pending_reasoning());
+
     assert_eq!(buffer.message(), message);
     assert_eq!(buffer.finish(), message);
   }
@@ -214,6 +215,7 @@ mod tests {
     ]);
 
     assert_eq!(buffer, MessageBuffer::default());
+
     assert!(buffer.is_empty());
 
     buffer.apply_many(&[
