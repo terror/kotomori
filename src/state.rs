@@ -2,15 +2,15 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct State {
-  pub(crate) composer: Composer,
+  composer: Composer,
   database: Database,
-  pub(crate) directory: PathBuf,
-  pub(crate) model: Model,
+  directory: PathBuf,
+  model: Model,
   next_run_id: u64,
   queued_inputs: VecDeque<String>,
   run: Option<Run>,
-  pub(crate) session: Session,
-  pub(crate) should_quit: bool,
+  session: Session,
+  should_quit: bool,
 }
 
 impl State {
@@ -20,6 +20,14 @@ impl State {
 
   pub(crate) fn approval(&self) -> Option<&ApprovalRequest> {
     self.run.as_ref().and_then(|run| run.approval.as_ref())
+  }
+
+  pub(crate) fn composer(&self) -> &Composer {
+    &self.composer
+  }
+
+  pub(crate) fn directory(&self) -> &Path {
+    &self.directory
   }
 
   fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
@@ -179,6 +187,10 @@ impl State {
     vec![Effect::InterruptAgent]
   }
 
+  pub(crate) fn model(&self) -> &Model {
+    &self.model
+  }
+
   pub(crate) fn new(settings: &Settings) -> Result<Self> {
     Self::with_session(settings, Database::new()?, Session::new(settings)?)
   }
@@ -237,6 +249,10 @@ impl State {
     }
   }
 
+  pub(crate) fn should_quit(&self) -> bool {
+    self.should_quit
+  }
+
   fn submit(&mut self, action: &Action) -> Vec<Effect> {
     let input = self.composer.input_text();
     let input = input.trim();
@@ -280,6 +296,10 @@ impl State {
       }
       _ => vec![self.run(input)],
     }
+  }
+
+  pub(crate) fn transcript(&self) -> &Transcript {
+    &self.session.transcript
   }
 
   pub(crate) fn with_session(
@@ -845,7 +865,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.session.transcript.messages().is_empty());
+    assert_eq!(state.session.transcript.messages(), Vec::new());
 
     assert_eq!(state.composer.input_text(), "  ");
   }
@@ -939,7 +959,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.session.transcript.messages().is_empty());
+    assert_eq!(state.session.transcript.messages(), Vec::new());
 
     assert_eq!(state.composer.input_text(), "");
   }
@@ -987,7 +1007,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.session.transcript.messages().is_empty());
+    assert_eq!(state.session.transcript.messages(), Vec::new());
 
     assert_eq!(state.composer.input_text(), "");
   }
@@ -1035,7 +1055,7 @@ mod tests {
       Vec::new()
     );
 
-    assert!(state.session.transcript.messages().is_empty());
+    assert_eq!(state.session.transcript.messages(), Vec::new());
 
     assert_eq!(state.composer.input_text(), "");
   }
@@ -1065,7 +1085,7 @@ mod tests {
 
     assert_eq!(state.run, None);
 
-    assert!(state.session.transcript.messages().is_empty());
+    assert_eq!(state.session.transcript.messages(), Vec::new());
 
     let invocation = ToolInvocation::new(
       "late",
@@ -1098,7 +1118,7 @@ mod tests {
       run_id: 0,
     });
 
-    assert!(state.session.transcript.messages().is_empty());
+    assert_eq!(state.session.transcript.messages(), Vec::new());
   }
 
   #[test]

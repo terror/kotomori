@@ -12,7 +12,7 @@ impl Screen {
     match self {
       Self::Quit => true,
       Self::Resume(_) => false,
-      Self::Session(state) => state.should_quit,
+      Self::Session(state) => state.should_quit(),
     }
   }
 }

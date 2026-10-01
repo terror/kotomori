@@ -35,11 +35,8 @@ impl Component for ViewComponent<'_> {
         .chain(HintComponent.render(content_width))
         .chain(once(LineComponent::blank()))
         .chain(
-          TranscriptComponent::new(
-            &state.session.transcript,
-            state.active_run(),
-          )
-          .render(content_width),
+          TranscriptComponent::new(state.transcript(), state.active_run())
+            .render(content_width),
         )
         .chain(
           QueuedInputsComponent {
@@ -52,13 +49,13 @@ impl Component for ViewComponent<'_> {
             ApprovalPromptComponent::new(request).render(content_width)
           }
           None => ComposerComponent {
-            composer: &state.composer,
+            composer: state.composer(),
           }
           .render(content_width),
         })
         .chain(once(LineComponent::blank()))
         .chain(
-          FooterComponent::new(&state.model, &state.directory)
+          FooterComponent::new(state.model(), state.directory())
             .render(content_width),
         )
         .collect(),

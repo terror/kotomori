@@ -28,6 +28,7 @@ mod zai;
 
 #[async_trait]
 pub(crate) trait Provider: fmt::Debug + Send + Sync {
+  #[allow(clippy::double_must_use)]
   async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result;
 }
 

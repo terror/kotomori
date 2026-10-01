@@ -17,5 +17,6 @@ pub(crate) trait ToolCall:
     Vec::new()
   }
 
+  #[allow(clippy::double_must_use)]
   async fn execute(&self, context: &ToolContext) -> ToolResult;
 }
