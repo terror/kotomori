@@ -38,7 +38,7 @@ impl<'a> TranscriptToolInvocationComponent<'a> {
       let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
 
       if preview_width + char_width > width {
-        while preview_width.saturating_add(3) > width {
+        while preview_width.saturating_add(width.min(3)) > width {
           let Some(c) = preview.pop() else {
             break;
           };
@@ -47,7 +47,7 @@ impl<'a> TranscriptToolInvocationComponent<'a> {
             .saturating_sub(UnicodeWidthChar::width(c).unwrap_or(0));
         }
 
-        preview.push_str("...");
+        preview.push_str(&".".repeat(width.min(3)));
 
         return preview;
       }
@@ -72,48 +72,61 @@ impl Component for TranscriptToolInvocationComponent<'_> {
       None => ("●", Style::Accent, ToolActionTense::Progressive),
     };
 
-    lines.push(LineComponent::from([
-      Span::styled(symbol, symbol_style),
-      Span::raw(" "),
-      Span::raw(self.invocation.title(tense)),
-    ]));
-
-    lines.extend(self.details().into_iter().map(|(label, value)| {
+    lines.extend(
       LineComponent::from([
-        Span::styled(Self::GUTTER, Style::Muted),
-        Span::styled(format!("{label} "), Style::Muted),
-        Span::raw(value),
+        Span::styled(symbol, symbol_style),
+        Span::raw(" "),
+        Span::raw(self.invocation.title(tense)),
       ])
-    }));
+      .wrap(width),
+    );
+
+    lines.extend(
+      GutteredLinesComponent::new(self.details().into_iter().map(
+        |(label, value)| {
+          LineComponent::from([
+            Span::styled(format!("{label} "), Style::Muted),
+            Span::raw(value),
+          ])
+        },
+      ))
+      .with_gutter(Span::styled(Self::GUTTER, Style::Muted))
+      .render(width),
+    );
 
     if let Some(output) = self.result.and_then(ToolResult::output) {
-      let output_width = usize::from(width.saturating_sub(4).max(8));
+      let output_width = usize::from(width.saturating_sub(4).max(width.min(1)));
 
       let output_lines = output
         .lines()
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>();
 
-      lines.extend(output_lines.iter().take(Self::OUTPUT_LIMIT).map(|line| {
-        LineComponent::from([
-          Span::styled(Self::GUTTER, Style::Muted),
-          Span::raw(Self::preview(line, output_width)),
-        ])
-      }));
+      lines.extend(
+        GutteredLinesComponent::new(
+          output_lines
+            .iter()
+            .take(Self::OUTPUT_LIMIT)
+            .map(|line| LineComponent::raw(Self::preview(line, output_width))),
+        )
+        .with_gutter(Span::styled(Self::GUTTER, Style::Muted))
+        .render(width),
+      );
 
       let omitted = output_lines.len().saturating_sub(Self::OUTPUT_LIMIT);
 
       if omitted > 0 {
-        lines.push(LineComponent::from([
-          Span::styled(Self::GUTTER, Style::Muted),
-          Span::styled(
+        lines.extend(
+          GutteredLinesComponent::new([LineComponent::from([Span::styled(
             format!(
               "... {omitted} more {}",
               if omitted == 1 { "line" } else { "lines" }
             ),
             Style::Muted,
-          ),
-        ]));
+          )])])
+          .with_gutter(Span::styled(Self::GUTTER, Style::Muted))
+          .render(width),
+        );
       }
     }
 
@@ -131,5 +144,17 @@ mod tests {
       TranscriptToolInvocationComponent::preview("\tfoo", 4),
       r"\...",
     );
+  }
+
+  #[test]
+  fn preview_fits_narrow_widths() {
+    for (width, expected) in
+      [(0, ""), (1, "."), (2, ".."), (3, "..."), (4, "f...")]
+    {
+      assert_eq!(
+        TranscriptToolInvocationComponent::preview("foobar", width),
+        expected
+      );
+    }
   }
 }
