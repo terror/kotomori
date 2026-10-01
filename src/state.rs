@@ -1567,6 +1567,7 @@ mod tests {
     state.run = Some(Run::new(0));
 
     let (event_sender, mut events) = mpsc::unbounded_channel();
+
     let mut sink = ProviderSink {
       event_sender,
       ..Default::default()
@@ -1575,6 +1576,7 @@ mod tests {
     let reasoning = Reasoning::new_with_signature("foo", Some("bar".into()))
       .with_id("baz".into())
       .sealed("foo");
+
     let encrypted = Reasoning::encrypted("qux")
       .with_id("quux".into())
       .sealed("foo");
@@ -2294,8 +2296,10 @@ mod tests {
       };
 
       let mut state = State::new(&settings).unwrap();
+
       let reasoning =
         Reasoning::new_with_signature("foo", Some("bar".into())).sealed("foo");
+
       let mut run = Run::new(0);
 
       run.update_many(&[
@@ -2314,6 +2318,7 @@ mod tests {
       ]);
 
       let draft = run.message.clone();
+
       state.run = Some(run);
       state.handle_event(event);
 
@@ -2349,6 +2354,7 @@ mod tests {
       Event::Action(Action::Interrupt),
       TranscriptEntry::Interrupted,
     );
+
     case(
       Event::Agent {
         event: AgentEvent::Error("foo".into()),
