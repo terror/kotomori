@@ -5,7 +5,6 @@ pub(crate) struct State {
   composer: Composer,
   database: Database,
   directory: PathBuf,
-  model: Model,
   next_run_id: u64,
   queued_inputs: VecDeque<String>,
   run: Option<Run>,
@@ -188,11 +187,32 @@ impl State {
   }
 
   pub(crate) fn model(&self) -> &Model {
-    &self.model
+    &self.session.settings.model
   }
 
-  pub(crate) fn new(settings: &Settings) -> Result<Self> {
-    Self::with_session(settings, Database::new()?, Session::new(settings)?)
+  pub(crate) fn new(database: Database, session: Session) -> Result<Self> {
+    let history = session
+      .transcript
+      .entries
+      .iter()
+      .filter_map(TranscriptEntry::message)
+      .filter_map(Message::user_content)
+      .map(str::to_owned)
+      .collect();
+
+    Ok(Self {
+      composer: Composer::new(
+        session.settings.prompt.as_deref().unwrap_or_default(),
+        history,
+      ),
+      database,
+      directory: env::current_dir()?,
+      next_run_id: 0,
+      queued_inputs: VecDeque::new(),
+      run: None,
+      session,
+      should_quit: false,
+    })
   }
 
   pub(crate) fn queued_inputs(&self) -> &VecDeque<String> {
@@ -301,38 +321,6 @@ impl State {
   pub(crate) fn transcript(&self) -> &Transcript {
     &self.session.transcript
   }
-
-  pub(crate) fn with_session(
-    settings: &Settings,
-    database: Database,
-    mut session: Session,
-  ) -> Result<Self> {
-    let history = session
-      .transcript
-      .entries
-      .iter()
-      .filter_map(TranscriptEntry::message)
-      .filter_map(Message::user_content)
-      .map(str::to_owned)
-      .collect();
-
-    session.set_model(&settings.model);
-
-    Ok(Self {
-      composer: Composer::new(
-        settings.prompt.as_deref().unwrap_or_default(),
-        history,
-      ),
-      database,
-      directory: env::current_dir()?,
-      model: settings.model.clone(),
-      next_run_id: 0,
-      queued_inputs: VecDeque::new(),
-      run: None,
-      session,
-      should_quit: false,
-    })
-  }
 }
 
 #[cfg(test)]
@@ -341,11 +329,15 @@ mod tests {
 
   #[test]
   fn agent_events_update_transcript() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -435,11 +427,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_approves_with_lowercase_y() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, response_receiver) =
@@ -471,11 +467,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_approves_with_uppercase_y() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, response_receiver) =
@@ -507,11 +507,15 @@ mod tests {
 
   #[test]
   fn approval_complete_command_leaves_request_pending() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, _response_receiver) =
@@ -540,11 +544,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_denies_with_escape() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, response_receiver) =
@@ -573,11 +581,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_denies_with_lowercase_n() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, response_receiver) =
@@ -609,11 +621,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_denies_with_uppercase_n() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, response_receiver) =
@@ -645,11 +661,15 @@ mod tests {
 
   #[test]
   fn approval_edit_other_key_leaves_request_pending() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, _response_receiver) =
@@ -681,11 +701,15 @@ mod tests {
 
   #[test]
   fn approval_select_next_command_leaves_request_pending() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, _response_receiver) =
@@ -714,11 +738,15 @@ mod tests {
 
   #[test]
   fn approval_select_previous_command_leaves_request_pending() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, _response_receiver) =
@@ -747,11 +775,15 @@ mod tests {
 
   #[test]
   fn approval_submit_leaves_request_pending() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, _response_receiver) =
@@ -780,11 +812,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_terminal_agent_tool_result_drops_pending_request() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, response_receiver) =
@@ -821,11 +857,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_terminal_error_drops_pending_request() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     let (request, response_receiver) =
@@ -853,11 +893,15 @@ mod tests {
 
   #[test]
   fn blank_submit_does_nothing() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("  ".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("  ".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -872,11 +916,15 @@ mod tests {
 
   #[test]
   fn command_autocomplete_select_next() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("/".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("/".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -896,11 +944,15 @@ mod tests {
 
   #[test]
   fn command_autocomplete_select_previous() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("/".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("/".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -920,11 +972,15 @@ mod tests {
 
   #[test]
   fn command_clear_from_empty_slash() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -966,11 +1022,15 @@ mod tests {
 
   #[test]
   fn command_clear_from_name() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -1014,11 +1074,15 @@ mod tests {
 
   #[test]
   fn command_clear_from_prefix() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -1062,11 +1126,15 @@ mod tests {
 
   #[test]
   fn command_clear_interrupts_active_agent_and_ignores_late_events() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -1123,11 +1191,15 @@ mod tests {
 
   #[test]
   fn command_quit_from_name() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("/quit".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("/quit".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -1142,11 +1214,15 @@ mod tests {
 
   #[test]
   fn command_quit_from_prefix() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("/q".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("/q".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -1161,11 +1237,15 @@ mod tests {
 
   #[test]
   fn command_quit_interrupts_active_agent_and_saves_partial_output() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -1197,7 +1277,7 @@ mod tests {
 
     let saved = state
       .database
-      .load_session(state.session.id.unwrap())
+      .load_session(state.session.id.unwrap(), &state.session.settings)
       .unwrap();
 
     assert_eq!(
@@ -1218,11 +1298,15 @@ mod tests {
   fn command_submission_returns_effects() {
     #[track_caller]
     fn case(input: &str, action: Action) {
-      let mut state = State::new(&Settings {
-        model: "mock:local".parse().unwrap(),
-        prompt: Some(input.into()),
-        yolo: false,
-      })
+      let mut state = State::new(
+        Database::new().unwrap(),
+        Session::new(&Settings {
+          model: "mock:local".parse().unwrap(),
+          prompt: Some(input.into()),
+          yolo: false,
+        })
+        .unwrap(),
+      )
       .unwrap();
 
       state.run("foo".into());
@@ -1251,7 +1335,9 @@ mod tests {
       yolo: false,
     };
 
-    let mut state = State::new(&settings).unwrap();
+    let mut state =
+      State::new(Database::new().unwrap(), Session::new(&settings).unwrap())
+        .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -1332,14 +1418,13 @@ mod tests {
 
     let session = state
       .database
-      .load_session(state.session.id.unwrap())
+      .load_session(state.session.id.unwrap(), &state.session.settings)
       .unwrap();
 
     assert_eq!(session.transcript.entries, state.session.transcript.entries);
     assert_eq!(session.title.as_deref(), Some("foo"));
 
-    let mut state =
-      State::with_session(&settings, state.database, session).unwrap();
+    let mut state = State::new(state.database, session).unwrap();
 
     let messages =
       once(Message::User(vec![UserMessageContent::Text("foo".into())]))
@@ -1360,11 +1445,15 @@ mod tests {
 
   #[test]
   fn error_is_not_included_in_next_request() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -1408,11 +1497,15 @@ mod tests {
 
   #[test]
   fn failed_save_preserves_run() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.run = Some({
@@ -1449,11 +1542,15 @@ mod tests {
 
   #[test]
   fn finish_run_saves_partial_output() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.run = Some({
@@ -1469,7 +1566,7 @@ mod tests {
 
     let session = state
       .database
-      .load_session(state.session.id.unwrap())
+      .load_session(state.session.id.unwrap(), &state.session.settings)
       .unwrap();
 
     assert_eq!(state.run, None);
@@ -1482,11 +1579,15 @@ mod tests {
 
   #[test]
   fn immediate_submit_interrupts_active_agent_and_starts_new_run() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -1546,11 +1647,15 @@ mod tests {
 
   #[test]
   fn interrupt_advances_to_next_queued_submission() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("first".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("first".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -1577,11 +1682,15 @@ mod tests {
 
   #[test]
   fn interrupt_stops_active_agent() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -1609,11 +1718,15 @@ mod tests {
 
   #[test]
   fn interruption_preserves_streamed_protocol() {
-    let mut state = State::new(&Settings {
-      model: "mock:foo".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:foo".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.run = Some(Run::new(0));
@@ -1670,7 +1783,7 @@ mod tests {
 
     let session = state
       .database
-      .load_session(state.session.id.unwrap())
+      .load_session(state.session.id.unwrap(), &state.session.settings)
       .unwrap();
 
     assert_eq!(
@@ -1684,11 +1797,15 @@ mod tests {
 
   #[test]
   fn multiline_input() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some(String::new()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some(String::new()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     for c in "foo".chars() {
@@ -1723,11 +1840,15 @@ mod tests {
 
   #[test]
   fn new_uses_empty_prompt_by_default() {
-    let state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
+    let state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(state.composer.input_text(), "");
@@ -1735,11 +1856,15 @@ mod tests {
 
   #[test]
   fn prompt_history_edit_detaches_navigation() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("history".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("history".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -1768,11 +1893,15 @@ mod tests {
 
   #[test]
   fn prompt_history_is_cleared_by_clear_command() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("history".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("history".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -1817,9 +1946,7 @@ mod tests {
       )])),
     ];
 
-    let mut state =
-      State::with_session(&settings, Database::new().unwrap(), session)
-        .unwrap();
+    let mut state = State::new(Database::new().unwrap(), session).unwrap();
 
     state.handle_event(Event::Action(Action::SelectPrevious));
     assert_eq!(state.composer.input_text(), "baz\nqux");
@@ -1833,11 +1960,15 @@ mod tests {
 
   #[test]
   fn prompt_history_navigates_and_restores_draft() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -1882,11 +2013,15 @@ mod tests {
 
   #[test]
   fn prompt_history_preserves_multiline_navigation() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("history".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("history".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -1927,11 +2062,15 @@ mod tests {
 
   #[test]
   fn queued_submissions_run_in_order() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("first".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("first".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -1981,11 +2120,15 @@ mod tests {
 
   #[test]
   fn quit_interrupts_active_agent() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -2013,11 +2156,15 @@ mod tests {
 
   #[tokio::test]
   async fn quit_interrupts_active_approval() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -2052,11 +2199,15 @@ mod tests {
 
   #[test]
   fn save_excludes_streaming_content() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.session.transcript.send("foo".into());
@@ -2074,7 +2225,7 @@ mod tests {
 
     let session = state
       .database
-      .load_session(state.session.id.unwrap())
+      .load_session(state.session.id.unwrap(), &state.session.settings)
       .unwrap();
 
     assert_eq!(
@@ -2085,11 +2236,15 @@ mod tests {
 
   #[tokio::test]
   async fn stale_agent_events_do_not_mutate_new_run() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("old".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("old".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
@@ -2180,11 +2335,15 @@ mod tests {
 
   #[test]
   fn submit_is_queued_while_agent_active() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("foo".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(
@@ -2238,11 +2397,15 @@ mod tests {
   fn submit_trims_input() {
     #[track_caller]
     fn case(action: Action) {
-      let mut state = State::new(&Settings {
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("  foo  ".into()),
-        yolo: false,
-      })
+      let mut state = State::new(
+        Database::new().unwrap(),
+        Session::new(&Settings {
+          model: "mock:local".parse().unwrap(),
+          prompt: Some("  foo  ".into()),
+          yolo: false,
+        })
+        .unwrap(),
+      )
       .unwrap();
 
       assert_eq!(
@@ -2268,11 +2431,15 @@ mod tests {
 
   #[test]
   fn terminal_error_interrupts_run() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.run = Some(Run::new(0));
@@ -2290,11 +2457,15 @@ mod tests {
 
   #[test]
   fn terminal_error_without_run() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: None,
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(state.handle_event(Event::Error("foo".into())), Vec::new());
@@ -2315,7 +2486,9 @@ mod tests {
         yolo: false,
       };
 
-      let mut state = State::new(&settings).unwrap();
+      let mut state =
+        State::new(Database::new().unwrap(), Session::new(&settings).unwrap())
+          .unwrap();
 
       let reasoning =
         Reasoning::new_with_signature("foo", Some("bar".into())).sealed("foo");
@@ -2344,7 +2517,7 @@ mod tests {
 
       let session = state
         .database
-        .load_session(state.session.id.unwrap())
+        .load_session(state.session.id.unwrap(), &state.session.settings)
         .unwrap();
 
       assert_eq!(
@@ -2352,8 +2525,7 @@ mod tests {
         [TranscriptEntry::Draft(draft), entry]
       );
 
-      let mut state =
-        State::with_session(&settings, state.database, session).unwrap();
+      let mut state = State::new(state.database, session).unwrap();
 
       assert_eq!(
         state.handle_event(Event::Action(Action::Submit)),
@@ -2386,11 +2558,15 @@ mod tests {
 
   #[test]
   fn unknown_command() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("/foobar".into()),
-      yolo: false,
-    })
+    let mut state = State::new(
+      Database::new().unwrap(),
+      Session::new(&Settings {
+        model: "mock:local".parse().unwrap(),
+        prompt: Some("/foobar".into()),
+        yolo: false,
+      })
+      .unwrap(),
+    )
     .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));

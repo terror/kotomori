@@ -5,7 +5,7 @@ pub(crate) struct Session {
   pub(crate) created_at: u64,
   pub(crate) directory: PathBuf,
   pub(crate) id: Option<i64>,
-  pub(crate) model: String,
+  pub(crate) settings: Settings,
   pub(crate) title: Option<String>,
   pub(crate) transcript: Transcript,
   pub(crate) updated_at: u64,
@@ -32,7 +32,7 @@ impl Session {
   pub(crate) fn detail(&self) -> String {
     format!(
       "{} · {} · {}",
-      self.model,
+      self.settings.model,
       DirectoryDisplay::new(&self.directory),
       self.age()
     )
@@ -42,7 +42,7 @@ impl Session {
     let search = format!(
       "{} {} {} {}",
       self.title.as_deref().unwrap_or("Untitled session"),
-      self.model,
+      self.settings.model,
       DirectoryDisplay::new(&self.directory),
       self.id.map_or_else(String::new, |id| id.to_string()),
     )
@@ -71,7 +71,7 @@ impl Session {
       directory: env::current_dir()
         .context("failed to read current directory")?,
       id: None,
-      model: settings.model.to_string(),
+      settings: settings.clone(),
       title: None,
       transcript: Transcript::default(),
       updated_at: now,
@@ -108,9 +108,5 @@ impl Session {
     database.save_session(self)?;
 
     Ok(())
-  }
-
-  pub(crate) fn set_model(&mut self, model: &Model) {
-    self.model = model.to_string();
   }
 }

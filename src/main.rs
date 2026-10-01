@@ -69,7 +69,10 @@ use {
     },
   },
   run::Run,
-  rusqlite::{Connection, TransactionBehavior, params},
+  rusqlite::{
+    Connection, TransactionBehavior, params,
+    types::{FromSql, FromSqlError, FromSqlResult, ValueRef},
+  },
   schemars::JsonSchema,
   screen::Screen,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
