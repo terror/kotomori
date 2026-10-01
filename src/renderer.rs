@@ -27,10 +27,12 @@ impl<W: Write> Renderer<W> {
     component: &impl Component,
     dimensions: Dimensions,
   ) -> Result {
+    let width = dimensions.width;
+
     let lines = component
-      .render(dimensions.width)
+      .render(width)
       .into_iter()
-      .flat_map(|line| line.render(dimensions.width))
+      .flat_map(|line| line.render(width))
       .map(|line| format!("{line}{}", Style::None.sequence()))
       .collect::<Vec<_>>();
 
