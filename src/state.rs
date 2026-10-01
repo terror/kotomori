@@ -993,6 +993,54 @@ mod tests {
   }
 
   #[test]
+  fn command_clear_from_prefix() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])],
+        run_id: 0,
+      }]
+    );
+
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Update(MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      }),
+      run_id: 0,
+    });
+    state.handle_event(Event::Agent {
+      event: AgentEvent::Done,
+      run_id: 0,
+    });
+
+    for c in "/c".chars() {
+      state.handle_event(Event::Action(Action::Edit(Input {
+        key: Key::Char(c),
+        ..Default::default()
+      })));
+    }
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      Vec::new()
+    );
+
+    assert!(state.session.transcript.messages().is_empty());
+
+    assert_eq!(state.composer.input_text(), "");
+  }
+
+  #[test]
   fn command_clear_interrupts_active_agent_and_ignores_late_events() {
     let mut state = State::new(&Settings {
       model: "mock:local".parse().unwrap(),
@@ -1051,54 +1099,6 @@ mod tests {
     });
 
     assert!(state.session.transcript.messages().is_empty());
-  }
-
-  #[test]
-  fn command_clear_from_prefix() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
-    .unwrap();
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
-    );
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text {
-        delta: "bar".into(),
-        index: 0,
-      }),
-      run_id: 0,
-    });
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
-      run_id: 0,
-    });
-
-    for c in "/c".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      Vec::new()
-    );
-
-    assert!(state.session.transcript.messages().is_empty());
-
-    assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
@@ -1556,6 +1556,38 @@ mod tests {
   }
 
   #[test]
+  fn interrupt_stops_active_agent() {
+    let mut state = State::new(&Settings {
+      model: "mock:local".parse().unwrap(),
+      prompt: Some("foo".into()),
+      yolo: false,
+    })
+    .unwrap();
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      vec![Effect::RunAgent {
+        messages: vec![Message::User(vec![UserMessageContent::Text(
+          "foo".into()
+        )])],
+        run_id: 0,
+      }]
+    );
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Interrupt)),
+      vec![Effect::InterruptAgent]
+    );
+
+    assert_eq!(state.run, None);
+
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Interrupt)),
+      Vec::new()
+    );
+  }
+
+  #[test]
   fn interruption_preserves_streamed_protocol() {
     let mut state = State::new(&Settings {
       model: "mock:foo".parse().unwrap(),
@@ -1627,38 +1659,6 @@ mod tests {
         TranscriptEntry::Message(Message::agent(content)),
         TranscriptEntry::Interrupted,
       ]
-    );
-  }
-
-  #[test]
-  fn interrupt_stops_active_agent() {
-    let mut state = State::new(&Settings {
-      model: "mock:local".parse().unwrap(),
-      prompt: Some("foo".into()),
-      yolo: false,
-    })
-    .unwrap();
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
-    );
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Interrupt)),
-      vec![Effect::InterruptAgent]
-    );
-
-    assert_eq!(state.run, None);
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Interrupt)),
-      Vec::new()
     );
   }
 

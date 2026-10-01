@@ -216,6 +216,70 @@ mod tests {
   use super::*;
 
   #[test]
+  fn render_active_activity_is_separated_from_user_entry() {
+    let run = Run::new(0);
+
+    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
+      Message::User(vec![UserMessageContent::Text("foo".into())]),
+    )]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript, Some(&run)).render(80),
+      [
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("foo"),
+        ]),
+        LineComponent::blank(),
+        LineComponent::from([
+          Span::styled("✦", Style::Accent),
+          Span::styled(" Working...", Style::Secondary),
+          Span::styled(" (0s • Esc to interrupt)", Style::Muted),
+        ]),
+        LineComponent::blank(),
+      ]
+    );
+  }
+
+  #[test]
+  fn render_active_content_in_order() {
+    let mut run = Run::new(0);
+
+    run.update_many(&[
+      MessageUpdate::ReasoningDelta {
+        index: 0,
+        delta: "foo".into(),
+      },
+      MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 1,
+      },
+      MessageUpdate::ReasoningDelta {
+        index: 2,
+        delta: "baz".into(),
+      },
+      MessageUpdate::Text {
+        delta: "qux".into(),
+        index: 3,
+      },
+    ]);
+
+    assert_eq!(
+      TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
+      [
+        LineComponent::raw("foo"),
+        LineComponent::blank(),
+        LineComponent::raw("bar"),
+        LineComponent::blank(),
+        LineComponent::raw("baz"),
+        LineComponent::blank(),
+        LineComponent::raw("qux"),
+        LineComponent::blank(),
+      ]
+    );
+  }
+
+  #[test]
   fn render_active_reasoning() {
     let mut run = Run {
       elapsed: Duration::from_secs(61),
@@ -264,44 +328,6 @@ mod tests {
   }
 
   #[test]
-  fn render_active_content_in_order() {
-    let mut run = Run::new(0);
-
-    run.update_many(&[
-      MessageUpdate::ReasoningDelta {
-        index: 0,
-        delta: "foo".into(),
-      },
-      MessageUpdate::Text {
-        delta: "bar".into(),
-        index: 1,
-      },
-      MessageUpdate::ReasoningDelta {
-        index: 2,
-        delta: "baz".into(),
-      },
-      MessageUpdate::Text {
-        delta: "qux".into(),
-        index: 3,
-      },
-    ]);
-
-    assert_eq!(
-      TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
-      [
-        LineComponent::raw("foo"),
-        LineComponent::blank(),
-        LineComponent::raw("bar"),
-        LineComponent::blank(),
-        LineComponent::raw("baz"),
-        LineComponent::blank(),
-        LineComponent::raw("qux"),
-        LineComponent::blank(),
-      ]
-    );
-  }
-
-  #[test]
   fn render_active_waiting() {
     let run = Run {
       elapsed: Duration::from_secs(111),
@@ -323,26 +349,23 @@ mod tests {
   }
 
   #[test]
-  fn render_active_activity_is_separated_from_user_entry() {
-    let run = Run::new(0);
-
-    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
-      Message::User(vec![UserMessageContent::Text("foo".into())]),
-    )]);
+  fn render_adjacent_non_user_entries_have_single_blank_line() {
+    let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::Message(Message::agent(vec![AssistantContent::text(
+        "foo",
+      )])),
+      TranscriptEntry::Interrupted,
+    ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, Some(&run)).render(80),
+      TranscriptComponent::new(&transcript, None).render(80),
       [
-        LineComponent::from([
-          Span::styled("│ ", Style::Accent),
-          Span::raw("foo"),
-        ]),
+        LineComponent::raw("foo"),
         LineComponent::blank(),
-        LineComponent::from([
-          Span::styled("✦", Style::Accent),
-          Span::styled(" Working...", Style::Secondary),
-          Span::styled(" (0s • Esc to interrupt)", Style::Muted),
-        ]),
+        LineComponent::from([Span::styled(
+          "■ Conversation interrupted, tell the model what to do differently.",
+          Style::Danger,
+        )]),
         LineComponent::blank(),
       ]
     );
@@ -424,29 +447,6 @@ mod tests {
         LineComponent::raw("bar"),
         LineComponent::blank(),
         LineComponent::raw("baz"),
-        LineComponent::blank(),
-      ]
-    );
-  }
-
-  #[test]
-  fn render_adjacent_non_user_entries_have_single_blank_line() {
-    let transcript = Transcript::with_entries(vec![
-      TranscriptEntry::Message(Message::agent(vec![AssistantContent::text(
-        "foo",
-      )])),
-      TranscriptEntry::Interrupted,
-    ]);
-
-    assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
-      [
-        LineComponent::raw("foo"),
-        LineComponent::blank(),
-        LineComponent::from([Span::styled(
-          "■ Conversation interrupted, tell the model what to do differently.",
-          Style::Danger,
-        )]),
         LineComponent::blank(),
       ]
     );

@@ -453,6 +453,27 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn does_not_emit_tool_calls_when_round_contains_malformed_call() {
+    let test_agent = TestAgent::new(
+      vec![vec![Output::ToolCall, Output::MalformedToolCall]],
+      true,
+    );
+
+    let error = test_agent
+      .agent
+      .stream(
+        0,
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+      )
+      .await
+      .unwrap_err();
+
+    assert!(test_agent.events.is_empty());
+
+    assert_eq!(error.to_string(), "failed to decode `command` arguments");
+  }
+
+  #[tokio::test]
   async fn errors_when_tool_call_limit_is_exceeded() {
     let tool_calls = vec![
       (0..=Agent::MAX_TOOL_CALLS)
@@ -474,27 +495,6 @@ mod tests {
     assert!(test_agent.events.is_empty());
 
     assert_eq!(error.to_string(), "maximum tool call limit of 128 exceeded");
-  }
-
-  #[tokio::test]
-  async fn does_not_emit_tool_calls_when_round_contains_malformed_call() {
-    let test_agent = TestAgent::new(
-      vec![vec![Output::ToolCall, Output::MalformedToolCall]],
-      true,
-    );
-
-    let error = test_agent
-      .agent
-      .stream(
-        0,
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-      )
-      .await
-      .unwrap_err();
-
-    assert!(test_agent.events.is_empty());
-
-    assert_eq!(error.to_string(), "failed to decode `command` arguments");
   }
 
   #[tokio::test]
@@ -687,62 +687,6 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn preserves_reasoning_with_tool_calls() {
-    let test_agent = TestAgent::new(
-      vec![
-        vec![
-          Output::ReasoningDelta("baz"),
-          Output::Reasoning(Reasoning::new("baz").sealed("mock")),
-          Output::ToolCall,
-        ],
-        vec![Output::Delta("done")],
-      ],
-      true,
-    );
-
-    test_agent
-      .agent
-      .stream(
-        0,
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-      )
-      .await
-      .unwrap();
-
-    let requests = test_agent.requests.lock().unwrap();
-
-    let tool_result = ToolResult {
-      exit_status: Some(0),
-      outcome: ToolOutcome::Success,
-      stdout: Some(COMMAND_OUTPUT.into()),
-      ..Default::default()
-    };
-
-    assert_eq!(
-      *requests,
-      [
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-        vec![
-          Message::User(vec![UserMessageContent::Text("foo".into())]),
-          Message::agent(vec![
-            AssistantContent::Reasoning(Reasoning::new("baz").sealed("mock")),
-            AssistantContent::tool_call(
-              "foo",
-              ToolName::new("command").unwrap(),
-              json!({"command": "echo bar"})
-            ),
-          ]),
-          Message::User(vec![UserMessageContent::ToolResult {
-            call: CallId::from_wire("foo"),
-            name: ToolName::new("command").unwrap(),
-            result: tool_result,
-          }]),
-        ],
-      ],
-    );
-  }
-
-  #[tokio::test]
   async fn preserves_protocol_in_subsequent_requests() {
     let reasoning = Reasoning::encrypted("foo")
       .with_id("bar".into())
@@ -817,6 +761,62 @@ mod tests {
           result.message_content()
         ),
       ]
+    );
+  }
+
+  #[tokio::test]
+  async fn preserves_reasoning_with_tool_calls() {
+    let test_agent = TestAgent::new(
+      vec![
+        vec![
+          Output::ReasoningDelta("baz"),
+          Output::Reasoning(Reasoning::new("baz").sealed("mock")),
+          Output::ToolCall,
+        ],
+        vec![Output::Delta("done")],
+      ],
+      true,
+    );
+
+    test_agent
+      .agent
+      .stream(
+        0,
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+      )
+      .await
+      .unwrap();
+
+    let requests = test_agent.requests.lock().unwrap();
+
+    let tool_result = ToolResult {
+      exit_status: Some(0),
+      outcome: ToolOutcome::Success,
+      stdout: Some(COMMAND_OUTPUT.into()),
+      ..Default::default()
+    };
+
+    assert_eq!(
+      *requests,
+      [
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+        vec![
+          Message::User(vec![UserMessageContent::Text("foo".into())]),
+          Message::agent(vec![
+            AssistantContent::Reasoning(Reasoning::new("baz").sealed("mock")),
+            AssistantContent::tool_call(
+              "foo",
+              ToolName::new("command").unwrap(),
+              json!({"command": "echo bar"})
+            ),
+          ]),
+          Message::User(vec![UserMessageContent::ToolResult {
+            call: CallId::from_wire("foo"),
+            name: ToolName::new("command").unwrap(),
+            result: tool_result,
+          }]),
+        ],
+      ],
     );
   }
 

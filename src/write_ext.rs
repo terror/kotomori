@@ -107,21 +107,21 @@ mod tests {
   }
 
   #[test]
-  fn replace_line_clears_line() {
-    let mut stdout = Vec::new();
-
-    stdout.replace_line(None).unwrap();
-
-    assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[1G\x1b[2K");
-  }
-
-  #[test]
   fn replace_line_clears_and_writes_line() {
     let mut stdout = Vec::new();
 
     stdout.replace_line(Some("foo")).unwrap();
 
     assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[1G\x1b[2Kfoo");
+  }
+
+  #[test]
+  fn replace_line_clears_line() {
+    let mut stdout = Vec::new();
+
+    stdout.replace_line(None).unwrap();
+
+    assert_eq!(String::from_utf8(stdout).unwrap(), "\x1b[1G\x1b[2K");
   }
 
   #[test]
