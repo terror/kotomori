@@ -10,10 +10,7 @@ impl Database {
   const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
   const SCHEMA_VERSION: usize = Self::MIGRATIONS.len();
 
-  pub(crate) fn get_sessions(
-    &self,
-    settings: &Settings,
-  ) -> Result<Vec<Session>> {
+  pub(crate) fn get_sessions(&self) -> Result<Vec<SessionSummary>> {
     let directory =
       env::current_dir().context("failed to read current directory")?;
 
@@ -29,16 +26,11 @@ impl Database {
     )?;
 
     let rows = statement.query_map([directory], |row| {
-      Ok(Session {
-        created_at: 0,
+      Ok(SessionSummary {
         directory: row.get::<_, String>(2)?.into(),
-        id: Some(row.get(0)?),
-        settings: Settings {
-          model: row.get(3)?,
-          ..settings.clone()
-        },
+        id: row.get(0)?,
+        model: row.get(3)?,
         title: row.get(4)?,
-        transcript: Transcript::default(),
         updated_at: row.get(1)?,
       })
     })?;
@@ -327,8 +319,15 @@ mod tests {
       session.settings,
     );
 
-    session.settings.model = "mock:bar".parse().unwrap();
-    session.updated_at = timestamp;
+    let mut session = Session {
+      settings: Settings {
+        model: "mock:bar".parse().unwrap(),
+        ..session.settings
+      },
+      title: Some("foo".into()),
+      updated_at: timestamp,
+      ..session
+    };
 
     database.save_session(&mut session).unwrap();
 
@@ -353,14 +352,15 @@ mod tests {
       (timestamp, timestamp),
     );
 
-    let sessions = database.get_sessions(&settings).unwrap();
-
     assert_eq!(
-      sessions
-        .iter()
-        .map(|session| (&session.settings, session.updated_at))
-        .collect::<Vec<_>>(),
-      [(&loaded.settings, timestamp)],
+      database.get_sessions().unwrap(),
+      [SessionSummary {
+        directory: env::current_dir().unwrap(),
+        id: 1,
+        model: "mock:bar".parse().unwrap(),
+        title: Some("foo".into()),
+        updated_at: timestamp,
+      }],
     );
   }
 
@@ -390,7 +390,7 @@ mod tests {
     );
 
     assert_eq!(
-      database.get_sessions(&settings).unwrap_err().to_string(),
+      database.get_sessions().unwrap_err().to_string(),
       "Conversion error from type Text at index: 3, model must be PROVIDER:MODEL",
     );
   }
@@ -434,7 +434,7 @@ mod tests {
 
       if updated_at < 0 {
         assert_eq!(
-          database.get_sessions(&settings).unwrap_err().to_string(),
+          database.get_sessions().unwrap_err().to_string(),
           "Integer -1 out of range at index 1",
         );
       }
@@ -464,7 +464,16 @@ mod tests {
       )
       .unwrap();
 
-    assert_eq!(database.get_sessions(&settings).unwrap().len(), 1);
+    assert_eq!(
+      database.get_sessions().unwrap(),
+      [SessionSummary {
+        directory,
+        id: 1,
+        model: "mock:local".parse().unwrap(),
+        title: None,
+        updated_at: 0,
+      }],
+    );
 
     assert_eq!(
       database
