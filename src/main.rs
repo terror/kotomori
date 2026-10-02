@@ -41,7 +41,6 @@ use {
   futures_util::StreamExt,
   home::home_dir,
   indoc::formatdoc,
-  lexiclean::Lexiclean,
   loader::Loader,
   message::Message,
   message_buffer::MessageBuffer,
@@ -50,6 +49,7 @@ use {
   model::Model,
   options::Options,
   patch::Patch,
+  path_ext::PathExt,
   process_wrap::tokio::{ChildWrapper, CommandWrap, KillOnDrop},
   provider::Provider,
   provider_sink::ProviderSink,
@@ -95,7 +95,7 @@ use {
     io::{self, BufWriter, Stdout, Write},
     iter::once,
     mem,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::{self, Stdio},
     slice,
     str::{self, FromStr},
@@ -188,6 +188,7 @@ mod message_update;
 mod model;
 mod options;
 mod patch;
+mod path_ext;
 mod provider;
 mod provider_sink;
 mod reasoning_ext;

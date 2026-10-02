@@ -19,9 +19,9 @@ impl<'a> DirectoryDisplay<'a> {
 
   #[cfg(test)]
   fn with_home(path: &Path, home: &Path) -> String {
-    let path = path.lexiclean();
+    let path = path.clean();
 
-    match path.strip_prefix(home.lexiclean()).ok() {
+    match path.strip_prefix(home.clean()).ok() {
       Some(relative) => Self::format_relative(relative),
       None => path.display().to_string(),
     }
@@ -30,9 +30,9 @@ impl<'a> DirectoryDisplay<'a> {
 
 impl Display for DirectoryDisplay<'_> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    let path = self.path.lexiclean();
+    let path = self.path.clean();
 
-    let Some(home) = home_dir().map(|home| home.lexiclean()) else {
+    let Some(home) = home_dir().map(|home| home.clean()) else {
       return write!(f, "{}", path.display());
     };
 
@@ -70,7 +70,7 @@ mod tests {
   fn displays_absolute_path() {
     assert_eq!(
       DirectoryDisplay::new(Path::new("/foo/./bar")).to_string(),
-      Path::new("/foo/bar").lexiclean().display().to_string(),
+      Path::new("/foo/bar").clean().display().to_string(),
     );
   }
 
@@ -94,7 +94,7 @@ mod tests {
   fn displays_path_outside_home() {
     assert_eq!(
       DirectoryDisplay::with_home(Path::new("/bar"), Path::new("/foo")),
-      Path::new("/bar").lexiclean().display().to_string(),
+      Path::new("/bar").clean().display().to_string(),
     );
   }
 
