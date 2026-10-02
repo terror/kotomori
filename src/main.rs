@@ -13,6 +13,7 @@ use {
   changed_range::ChangedRange,
   clap::{Args, Parser},
   command::Command,
+  command_child::CommandChild,
   command_executor::CommandExecutor,
   component::{Component, ViewComponent},
   composer::Composer,
@@ -49,6 +50,7 @@ use {
   model::Model,
   options::Options,
   patch::Patch,
+  process_wrap::tokio::{ChildWrapper, CommandWrap, KillOnDrop},
   provider::Provider,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
@@ -130,7 +132,10 @@ use {
 };
 
 #[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
+use {process_wrap::tokio::ProcessGroup, std::os::unix::fs::PermissionsExt};
+
+#[cfg(windows)]
+use process_wrap::tokio::JobObject;
 
 #[cfg(test)]
 macro_rules! assert_matches {
@@ -160,6 +165,7 @@ mod approval_request;
 mod arguments;
 mod changed_range;
 mod command;
+mod command_child;
 mod command_executor;
 mod component;
 mod composer;
