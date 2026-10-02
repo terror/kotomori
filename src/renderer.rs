@@ -29,7 +29,6 @@ impl<W: Write> Renderer<W> {
     let lines = component
       .render(width)
       .into_iter()
-      .flat_map(|line| line.render(width))
       .map(|line| format!("{line}{}", Style::None.sequence()))
       .collect::<Vec<_>>();
 

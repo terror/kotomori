@@ -483,8 +483,12 @@ fn approval_prompt_approves_command() -> Result {
     .argument("mock:approval-required-command")
     .type_text("foo")
     .enter()
-    .expect_screen_contains("Approve echo bar?")
-    .expect_screen_contains("y approve · n/Esc deny")
+    .expect_screen_contains(concat!(
+      "  ? Approve echo bar?\n",
+      "  y approve · n/Esc deny\n",
+      "\n",
+      "  mock · approval-required-command · ",
+    ))
     .type_text("y")
     .expect_screen_contains("Ran echo bar")
     .expect_screen_contains("bar")
@@ -544,7 +548,14 @@ fn command_completion_quits() -> Result {
     .argument("--model")
     .argument("mock:local")
     .type_text("/")
-    .expect_screen_contains("/clear")
+    .expect_screen_contains(concat!(
+      "  │ /\n",
+      "\n",
+      "  /clear  Clear the transcript\n",
+      "  /quit  Quit kotomori\n",
+      "\n",
+      "  mock · local · ",
+    ))
     .down()
     .tab()
     .expect_screen_contains("/quit")
@@ -693,6 +704,7 @@ fn queued_steering_runs_after_active_response() -> Result {
     .enter()
     .expect_screen_contains("queued")
     .type_text("bar")
+    .expect_screen_contains("  │ bar\n\n  mock · slow-streaming · ")
     .enter()
     .expect_screen_contains("Queued\n  │ bar")
     .expect_screen_contains("queued for mock:slow-streaming: bar")

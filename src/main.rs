@@ -123,7 +123,7 @@ use {
   tool_result::ToolResult,
   transcript::Transcript,
   transcript_entry::TranscriptEntry,
-  unicode_width::UnicodeWidthChar,
+  unicode_width::{UnicodeWidthChar, UnicodeWidthStr},
   user_message_content::UserMessageContent,
   write_ext::WriteExt,
 };

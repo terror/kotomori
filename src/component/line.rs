@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct LineComponent {
-  spans: SmallVec<[Span; 6]>,
+  pub(super) spans: SmallVec<[Span; 6]>,
 }
 
 impl LineComponent {
@@ -23,16 +23,41 @@ impl LineComponent {
 
 impl Component for LineComponent {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    let max_width = usize::from(width.max(1));
+    if width == 0 || self.is_blank() {
+      return vec![Self::blank()];
+    }
+
+    let max_width = usize::from(width);
+
+    let mut line = self.clone();
+
+    line.spans.retain(|span| !span.text.is_empty());
+
+    if line
+      .spans
+      .iter()
+      .flat_map(|span| span.text.chars())
+      .map(|c| UnicodeWidthChar::width(c).unwrap_or(0))
+      .sum::<usize>()
+      <= max_width
+    {
+      return vec![line];
+    }
 
     let mut lines = Vec::new();
 
     let mut spans = SmallVec::<[Span; 6]>::new();
     let mut span_width = 0;
 
-    for source_span in &self.spans {
+    for source_span in line.spans {
       for c in source_span.text.chars() {
         let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
+
+        let (c, char_width) = if char_width > max_width {
+          ('\u{fffd}', 1)
+        } else {
+          (c, char_width)
+        };
 
         if span_width > 0 && span_width + char_width > max_width {
           lines.push(LineComponent {
@@ -53,11 +78,7 @@ impl Component for LineComponent {
       }
     }
 
-    lines.push(if spans.is_empty() {
-      LineComponent::blank()
-    } else {
-      LineComponent { spans }
-    });
+    lines.push(LineComponent { spans });
 
     lines
   }
@@ -175,10 +196,22 @@ mod tests {
 
   #[test]
   fn rendering_accounts_for_wide_characters() {
-    assert_eq!(
-      LineComponent::raw("a界b").render(3),
-      [LineComponent::raw("a界"), LineComponent::raw("b")],
-    );
+    #[track_caller]
+    fn case(width: u16, expected: &[&str]) {
+      assert_eq!(
+        LineComponent::raw("a界b").render(width),
+        expected
+          .iter()
+          .copied()
+          .map(LineComponent::raw)
+          .collect::<Vec<_>>(),
+      );
+    }
+
+    case(1, &["a", "�", "b"]);
+    case(2, &["a", "界", "b"]);
+    case(3, &["a界", "b"]);
+    case(4, &["a界b"]);
   }
 
   #[test]
@@ -196,8 +229,11 @@ mod tests {
         Span::styled("foo", Style::Accent),
         Span::styled("bar", Style::Accent),
       ])
-      .render(6),
-      [LineComponent::from([Span::styled("foobar", Style::Accent)])],
+      .render(4),
+      [
+        LineComponent::from([Span::styled("foob", Style::Accent)]),
+        LineComponent::from([Span::styled("ar", Style::Accent)]),
+      ],
     );
   }
 
@@ -270,7 +306,7 @@ mod tests {
       assert_eq!(LineComponent::raw("foo").render(width), expected);
     }
 
-    case(0, &["f", "o", "o"]);
+    case(0, &[""]);
     case(1, &["f", "o", "o"]);
     case(2, &["fo", "o"]);
     case(3, &["foo"]);

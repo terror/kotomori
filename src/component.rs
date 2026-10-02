@@ -3,12 +3,16 @@ use super::*;
 mod approval_prompt;
 mod composer;
 mod footer;
-mod guttered_lines;
+mod gutter;
 mod header;
 mod hint;
 mod line;
+mod lines;
+mod output_preview;
+mod padding;
 mod queued_inputs;
 mod resume_picker;
+mod stack;
 mod transcript;
 mod transcript_error;
 mod transcript_tool_invocation;
@@ -16,14 +20,16 @@ mod view;
 
 pub(crate) use {
   approval_prompt::ApprovalPromptComponent, composer::ComposerComponent,
-  footer::FooterComponent, guttered_lines::GutteredLinesComponent,
-  header::HeaderComponent, hint::HintComponent, line::LineComponent,
+  footer::FooterComponent, gutter::GutterComponent, header::HeaderComponent,
+  hint::HintComponent, line::LineComponent, lines::LinesComponent,
+  output_preview::OutputPreviewComponent, padding::PaddingComponent,
   queued_inputs::QueuedInputsComponent, resume_picker::ResumePickerComponent,
-  transcript::TranscriptComponent, transcript_error::TranscriptErrorComponent,
+  stack::StackComponent, transcript::TranscriptComponent,
+  transcript_error::TranscriptErrorComponent,
   transcript_tool_invocation::TranscriptToolInvocationComponent,
   view::ViewComponent,
 };
 
-pub(crate) trait Component {
+pub(crate) trait Component: Debug {
   fn render(&self, width: u16) -> Vec<LineComponent>;
 }

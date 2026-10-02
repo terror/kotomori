@@ -11,7 +11,7 @@ impl Component for ComposerComponent<'_> {
 
     let selected = self.composer.selected_command_index();
 
-    let mut lines = GutteredLinesComponent::new(
+    let input = LinesComponent::new(
       self.composer.lines().iter().enumerate().map(|(row, line)| {
         if cursor.0 != row {
           return LineComponent::raw(line);
@@ -29,29 +29,39 @@ impl Component for ComposerComponent<'_> {
           Span::raw(after),
         ])
       }),
-    )
-    .render(width);
+    );
 
-    if selected.is_some() {
-      lines.push(LineComponent::blank());
-    }
-
-    lines.extend(self.composer.commands().enumerate().map(
-      |(index, command)| {
-        let input_style = match selected {
-          Some(selected) if selected == index => Style::Accent,
-          _ => Style::Secondary,
-        };
-
-        LineComponent::from([
-          Span::styled(command.input(), input_style),
-          Span::styled("  ", Style::Muted),
-          Span::styled(command.description(), Style::Muted),
-        ])
-      },
+    let stack = StackComponent::default().push(GutterComponent::new(
+      input,
+      Span::styled("│ ", Style::Accent),
     ));
 
-    lines
+    let stack = if selected.is_some() {
+      stack.push(LineComponent::blank())
+    } else {
+      stack
+    };
+
+    stack
+      .push(LinesComponent::new(
+        self
+          .composer
+          .commands()
+          .enumerate()
+          .map(|(index, command)| {
+            let input_style = match selected {
+              Some(selected) if selected == index => Style::Accent,
+              _ => Style::Secondary,
+            };
+
+            LineComponent::from([
+              Span::styled(command.input(), input_style),
+              Span::styled("  ", Style::Muted),
+              Span::styled(command.description(), Style::Muted),
+            ])
+          }),
+      ))
+      .render(width)
   }
 }
 
