@@ -19,11 +19,13 @@ impl LineComponent {
       spans: [Span::raw(text)].into_iter().collect(),
     }
   }
-}
 
-impl Component for LineComponent {
-  fn render(&self, width: u16) -> Vec<LineComponent> {
-    let max_width = usize::from(width.max(1));
+  pub(crate) fn wrap(&self, width: u16) -> Vec<Self> {
+    if width == 0 {
+      return vec![Self::blank()];
+    }
+
+    let max_width = usize::from(width);
 
     let mut lines = Vec::new();
 
@@ -33,6 +35,12 @@ impl Component for LineComponent {
     for source_span in &self.spans {
       for c in source_span.text.chars() {
         let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
+
+        let (c, char_width) = if char_width > max_width {
+          ('�', 1)
+        } else {
+          (c, char_width)
+        };
 
         if span_width > 0 && span_width + char_width > max_width {
           lines.push(LineComponent {
@@ -60,6 +68,12 @@ impl Component for LineComponent {
     });
 
     lines
+  }
+}
+
+impl Component for LineComponent {
+  fn render(&self, width: u16) -> Vec<LineComponent> {
+    self.wrap(width)
   }
 }
 
@@ -182,6 +196,14 @@ mod tests {
   }
 
   #[test]
+  fn rendering_replaces_characters_wider_than_the_row() {
+    assert_eq!(
+      LineComponent::raw("界e\u{0301}").wrap(1),
+      [LineComponent::raw("�"), LineComponent::raw("e\u{0301}")],
+    );
+  }
+
+  #[test]
   fn rendering_keeps_zero_width_combining_marks_with_line() {
     assert_eq!(
       LineComponent::raw("e\u{0301}x").render(1),
@@ -270,7 +292,7 @@ mod tests {
       assert_eq!(LineComponent::raw("foo").render(width), expected);
     }
 
-    case(0, &["f", "o", "o"]);
+    case(0, &[""]);
     case(1, &["f", "o", "o"]);
     case(2, &["fo", "o"]);
     case(3, &["foo"]);

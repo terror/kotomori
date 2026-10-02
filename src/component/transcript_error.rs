@@ -15,21 +15,18 @@ impl<'a> TranscriptErrorComponent<'a> {
 
 impl Component for TranscriptErrorComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    let mut lines = vec![LineComponent::from([
+    let mut lines = LineComponent::from([
       Span::styled("●", Style::Danger),
       Span::raw(" "),
       Span::raw("Error"),
-    ])];
+    ])
+    .wrap(width);
 
-    let detail_width = width.saturating_sub(4).max(1);
-
-    for detail in self.error.lines() {
-      for line in LineComponent::raw(detail).render(detail_width) {
-        let mut spans = vec![Span::styled(Self::GUTTER, Style::Muted)];
-        spans.extend(Vec::<Span>::from(line));
-        lines.push(LineComponent::from(spans));
-      }
-    }
+    lines.extend(
+      GutteredLinesComponent::raw(self.error.lines())
+        .with_gutter(Span::styled(Self::GUTTER, Style::Muted))
+        .render(width),
+    );
 
     lines
   }
@@ -46,8 +43,7 @@ mod tests {
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),
-          Span::raw(" "),
-          Span::raw("Error"),
+          Span::raw(" Error"),
         ]),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
@@ -68,8 +64,7 @@ mod tests {
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),
-          Span::raw(" "),
-          Span::raw("Error"),
+          Span::raw(" Error"),
         ]),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),

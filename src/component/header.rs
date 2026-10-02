@@ -14,7 +14,7 @@ impl HeaderComponent {
 }
 
 impl Component for HeaderComponent {
-  fn render(&self, _width: u16) -> Vec<LineComponent> {
+  fn render(&self, width: u16) -> Vec<LineComponent> {
     let mut spans = vec![
       Span::styled(env!("CARGO_PKG_NAME"), Style::Accent),
       Span::raw("  "),
@@ -31,7 +31,7 @@ impl Component for HeaderComponent {
       ]);
     }
 
-    vec![LineComponent::from(spans)]
+    LineComponent::from(spans).wrap(width)
   }
 }
 
@@ -46,9 +46,10 @@ mod tests {
       [LineComponent::from([
         Span::styled(env!("CARGO_PKG_NAME"), Style::Accent),
         Span::raw("  "),
-        Span::styled(env!("CARGO_PKG_VERSION"), Style::Muted),
-        Span::styled(" · ", Style::Muted),
-        Span::styled("first draw 42ms", Style::Muted),
+        Span::styled(
+          concat!(env!("CARGO_PKG_VERSION"), " · first draw 42ms"),
+          Style::Muted,
+        ),
       ])],
     );
   }

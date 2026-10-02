@@ -16,29 +16,38 @@ impl Component for ResumePickerComponent<'_> {
     let mut lines = once(LineComponent::blank())
       .chain(HeaderComponent::new(None).render(width))
       .chain(once(LineComponent::blank()))
-      .chain(once(LineComponent::from([
-        Span::styled("Search previous sessions. Press ", Style::Muted),
-        Span::styled("Enter", Style::Secondary),
-        Span::styled(" to resume, ", Style::Muted),
-        Span::styled("Esc", Style::Secondary),
-        Span::styled(" to cancel.", Style::Muted),
-      ])))
+      .chain(
+        LineComponent::from([
+          Span::styled("Search previous sessions. Press ", Style::Muted),
+          Span::styled("Enter", Style::Secondary),
+          Span::styled(" to resume, ", Style::Muted),
+          Span::styled("Esc", Style::Secondary),
+          Span::styled(" to cancel.", Style::Muted),
+        ])
+        .wrap(width),
+      )
       .chain(once(LineComponent::blank()))
-      .chain(once(LineComponent::from([
-        Span::styled("Search: ", Style::Muted),
-        Span::raw(&self.picker.query),
-        Span::styled(" ", Style::Selection),
-      ])))
+      .chain(
+        LineComponent::from([
+          Span::styled("Search: ", Style::Muted),
+          Span::raw(&self.picker.query),
+          Span::styled(" ", Style::Selection),
+        ])
+        .wrap(width),
+      )
       .chain(once(LineComponent::blank()))
       .collect::<Vec<_>>();
 
     let filtered = self.picker.filtered();
 
     if filtered.is_empty() {
-      lines.push(LineComponent::from([Span::styled(
-        "No matching sessions.",
-        Style::Muted,
-      )]));
+      lines.extend(
+        LineComponent::from([Span::styled(
+          "No matching sessions.",
+          Style::Muted,
+        )])
+        .wrap(width),
+      );
 
       return lines;
     }
@@ -56,15 +65,18 @@ impl Component for ResumePickerComponent<'_> {
         "  "
       };
 
-      lines.push(LineComponent::from([
-        Span::styled(marker, style),
-        Span::styled(
-          session.title.as_deref().unwrap_or("Untitled session"),
-          style,
-        ),
-        Span::styled("  ", Style::Muted),
-        Span::styled(session.detail(), Style::Muted),
-      ]));
+      lines.extend(
+        LineComponent::from([
+          Span::styled(marker, style),
+          Span::styled(
+            session.title.as_deref().unwrap_or("Untitled session"),
+            style,
+          ),
+          Span::styled("  ", Style::Muted),
+          Span::styled(session.detail(), Style::Muted),
+        ])
+        .wrap(width),
+      );
     }
 
     lines

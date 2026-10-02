@@ -36,7 +36,7 @@ impl Component for ComposerComponent<'_> {
       lines.push(LineComponent::blank());
     }
 
-    lines.extend(self.composer.commands().enumerate().map(
+    lines.extend(self.composer.commands().enumerate().flat_map(
       |(index, command)| {
         let input_style = match selected {
           Some(selected) if selected == index => Style::Accent,
@@ -48,6 +48,7 @@ impl Component for ComposerComponent<'_> {
           Span::styled("  ", Style::Muted),
           Span::styled(command.description(), Style::Muted),
         ])
+        .wrap(width)
       },
     ));
 
@@ -76,13 +77,11 @@ mod tests {
         LineComponent::blank(),
         LineComponent::from([
           Span::styled("/clear", Style::Accent),
-          Span::styled("  ", Style::Muted),
-          Span::styled("Clear the transcript", Style::Muted),
+          Span::styled("  Clear the transcript", Style::Muted),
         ]),
         LineComponent::from([
           Span::styled("/quit", Style::Secondary),
-          Span::styled("  ", Style::Muted),
-          Span::styled("Quit kotomori", Style::Muted),
+          Span::styled("  Quit kotomori", Style::Muted),
         ]),
       ]
     );

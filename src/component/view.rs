@@ -20,7 +20,8 @@ impl<'a> ViewComponent<'a> {
 
 impl Component for ViewComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    let content_width = width.saturating_sub(4).max(1);
+    let padding = (width.saturating_sub(1) / 2).min(2);
+    let content_width = width - padding * 2;
 
     let lines = match self.screen {
       Screen::Quit => Vec::new(),
@@ -63,13 +64,12 @@ impl Component for ViewComponent<'_> {
 
     lines
       .into_iter()
-      .flat_map(|line| line.render(content_width))
       .map(|line| {
         if line.is_blank() {
           line
         } else {
           let mut spans = Vec::<Span>::from(line);
-          spans.insert(0, Span::raw("  "));
+          spans.insert(0, Span::raw(" ".repeat(usize::from(padding))));
           LineComponent::from(spans)
         }
       })

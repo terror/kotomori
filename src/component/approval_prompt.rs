@@ -28,7 +28,7 @@ impl Component for ApprovalPromptComponent<'_> {
       ]),
     ]
     .into_iter()
-    .flat_map(|line| line.render(width))
+    .flat_map(|line| line.wrap(width))
     .collect()
   }
 }

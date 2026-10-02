@@ -15,7 +15,9 @@ impl Component for QueuedInputsComponent<'_> {
       .inputs
       .iter()
       .flat_map(|input| {
-        once(LineComponent::from([Span::styled("Queued", Style::Muted)]))
+        LineComponent::from([Span::styled("Queued", Style::Muted)])
+          .wrap(width)
+          .into_iter()
           .chain(GutteredLinesComponent::raw(input.split('\n')).render(width))
           .chain(once(LineComponent::blank()))
       })

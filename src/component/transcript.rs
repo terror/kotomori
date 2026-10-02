@@ -42,7 +42,7 @@ impl<'a> TranscriptComponent<'a> {
 
     match run.activity {
       AgentActivity::Reasoning | AgentActivity::Waiting => {
-        lines.push(working());
+        lines.extend(working().wrap(width));
       }
       AgentActivity::Streaming => {}
     }
@@ -62,10 +62,20 @@ impl<'a> TranscriptComponent<'a> {
 
       match content {
         AssistantContent::Reasoning(reasoning) => {
-          lines.extend(reasoning.text().lines().map(LineComponent::raw));
+          lines.extend(
+            reasoning
+              .text()
+              .lines()
+              .flat_map(|line| LineComponent::raw(line).wrap(width)),
+          );
         }
         AssistantContent::Text(text) => {
-          lines.extend(text.text.lines().map(LineComponent::raw));
+          lines.extend(
+            text
+              .text
+              .lines()
+              .flat_map(|line| LineComponent::raw(line).wrap(width)),
+          );
         }
         AssistantContent::ToolCall(call) => {
           let result = following
@@ -90,10 +100,13 @@ impl<'a> TranscriptComponent<'a> {
               TranscriptToolInvocationComponent::new(&invocation, result)
                 .render(width),
             ),
-            Err(_) => lines.push(LineComponent::raw(format!(
-              "{} {}",
-              call.function.name, call.function.arguments
-            ))),
+            Err(_) => lines.extend(
+              LineComponent::raw(format!(
+                "{} {}",
+                call.function.name, call.function.arguments
+              ))
+              .wrap(width),
+            ),
           }
         }
         AssistantContent::Image(_) => {}
@@ -124,7 +137,11 @@ impl<'a> TranscriptComponent<'a> {
           ));
         }
         MessageDraft::Reasoning(reasoning) => {
-          lines.extend(reasoning.lines().map(LineComponent::raw));
+          lines.extend(
+            reasoning
+              .lines()
+              .flat_map(|line| LineComponent::raw(line).wrap(width)),
+          );
         }
       }
 
@@ -156,10 +173,10 @@ impl<'a> TranscriptComponent<'a> {
         TranscriptEntry::Interrupted => {
           Self::ensure_trailing_blank_line(&mut lines);
 
-          lines.push(LineComponent::from([Span::styled(
+          lines.extend(LineComponent::from([Span::styled(
             "■ Conversation interrupted, tell the model what to do differently.",
             Style::Danger,
-          )]));
+          )]).wrap(width));
 
           Self::ensure_trailing_blank_line(&mut lines);
         }
@@ -181,7 +198,11 @@ impl<'a> TranscriptComponent<'a> {
         }
         TranscriptEntry::Notice(notice) => {
           Self::ensure_trailing_blank_line(&mut lines);
-          lines.extend(notice.lines().map(LineComponent::raw));
+          lines.extend(
+            notice
+              .lines()
+              .flat_map(|line| LineComponent::raw(line).wrap(width)),
+          );
           Self::ensure_trailing_blank_line(&mut lines);
         }
       }
@@ -462,8 +483,7 @@ mod tests {
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),
-          Span::raw(" "),
-          Span::raw("Error"),
+          Span::raw(" Error"),
         ]),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
@@ -573,8 +593,7 @@ mod tests {
         LineComponent::blank(),
         LineComponent::from([
           Span::styled("●", Style::Success),
-          Span::raw(" "),
-          Span::raw("Ran rg --files"),
+          Span::raw(" Ran rg --files"),
         ]),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
@@ -616,8 +635,7 @@ mod tests {
         LineComponent::blank(),
         LineComponent::from([
           Span::styled("●", Style::Accent),
-          Span::raw(" "),
-          Span::raw("Running rg --files"),
+          Span::raw(" Running rg --files"),
         ]),
         LineComponent::blank(),
       ]
@@ -657,8 +675,7 @@ mod tests {
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),
-          Span::raw(" "),
-          Span::raw("Failed running foo bar"),
+          Span::raw(" Failed running foo bar"),
         ]),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
@@ -716,12 +733,12 @@ mod tests {
       [
         LineComponent::from([
           Span::styled("●", Style::Success),
-          Span::raw(" "),
-          Span::raw("Ran rg --files"),
+          Span::raw(" Ran rg -"),
         ]),
+        LineComponent::raw("-files"),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
-          Span::raw("fooba..."),
+          Span::raw("foo..."),
         ]),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
@@ -733,7 +750,15 @@ mod tests {
         ]),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
-          Span::styled("... 1 more line", Style::Muted),
+          Span::styled("... 1 ", Style::Muted),
+        ]),
+        LineComponent::from([
+          Span::styled("  │ ", Style::Muted),
+          Span::styled("more l", Style::Muted),
+        ]),
+        LineComponent::from([
+          Span::styled("  │ ", Style::Muted),
+          Span::styled("ine", Style::Muted),
         ]),
         LineComponent::blank(),
       ]
@@ -760,8 +785,7 @@ mod tests {
       [
         LineComponent::from([
           Span::styled("●", Style::Accent),
-          Span::raw(" "),
-          Span::raw("Running rg --files"),
+          Span::raw(" Running rg --files"),
         ]),
         LineComponent::blank(),
       ]
@@ -806,14 +830,12 @@ mod tests {
       [
         LineComponent::from([
           Span::styled("●", Style::Accent),
-          Span::raw(" "),
-          Span::raw("Running bar"),
+          Span::raw(" Running bar"),
         ]),
         LineComponent::blank(),
         LineComponent::from([
           Span::styled("●", Style::Success),
-          Span::raw(" "),
-          Span::raw("Ran bar"),
+          Span::raw(" Ran bar"),
         ]),
         LineComponent::blank(),
       ]
