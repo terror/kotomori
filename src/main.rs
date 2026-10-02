@@ -15,7 +15,7 @@ use {
   command::Command,
   command_child::CommandChild,
   command_executor::CommandExecutor,
-  component::{Component, ViewComponent},
+  component::{LineComponent, ViewComponent},
   composer::Composer,
   config::Config,
   crossterm::{
@@ -87,6 +87,7 @@ use {
   std::{
     backtrace::BacktraceStatus,
     borrow::Cow,
+    cell::Cell,
     collections::{BTreeMap, VecDeque},
     env,
     fmt::{self, Debug, Display, Formatter},
@@ -126,6 +127,7 @@ use {
   tool_result::ToolResult,
   transcript::Transcript,
   transcript_entry::TranscriptEntry,
+  unicode_segmentation::UnicodeSegmentation,
   unicode_width::{UnicodeWidthChar, UnicodeWidthStr},
   user_message_content::UserMessageContent,
   write_ext::WriteExt,

@@ -16,15 +16,12 @@ impl<'a> ViewComponent<'a> {
       screen,
     }
   }
-}
 
-impl Component for ViewComponent<'_> {
-  fn render(&self, width: u16) -> Vec<LineComponent> {
+  pub(crate) fn render(&self, dimensions: Dimensions) -> Vec<LineComponent> {
     let stack = match self.screen {
       Screen::Quit => StackComponent::default(),
-      Screen::Resume(picker) => {
-        StackComponent::default().push(ResumePickerComponent::new(picker))
-      }
+      Screen::Resume(picker) => StackComponent::default()
+        .push(ResumePickerComponent::new(picker, dimensions.height)),
       Screen::Session(state) => {
         let stack = StackComponent::default()
           .push(LineComponent::blank())
@@ -51,6 +48,6 @@ impl Component for ViewComponent<'_> {
       }
     };
 
-    PaddingComponent::new(stack, 2).render(width)
+    PaddingComponent::new(stack, 2).render(dimensions.width)
   }
 }

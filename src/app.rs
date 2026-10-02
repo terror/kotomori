@@ -128,7 +128,9 @@ impl App {
     let mut tick_interval = interval(Self::TICK_INTERVAL);
 
     while !self.screen.should_quit() {
-      renderer.draw(&ViewComponent::new(&self.screen, first_draw_duration))?;
+      renderer.draw(|dimensions| {
+        ViewComponent::new(&self.screen, first_draw_duration).render(dimensions)
+      })?;
 
       if let Some(started_at) = first_draw_started_at.take() {
         first_draw_duration = Some(started_at.elapsed());
