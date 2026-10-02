@@ -7,6 +7,7 @@ pub(crate) struct State {
   directory: PathBuf,
   next_run_id: u64,
   queued_inputs: VecDeque<String>,
+  redraw: bool,
   run: Option<Run>,
   session: Session,
   should_quit: bool,
@@ -30,6 +31,8 @@ impl State {
   }
 
   fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
+    self.redraw = true;
+
     if let Some(entry) = self.run.take().and_then(Run::finish) {
       self.session.transcript.entries.push(entry);
     }
@@ -105,6 +108,10 @@ impl State {
       Command::Clear => {
         let interrupt_agent = self.run.take().is_some();
 
+        self.redraw |= interrupt_agent
+          || !self.session.transcript.is_empty()
+          || !self.queued_inputs.is_empty();
+
         self.session.transcript.clear();
         self.composer.clear_history();
         self.queued_inputs.clear();
@@ -139,9 +146,10 @@ impl State {
             return self.run_next_queued();
           }
           AgentEvent::Update(update) => {
-            run.update(update);
+            self.redraw |= run.update(update);
           }
           AgentEvent::Message(message) => {
+            self.redraw = true;
             run.reset_message();
             self.session.transcript.push_message(message);
             self.save_session();
@@ -151,6 +159,7 @@ impl State {
             return self.run_next_queued();
           }
           AgentEvent::ToolApprovalRequest(request) => {
+            self.redraw = true;
             run.approval = Some(request);
           }
         }
@@ -167,9 +176,10 @@ impl State {
         return effects;
       }
       Event::Resize(_) => {}
-      Event::Tick(elapsed) => {
+      Event::Tick(now) => {
         if let Some(run) = &mut self.run {
-          run.tick(elapsed);
+          run.tick(now);
+          self.redraw |= run.needs_animation();
         }
       }
     }
@@ -210,6 +220,7 @@ impl State {
       directory: env::current_dir()?,
       next_run_id: 0,
       queued_inputs: VecDeque::new(),
+      redraw: false,
       run: None,
       session,
       should_quit: false,
@@ -230,11 +241,13 @@ impl State {
 
   fn resolve_approval(&mut self, approval: ToolApproval) {
     if let Some(run) = &mut self.run {
+      self.redraw |= run.approval.is_some();
       run.resolve_approval(approval);
     }
   }
 
   fn run(&mut self, input: String) -> Effect {
+    self.redraw = true;
     self.session.transcript.send(input);
 
     self.save_session();
@@ -263,6 +276,7 @@ impl State {
 
   fn save_session(&mut self) {
     if let Err(error) = self.session.save(&self.database) {
+      self.redraw = true;
       self
         .session
         .transcript
@@ -286,6 +300,7 @@ impl State {
 
     if input.starts_with('/') {
       if input.len() > 1 {
+        self.redraw = true;
         self.session.transcript.notice(format!(
           "Unrecognized command '{input}'. Type \"/\" for a list of supported commands."
         ));
@@ -312,11 +327,17 @@ impl State {
         .chain(once(self.run(input)))
         .collect(),
       _ if self.run.is_some() => {
+        self.redraw = true;
         self.queued_inputs.push_back(input);
         Vec::new()
       }
       _ => vec![self.run(input)],
     }
+  }
+
+  pub(crate) fn take_redraw(&mut self) -> bool {
+    let redraw = mem::take(&mut self.redraw);
+    self.composer.take_redraw() || redraw
   }
 
   pub(crate) fn transcript(&self) -> &Transcript {
@@ -448,8 +469,11 @@ mod tests {
         }),
       ));
 
+    let started_at = Instant::now();
+
     state.run = Some(Run {
       approval: Some(request),
+      started_at,
       ..Run::new(0)
     });
 
@@ -463,7 +487,13 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
 
-    assert_eq!(state.run, Some(Run::new(0)));
+    assert_eq!(
+      state.run,
+      Some(Run {
+        started_at,
+        ..Run::new(0)
+      })
+    );
   }
 
   #[tokio::test]
@@ -488,8 +518,11 @@ mod tests {
         }),
       ));
 
+    let started_at = Instant::now();
+
     state.run = Some(Run {
       approval: Some(request),
+      started_at,
       ..Run::new(0)
     });
 
@@ -503,7 +536,13 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Approved);
 
-    assert_eq!(state.run, Some(Run::new(0)));
+    assert_eq!(
+      state.run,
+      Some(Run {
+        started_at,
+        ..Run::new(0)
+      })
+    );
   }
 
   #[test]
@@ -565,8 +604,11 @@ mod tests {
         }),
       ));
 
+    let started_at = Instant::now();
+
     state.run = Some(Run {
       approval: Some(request),
+      started_at,
       ..Run::new(0)
     });
 
@@ -577,7 +619,13 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert_eq!(state.run, Some(Run::new(0)));
+    assert_eq!(
+      state.run,
+      Some(Run {
+        started_at,
+        ..Run::new(0)
+      })
+    );
   }
 
   #[tokio::test]
@@ -602,8 +650,11 @@ mod tests {
         }),
       ));
 
+    let started_at = Instant::now();
+
     state.run = Some(Run {
       approval: Some(request),
+      started_at,
       ..Run::new(0)
     });
 
@@ -617,7 +668,13 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert_eq!(state.run, Some(Run::new(0)));
+    assert_eq!(
+      state.run,
+      Some(Run {
+        started_at,
+        ..Run::new(0)
+      })
+    );
   }
 
   #[tokio::test]
@@ -642,8 +699,11 @@ mod tests {
         }),
       ));
 
+    let started_at = Instant::now();
+
     state.run = Some(Run {
       approval: Some(request),
+      started_at,
       ..Run::new(0)
     });
 
@@ -657,7 +717,13 @@ mod tests {
 
     assert_eq!(response_receiver.await.unwrap(), ToolApproval::Denied);
 
-    assert_eq!(state.run, Some(Run::new(0)));
+    assert_eq!(
+      state.run,
+      Some(Run {
+        started_at,
+        ..Run::new(0)
+      })
+    );
   }
 
   #[test]
@@ -833,8 +899,11 @@ mod tests {
         }),
       ));
 
+    let started_at = Instant::now();
+
     state.run = Some(Run {
       approval: Some(request),
+      started_at,
       ..Run::new(0)
     });
 
@@ -852,7 +921,13 @@ mod tests {
       run_id: 0,
     });
 
-    assert_eq!(state.run, Some(Run::new(0)));
+    assert_eq!(
+      state.run,
+      Some(Run {
+        started_at,
+        ..Run::new(0)
+      })
+    );
     assert!(response_receiver.await.is_err());
   }
 
@@ -1520,12 +1595,17 @@ mod tests {
 
     state.session.id = Some(0);
 
+    let started_at = state.active_run().unwrap().started_at;
+
     state.save_session();
 
     assert_eq!(
       state.run,
       Some({
-        let mut run = Run::new(0);
+        let mut run = Run {
+          started_at,
+          ..Run::new(0)
+        };
         run.update(MessageUpdate::Text {
           delta: "foo".into(),
           index: 0,
@@ -1625,7 +1705,13 @@ mod tests {
       ]
     );
 
-    assert_eq!(state.run, Some(Run::new(1)));
+    assert_eq!(
+      state.run,
+      Some(Run {
+        started_at: state.active_run().unwrap().started_at,
+        ..Run::new(1)
+      }),
+    );
 
     assert_eq!(state.composer.input_text(), "");
     assert_eq!(state.queued_inputs(), &VecDeque::from(["baz".into()]));
@@ -1643,7 +1729,13 @@ mod tests {
       run_id: 0,
     });
 
-    assert_eq!(state.run, Some(Run::new(1)));
+    assert_eq!(
+      state.run,
+      Some(Run {
+        started_at: state.active_run().unwrap().started_at,
+        ..Run::new(1)
+      }),
+    );
   }
 
   #[test]
@@ -1678,7 +1770,13 @@ mod tests {
     );
 
     assert!(state.queued_inputs().is_empty());
-    assert_eq!(state.run, Some(Run::new(1)));
+    assert_eq!(
+      state.run,
+      Some(Run {
+        started_at: state.active_run().unwrap().started_at,
+        ..Run::new(1)
+      }),
+    );
   }
 
   #[test]
@@ -2271,6 +2369,8 @@ mod tests {
 
     let (request, response_receiver) = ApprovalRequest::new(invocation.clone());
 
+    let started_at = state.active_run().unwrap().started_at;
+
     for event in [
       AgentEvent::Update(MessageUpdate::Text {
         delta: "stale".into(),
@@ -2307,7 +2407,13 @@ mod tests {
 
     assert_eq!(state.approval(), None);
 
-    assert_eq!(state.run, Some(Run::new(1)));
+    assert_eq!(
+      state.run,
+      Some(Run {
+        started_at,
+        ..Run::new(1)
+      }),
+    );
 
     state.handle_event(Event::Agent {
       event: AgentEvent::Update(MessageUpdate::Text {

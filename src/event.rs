@@ -6,7 +6,7 @@ pub(crate) enum Event {
   Agent { event: AgentEvent, run_id: u64 },
   Error(String),
   Resize(Dimensions),
-  Tick(Duration),
+  Tick(Instant),
 }
 
 impl Event {

@@ -8,6 +8,7 @@ pub(crate) struct Run {
   pub(crate) frame: usize,
   pub(crate) id: u64,
   pub(crate) message: MessageBuffer,
+  pub(crate) started_at: Instant,
 }
 
 impl Run {
@@ -23,6 +24,13 @@ impl Run {
     }
   }
 
+  pub(crate) fn needs_animation(&self) -> bool {
+    matches!(
+      self.activity,
+      AgentActivity::Reasoning | AgentActivity::Waiting
+    )
+  }
+
   pub(crate) fn new(id: u64) -> Self {
     Self {
       activity: AgentActivity::Waiting,
@@ -31,6 +39,7 @@ impl Run {
       frame: 0,
       id,
       message: MessageBuffer::default(),
+      started_at: Instant::now(),
     }
   }
 
@@ -48,35 +57,34 @@ impl Run {
     request.respond(approval);
   }
 
-  pub(crate) fn tick(&mut self, elapsed: Duration) {
-    self.elapsed = self.elapsed.saturating_add(elapsed);
+  pub(crate) fn tick(&mut self, now: Instant) {
+    self.elapsed = now.saturating_duration_since(self.started_at);
     self.frame = self.frame.wrapping_add(1);
   }
 
-  pub(crate) fn update(&mut self, update: MessageUpdate) {
-    match &update {
+  pub(crate) fn update(&mut self, update: MessageUpdate) -> bool {
+    let activity = match &update {
       MessageUpdate::Text { delta, .. } if !delta.is_empty() => {
-        self.activity = AgentActivity::Streaming;
+        AgentActivity::Streaming
       }
       MessageUpdate::ReasoningDelta { delta, .. } if !delta.is_empty() => {
-        self.activity = AgentActivity::Reasoning;
+        AgentActivity::Reasoning
       }
       MessageUpdate::Content {
         content: AssistantContent::Reasoning(reasoning),
         ..
-      } if !reasoning.text().is_empty() => {
-        self.activity = AgentActivity::Reasoning;
-      }
+      } if !reasoning.text().is_empty() => AgentActivity::Reasoning,
       MessageUpdate::Content {
         content: AssistantContent::ToolCall(_),
         ..
-      } => {
-        self.activity = AgentActivity::Waiting;
-      }
-      _ => {}
-    }
+      } => AgentActivity::Waiting,
+      _ => return self.message.apply(update),
+    };
 
-    self.message.apply(update);
+    let changed = self.activity != activity;
+    self.activity = activity;
+
+    self.message.apply(update) || changed
   }
 
   #[cfg(test)]
@@ -122,6 +130,7 @@ mod tests {
       Run {
         elapsed: Duration::from_secs(1),
         frame: 1,
+        started_at: run.started_at,
         ..Run::new(0)
       }
     );
@@ -131,32 +140,33 @@ mod tests {
   fn tick_advances_elapsed_and_frame() {
     let mut run = Run::new(0);
 
-    run.tick(Duration::from_secs(1));
+    run.tick(run.started_at + Duration::from_secs(1));
 
     assert_eq!(
       run,
       Run {
         elapsed: Duration::from_secs(1),
         frame: 1,
+        started_at: run.started_at,
         ..Run::new(0)
       }
     );
   }
 
   #[test]
-  fn tick_saturates_elapsed_and_wraps_frame() {
+  fn tick_uses_elapsed_time_and_wraps_frame() {
     let mut run = Run {
-      elapsed: Duration::MAX,
       frame: usize::MAX,
       ..Run::new(0)
     };
 
-    run.tick(Duration::from_secs(1));
+    run.tick(run.started_at + Duration::from_secs(60));
 
     assert_eq!(
       run,
       Run {
-        elapsed: Duration::MAX,
+        elapsed: Duration::from_secs(60),
+        started_at: run.started_at,
         ..Run::new(0)
       }
     );

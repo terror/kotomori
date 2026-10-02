@@ -110,7 +110,7 @@ use {
       oneshot,
     },
     task,
-    time::{interval, sleep, timeout},
+    time::{MissedTickBehavior, interval, sleep, timeout},
   },
   tool::ToolInvocationKind,
   tool_action_tense::ToolActionTense,
