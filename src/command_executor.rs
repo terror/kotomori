@@ -20,23 +20,21 @@ impl CommandExecutor {
     &self,
     mut command: AsyncCommand,
   ) -> Result<ToolResult> {
-    command.kill_on_drop(true);
-
     command.stderr(Stdio::piped());
     command.stdout(Stdio::piped());
 
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
 
     let status = timeout(self.limits.timeout, async {
-      let mut child = command.spawn()?;
+      let mut child = CommandChild::spawn(command)?;
 
       let (stdout_pipe, stderr_pipe) = (
-        child.stdout.take().expect("stdout is piped"),
-        child.stderr.take().expect("stderr is piped"),
+        child.inner.stdout().take().expect("stdout is piped"),
+        child.inner.stderr().take().expect("stderr is piped"),
       );
 
       tokio::try_join!(
-        child.wait(),
+        child.inner.wait(),
         self.read_pipe(stdout_pipe, &mut stdout),
         self.read_pipe(stderr_pipe, &mut stderr),
       )
