@@ -32,7 +32,7 @@ impl Display for DirectoryDisplay<'_> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     let path = self.path.clean();
 
-    let Some(home) = home_dir().map(|home| home.clean()) else {
+    let Some(home) = env::home_dir().map(|home| home.clean()) else {
       return write!(f, "{}", path.display());
     };
 
