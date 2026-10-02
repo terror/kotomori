@@ -15,7 +15,11 @@ struct GithubCopilot {
 
 #[async_trait]
 impl Provider for GithubCopilot {
-  async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result {
+  async fn stream(
+    &self,
+    request: Request,
+    sink: &ProviderSink,
+  ) -> Result<AgentMessage> {
     let client = self
       .client
       .clone()

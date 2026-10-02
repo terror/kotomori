@@ -1733,9 +1733,9 @@ mod tests {
 
     let (event_sender, mut events) = mpsc::unbounded_channel();
 
-    let mut sink = ProviderSink {
+    let sink = ProviderSink {
       event_sender,
-      ..Default::default()
+      run_id: 0,
     };
 
     let reasoning = Reasoning::new_with_signature("foo", Some("bar".into()))
@@ -1776,8 +1776,6 @@ mod tests {
       AssistantContent::Reasoning(encrypted),
       AssistantContent::text("quuz"),
     ];
-
-    assert_eq!(sink.finish(), AgentMessage::from(content.clone()));
 
     state.handle_event(Event::Action(Action::Interrupt));
 

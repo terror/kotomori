@@ -83,10 +83,9 @@ impl Agent {
     let (mut tool_call_count, mut tool_round_count) = (0, 0);
 
     loop {
-      let mut sink = ProviderSink {
+      let sink = ProviderSink {
         event_sender: self.event_sender.clone(),
         run_id,
-        ..Default::default()
       };
 
       let request = Request {
@@ -95,9 +94,7 @@ impl Agent {
         system: (!system.is_empty()).then(|| system.clone()),
       };
 
-      self.provider.stream(request, &mut sink).await?;
-
-      let message = sink.finish();
+      let message = self.provider.stream(request, &sink).await?;
 
       if message.content.is_empty() {
         break;
@@ -222,10 +219,9 @@ mod tests {
   enum Output {
     Delta(&'static str),
     MalformedToolCall,
-    MessageId(&'static str),
-    ProtocolToolCall(::rig::message::ToolCall),
     Reasoning(Sealed<Reasoning>),
     ReasoningDelta(&'static str),
+    Response(AgentMessage),
     ToolCall,
   }
 
@@ -246,17 +242,17 @@ mod tests {
     async fn stream(
       &self,
       request: Request,
-      sink: &mut ProviderSink,
-    ) -> Result {
+      sink: &ProviderSink,
+    ) -> Result<AgentMessage> {
       self.requests.lock().unwrap().push(request.messages);
 
       let mut index = 0;
+      let mut message = MessageBuffer::default();
       let mut pending = None;
 
       for output in self.outputs.lock().unwrap().pop_front().unwrap() {
         let part = match &output {
           Output::Delta(_) => Some(OutputPart::Text),
-          Output::MessageId(_) => pending,
           Output::Reasoning(_) | Output::ReasoningDelta(_) => {
             Some(OutputPart::Reasoning)
           }
@@ -284,7 +280,6 @@ mod tests {
               ),
             ),
           },
-          Output::MessageId(id) => MessageUpdate::MessageId(id.into()),
           Output::ReasoningDelta(delta) => MessageUpdate::ReasoningDelta {
             delta: delta.into(),
             index,
@@ -293,10 +288,7 @@ mod tests {
             index,
             content: AssistantContent::Reasoning(reasoning),
           },
-          Output::ProtocolToolCall(tool_call) => MessageUpdate::Content {
-            index,
-            content: AssistantContent::ToolCall(tool_call),
-          },
+          Output::Response(message) => return Ok(message),
           Output::ToolCall => MessageUpdate::Content {
             index,
             content: AssistantContent::tool_call(
@@ -309,6 +301,8 @@ mod tests {
 
         let complete = matches!(update, MessageUpdate::Content { .. });
 
+        message.apply(update.clone());
+
         sink.update(update)?;
 
         if complete {
@@ -318,7 +312,7 @@ mod tests {
         pending = if complete { None } else { part };
       }
 
-      Ok(())
+      Ok(message.finish())
     }
   }
 
@@ -706,9 +700,14 @@ mod tests {
     let test_agent = TestAgent::new(
       vec![
         vec![
-          Output::Reasoning(reasoning.clone()),
-          Output::ProtocolToolCall(tool_call.clone()),
-          Output::MessageId("quuz"),
+          Output::Delta("foo"),
+          Output::Response(AgentMessage {
+            content: vec![
+              AssistantContent::Reasoning(reasoning.clone()),
+              AssistantContent::ToolCall(tool_call.clone()),
+            ],
+            id: Some("quuz".into()),
+          }),
         ],
         Vec::new(),
       ],
