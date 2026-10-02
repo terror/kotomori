@@ -77,6 +77,7 @@ use {
   screen::Screen,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
   session::Session,
+  session_summary::SessionSummary,
   settings::Settings,
   smallvec::SmallVec,
   span::Span,
@@ -189,6 +190,7 @@ mod resume_picker_action;
 mod run;
 mod screen;
 mod session;
+mod session_summary;
 mod settings;
 mod span;
 mod state;

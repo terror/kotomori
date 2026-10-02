@@ -4,7 +4,7 @@ use super::*;
 pub(crate) struct ResumePicker {
   pub(crate) query: String,
   pub(crate) selected: usize,
-  sessions: Vec<Session>,
+  sessions: Vec<SessionSummary>,
 }
 
 impl ResumePicker {
@@ -18,7 +18,7 @@ impl ResumePicker {
     };
   }
 
-  pub(crate) fn filtered(&self) -> Vec<&Session> {
+  pub(crate) fn filtered(&self) -> Vec<&SessionSummary> {
     self
       .sessions
       .iter()
@@ -88,7 +88,7 @@ impl ResumePicker {
     None
   }
 
-  pub(crate) fn new(sessions: Vec<Session>) -> Self {
+  pub(crate) fn new(sessions: Vec<SessionSummary>) -> Self {
     Self {
       query: String::new(),
       selected: 0,
@@ -97,10 +97,7 @@ impl ResumePicker {
   }
 
   fn selected_id(&self) -> Option<i64> {
-    self
-      .filtered()
-      .get(self.selected)
-      .and_then(|session| session.id)
+    self.filtered().get(self.selected).map(|session| session.id)
   }
 }
 
@@ -111,30 +108,18 @@ mod tests {
   #[test]
   fn filters_sessions() {
     let mut picker = ResumePicker::new(vec![
-      Session {
-        created_at: 0,
+      SessionSummary {
         directory: "foo".into(),
-        id: Some(1),
-        settings: Settings {
-          model: "mock:local".parse().unwrap(),
-          prompt: None,
-          yolo: false,
-        },
+        id: 1,
+        model: "mock:local".parse().unwrap(),
         title: Some("foo".into()),
-        transcript: Transcript::default(),
         updated_at: 0,
       },
-      Session {
-        created_at: 0,
+      SessionSummary {
         directory: "bar".into(),
-        id: Some(2),
-        settings: Settings {
-          model: "mock:local".parse().unwrap(),
-          prompt: None,
-          yolo: false,
-        },
+        id: 2,
+        model: "mock:local".parse().unwrap(),
         title: Some("bar".into()),
-        transcript: Transcript::default(),
         updated_at: 0,
       },
     ]);
@@ -148,9 +133,14 @@ mod tests {
       picker
         .filtered()
         .into_iter()
-        .filter_map(|session| session.id)
+        .map(|session| session.id)
         .collect::<Vec<_>>(),
       [2],
+    );
+
+    assert_matches!(
+      picker.handle_action(Action::Submit),
+      Some(ResumePickerAction::Resume(2)),
     );
   }
 }

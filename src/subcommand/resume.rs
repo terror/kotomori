@@ -8,20 +8,18 @@ pub(crate) struct Resume {
 
 impl Resume {
   pub(crate) async fn run(self, settings: Settings) -> Result {
-    let sessions = Database::new()?.get_sessions(&settings)?;
+    let sessions = Database::new()?.get_sessions()?;
 
-    if sessions.is_empty() {
+    let Some(last_id) = sessions.first().map(|session| session.id) else {
       println!("No saved sessions.");
       return Ok(());
-    }
-
-    let last_id = sessions.first().and_then(|session| session.id);
+    };
 
     let mut app =
       App::with_screen(&settings, Screen::Resume(ResumePicker::new(sessions)))?;
 
     if self.last {
-      app.resume(last_id.context("saved session is missing an ID")?)?;
+      app.resume(last_id)?;
     }
 
     app.run().await
