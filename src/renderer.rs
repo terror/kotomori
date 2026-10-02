@@ -22,9 +22,12 @@ impl Renderer {
 }
 
 impl<W: Write> Renderer<W> {
-  pub(crate) fn draw(&mut self, component: &impl Component) -> Result {
-    let (width, height) =
-      crossterm_terminal::size().context("failed to read terminal size")?;
+  pub(crate) fn draw(
+    &mut self,
+    component: &impl Component,
+    dimensions: Dimensions,
+  ) -> Result {
+    let width = dimensions.width;
 
     let lines = component
       .render(width)
@@ -33,13 +36,7 @@ impl<W: Write> Renderer<W> {
       .map(|line| format!("{line}{}", Style::None.sequence()))
       .collect::<Vec<_>>();
 
-    self.draw_frame(Frame::new(
-      lines,
-      Dimensions {
-        height: usize::from(height),
-        width,
-      },
-    ))?;
+    self.draw_frame(Frame::new(lines, dimensions))?;
 
     self.stdout.flush()?;
 
@@ -351,6 +348,28 @@ mod tests {
     assert_eq!(
       String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
+    );
+  }
+
+  #[test]
+  fn layout_uses_supplied_dimensions() {
+    let mut renderer = TestRenderer::default();
+
+    let dimensions = Dimensions {
+      height: 24,
+      width: 3,
+    };
+
+    renderer
+      .draw(&component::LineComponent::raw("foobar"), dimensions)
+      .unwrap();
+
+    assert_eq!(
+      renderer.current,
+      Some(Frame::new(
+        vec!["foo\x1b[0m".into(), "bar\x1b[0m".into()],
+        dimensions,
+      )),
     );
   }
 

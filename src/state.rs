@@ -166,6 +166,7 @@ impl State {
 
         return effects;
       }
+      Event::Resize(_) => {}
       Event::Tick(elapsed) => {
         if let Some(run) = &mut self.run {
           run.tick(elapsed);

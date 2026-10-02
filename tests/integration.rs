@@ -32,13 +32,14 @@ enum Step {
   ExpectScreenContains(String),
   ExpectScreenExcludes(String),
   Quit,
+  Resize { cols: u16, rows: u16 },
   Wait(Duration),
   Write(Vec<u8>),
 }
 
 struct Running {
-  _master: Box<dyn portable_pty::MasterPty + Send>,
   child: Option<Box<dyn portable_pty::Child + Send + Sync>>,
+  master: Box<dyn portable_pty::MasterPty + Send>,
   output: Receiver<Vec<u8>>,
   parser: vt100::Parser,
   writer: Box<dyn Write + Send>,
@@ -162,7 +163,7 @@ impl Running {
     let mut rows = self
       .parser
       .screen()
-      .rows(0, SCREEN_COLS)
+      .rows(0, self.parser.screen().size().1)
       .map(|row| row.trim_end().to_string())
       .collect::<Vec<_>>();
 
@@ -216,8 +217,8 @@ impl Running {
     }
 
     Ok(Self {
-      _master: pair.master,
       child: Some(child),
+      master: pair.master,
       output,
       parser: vt100::Parser::new(SCREEN_ROWS, SCREEN_COLS, 0),
       writer,
@@ -387,6 +388,11 @@ impl Test {
     self
   }
 
+  fn resize(mut self, cols: u16, rows: u16) -> Self {
+    self.steps.push(Step::Resize { cols, rows });
+    self
+  }
+
   fn run(self) -> Result {
     let mut running = Running::spawn(&self)?;
 
@@ -404,6 +410,15 @@ impl Test {
           running.expect_screen_excludes(&text, EXPECT_TIMEOUT)
         }
         Step::Quit => running.quit(),
+        Step::Resize { cols, rows } => {
+          running.parser.screen_mut().set_size(rows, cols);
+          running.master.resize(PtySize {
+            cols,
+            pixel_height: 0,
+            pixel_width: 0,
+            rows,
+          })
+        }
         Step::Wait(duration) => {
           thread::sleep(duration);
           Ok(())
@@ -696,6 +711,20 @@ fn queued_steering_runs_after_active_response() -> Result {
     .enter()
     .expect_screen_contains("Queued\n  │ bar")
     .expect_screen_contains("queued for mock:slow-streaming: bar")
+    .run()
+}
+
+#[test]
+fn resizing_reflows_without_input() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:foo")
+    .type_text("foobar")
+    .expect_screen_contains("│ foobar")
+    .resize(9, 40)
+    .expect_screen_contains("  │ foo\n  │ bar")
+    .resize(80, 24)
+    .expect_screen_contains("│ foobar")
     .run()
 }
 
