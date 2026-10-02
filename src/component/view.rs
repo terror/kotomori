@@ -20,66 +20,44 @@ impl<'a> ViewComponent<'a> {
 
 impl Component for ViewComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    let content_width = width.saturating_sub(4).max(1);
-
-    let lines = match self.screen {
-      Screen::Quit => Vec::new(),
+    let stack = match self.screen {
+      Screen::Quit => StackComponent::default(),
       Screen::Resume(picker) => {
-        ResumePickerComponent::new(picker).render(content_width)
+        StackComponent::default().push(ResumePickerComponent::new(picker))
       }
-      Screen::Session(state) => once(LineComponent::blank())
-        .chain(
-          HeaderComponent::new(self.first_draw_duration).render(content_width),
-        )
-        .chain(once(LineComponent::blank()))
-        .chain(HintComponent.render(content_width))
-        .chain(once(LineComponent::blank()))
-        .chain(
-          TranscriptComponent::new(state.transcript(), state.active_run())
-            .render(content_width),
-        )
-        .chain(
-          QueuedInputsComponent {
+      Screen::Session(state) => {
+        let stack = StackComponent::default()
+          .push(LineComponent::blank())
+          .push_spaced(HeaderComponent::new(self.first_draw_duration))
+          .push_spaced(HintComponent)
+          .push(TranscriptComponent::new(
+            state.transcript(),
+            state.active_run(),
+          ))
+          .push(QueuedInputsComponent {
             inputs: state.queued_inputs(),
-          }
-          .render(content_width),
-        )
-        .chain(match state.approval() {
-          Some(request) => {
-            ApprovalPromptComponent::new(request).render(content_width)
-          }
-          None => ComposerComponent {
+          });
+
+        let stack = match state.approval() {
+          Some(request) => stack.push(ApprovalPromptComponent::new(request)),
+          None => stack.push(ComposerComponent {
             composer: state.composer(),
-          }
-          .render(content_width),
-        })
-        .chain(once(LineComponent::blank()))
-        .chain(
-          FooterComponent::new(state.model(), state.directory())
-            .render(content_width),
-        )
-        .collect(),
+          }),
+        };
+
+        stack
+          .push(LineComponent::blank())
+          .push(FooterComponent::new(state.model(), state.directory()))
+      }
     };
 
-    lines
-      .into_iter()
-      .flat_map(|line| line.render(content_width))
-      .map(|line| {
-        if line.is_blank() {
-          line
-        } else {
-          let mut spans = Vec::<Span>::from(line);
-          spans.insert(0, Span::raw("  "));
-          LineComponent::from(spans)
-        }
-      })
-      .collect()
+    PaddingComponent::new(stack, 2).render(width)
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use {super::*, unicode_width::UnicodeWidthStr};
+  use super::*;
 
   #[test]
   fn composer_renders_while_agent_is_active() {
@@ -114,27 +92,43 @@ mod tests {
       Database::new().unwrap(),
       Session::new(&Settings {
         model: "mock:local".parse().unwrap(),
-        prompt: None,
+        prompt: Some("/".into()),
         yolo: false,
       })
       .unwrap(),
     )
     .unwrap();
 
-    let lines =
-      ViewComponent::new(&Screen::Session(Box::new(state)), None).render(20);
+    for screen in [
+      Screen::Session(Box::new(state)),
+      Screen::Resume(ResumePicker::new(Vec::new())),
+      Screen::Resume(ResumePicker::new(vec![SessionSummary {
+        directory: "foo".into(),
+        id: 0,
+        model: "mock:bar".parse().unwrap(),
+        title: Some("baz".into()),
+        updated_at: u64::MAX,
+      }])),
+    ] {
+      for width in 0..=20 {
+        let lines = ViewComponent::new(&screen, None).render(width);
 
-    for line in lines.into_iter().filter(|line| !line.is_blank()) {
-      let spans = Vec::<Span>::from(line);
+        for line in lines.into_iter().filter(|line| !line.is_blank()) {
+          let spans = Vec::<Span>::from(line);
 
-      let width = spans
-        .iter()
-        .map(|span| UnicodeWidthStr::width(span.text.as_str()))
-        .sum::<usize>();
+          let line_width = spans
+            .iter()
+            .map(|span| UnicodeWidthStr::width(span.text.as_str()))
+            .sum::<usize>();
 
-      assert!(width <= 18);
+          assert!(line_width <= usize::from(width));
 
-      assert_eq!(spans.first().unwrap().text, "  ");
+          if width >= 5 {
+            assert!(line_width <= usize::from(width - 2));
+            assert_eq!(spans.first().unwrap().text, "  ");
+          }
+        }
+      }
     }
   }
 

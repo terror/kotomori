@@ -9,63 +9,43 @@ pub(crate) struct TranscriptComponent<'a> {
 impl<'a> TranscriptComponent<'a> {
   const FRAMES: &'static [&'static str] = &["✦", "✧", "✶", "✹", "✶", "✧"];
 
-  fn ensure_trailing_blank_line(lines: &mut Vec<LineComponent>) {
-    if lines.last().is_some_and(|line| !line.is_blank()) {
-      lines.push(LineComponent::blank());
-    }
-  }
-
-  pub(crate) fn new(state: &'a Transcript, run: Option<&'a Run>) -> Self {
-    Self { run, state }
-  }
-
-  fn render_agent_activity(&self, width: u16) -> Vec<LineComponent> {
+  fn agent_activity(&self) -> StackComponent<'a> {
     let Some(run) = self.run else {
-      return Vec::new();
+      return StackComponent::default();
     };
 
-    let mut lines = Self::render_draft(&run.message, &[], width);
-
-    let working = || {
-      LineComponent::from([
-        Span::styled(
-          Self::FRAMES[run.frame % Self::FRAMES.len()],
-          Style::Accent,
-        ),
-        Span::styled(" Working...", Style::Secondary),
-        Span::styled(
-          format!(" ({} • Esc to interrupt)", run.elapsed.format()),
-          Style::Muted,
-        ),
-      ])
-    };
+    let stack = StackComponent::default().push(Self::draft(&run.message, &[]));
 
     match run.activity {
       AgentActivity::Reasoning | AgentActivity::Waiting => {
-        lines.push(working());
+        stack.push(LineComponent::from([
+          Span::styled(
+            Self::FRAMES[run.frame % Self::FRAMES.len()],
+            Style::Accent,
+          ),
+          Span::styled(" Working...", Style::Secondary),
+          Span::styled(
+            format!(" ({} • Esc to interrupt)", run.elapsed.format()),
+            Style::Muted,
+          ),
+        ]))
       }
-      AgentActivity::Streaming => {}
+      AgentActivity::Streaming => stack,
     }
-
-    lines
   }
 
-  fn render_agent_content(
+  fn agent_content(
     content: &[AssistantContent],
-    following: &[TranscriptEntry],
-    width: u16,
-  ) -> Vec<LineComponent> {
-    let mut lines = Vec::new();
-
-    for content in content {
-      Self::ensure_trailing_blank_line(&mut lines);
-
-      match content {
+    following: &'a [TranscriptEntry],
+  ) -> StackComponent<'a> {
+    content
+      .iter()
+      .fold(StackComponent::default(), |stack, content| match content {
         AssistantContent::Reasoning(reasoning) => {
-          lines.extend(reasoning.text().lines().map(LineComponent::raw));
+          stack.push_spaced(LinesComponent::raw(reasoning.text().lines()))
         }
         AssistantContent::Text(text) => {
-          lines.extend(text.text.lines().map(LineComponent::raw));
+          stack.push_spaced(LinesComponent::raw(text.text.lines()))
         }
         AssistantContent::ToolCall(call) => {
           let result = following
@@ -86,128 +66,87 @@ impl<'a> TranscriptComponent<'a> {
             });
 
           match ToolInvocationKind::decode(call.clone()) {
-            Ok(invocation) => lines.extend(
-              TranscriptToolInvocationComponent::new(&invocation, result)
-                .render(width),
+            Ok(invocation) => stack.push_spaced(
+              TranscriptToolInvocationComponent::new(invocation, result),
             ),
-            Err(_) => lines.push(LineComponent::raw(format!(
+            Err(_) => stack.push_spaced(LineComponent::raw(format!(
               "{} {}",
               call.function.name, call.function.arguments
             ))),
           }
         }
-        AssistantContent::Image(_) => {}
-      }
-
-      Self::ensure_trailing_blank_line(&mut lines);
-    }
-
-    lines
+        AssistantContent::Image(_) => stack,
+      })
   }
 
-  fn render_draft(
+  fn draft(
     buffer: &MessageBuffer,
-    following: &[TranscriptEntry],
-    width: u16,
-  ) -> Vec<LineComponent> {
-    let mut lines = Vec::new();
-
-    for block in buffer.preview() {
-      Self::ensure_trailing_blank_line(&mut lines);
-
-      match block {
-        MessageDraft::Content(content) => {
-          lines.extend(Self::render_agent_content(
-            slice::from_ref(content),
-            following,
-            width,
-          ));
-        }
+    following: &'a [TranscriptEntry],
+  ) -> StackComponent<'a> {
+    buffer
+      .preview()
+      .fold(StackComponent::default(), |stack, block| match block {
+        MessageDraft::Content(content) => stack.push_spaced(
+          Self::agent_content(slice::from_ref(content), following),
+        ),
         MessageDraft::Reasoning(reasoning) => {
-          lines.extend(reasoning.lines().map(LineComponent::raw));
+          stack.push_spaced(LinesComponent::raw(reasoning.lines()))
         }
-      }
-
-      Self::ensure_trailing_blank_line(&mut lines);
-    }
-
-    lines
+      })
   }
 
-  fn render_entries(&self, width: u16) -> Vec<LineComponent> {
-    let mut lines = Vec::new();
-
-    for (index, entry) in self.state.entries.iter().enumerate() {
-      match entry {
+  fn entries(&self) -> StackComponent<'a> {
+    self.state.entries.iter().enumerate().fold(
+      StackComponent::default(),
+      |stack, (index, entry)| match entry {
         TranscriptEntry::Draft(buffer) => {
-          Self::ensure_trailing_blank_line(&mut lines);
-
-          lines.extend(Self::render_draft(
+          stack.push_spaced(Self::draft(
             buffer,
             &self.state.entries[index + 1..],
-            width,
-          ));
+          ))
         }
         TranscriptEntry::Error(error) => {
-          Self::ensure_trailing_blank_line(&mut lines);
-          lines.extend(TranscriptErrorComponent::new(error).render(width));
-          Self::ensure_trailing_blank_line(&mut lines);
+          stack.push_spaced(TranscriptErrorComponent::new(error))
         }
         TranscriptEntry::Interrupted => {
-          Self::ensure_trailing_blank_line(&mut lines);
-
-          lines.push(LineComponent::from([Span::styled(
+          stack.push_spaced(LineComponent::from([Span::styled(
             "■ Conversation interrupted, tell the model what to do differently.",
             Style::Danger,
-          )]));
-
-          Self::ensure_trailing_blank_line(&mut lines);
+          )]))
         }
         TranscriptEntry::Message(Message::Agent(message)) => {
-          Self::ensure_trailing_blank_line(&mut lines);
-
-          lines.extend(Self::render_agent_content(
+          stack.push_spaced(Self::agent_content(
             &message.content,
             &self.state.entries[index + 1..],
-            width,
-          ));
+          ))
         }
         TranscriptEntry::Message(Message::User(content)) => {
-          for text in content.iter().filter_map(UserMessageContent::text) {
-            lines.extend(
-              GutteredLinesComponent::raw(text.split('\n')).render(width),
-            );
-          }
+          content.iter().filter_map(UserMessageContent::text).fold(
+            stack,
+            |stack, text| stack.push(GutterComponent::new(
+              LinesComponent::raw(text.split('\n')),
+              Span::styled("│ ", Style::Accent),
+            )),
+          )
         }
         TranscriptEntry::Notice(notice) => {
-          Self::ensure_trailing_blank_line(&mut lines);
-          lines.extend(notice.lines().map(LineComponent::raw));
-          Self::ensure_trailing_blank_line(&mut lines);
+          stack.push_spaced(LinesComponent::raw(notice.lines()))
         }
-      }
-    }
+      },
+    )
+  }
 
-    lines
+  pub(crate) fn new(state: &'a Transcript, run: Option<&'a Run>) -> Self {
+    Self { run, state }
   }
 }
 
 impl Component for TranscriptComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    let mut lines = self.render_entries(width);
-
-    let activity = self.render_agent_activity(width);
-
-    if !activity.is_empty() {
-      if !lines.is_empty() {
-        Self::ensure_trailing_blank_line(&mut lines);
-      }
-
-      lines.extend(activity);
-
-      Self::ensure_trailing_blank_line(&mut lines);
-    }
-
-    lines
+    self
+      .entries()
+      .push_spaced(self.agent_activity())
+      .render(width)
   }
 }
 
@@ -378,10 +317,12 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent::new(&transcript, None).render(2),
       [
-        LineComponent::raw("foo"),
-        LineComponent::raw("bar"),
+        LineComponent::raw("fo"),
+        LineComponent::raw("o"),
+        LineComponent::raw("ba"),
+        LineComponent::raw("r"),
         LineComponent::blank(),
       ]
     );
@@ -716,12 +657,12 @@ mod tests {
       [
         LineComponent::from([
           Span::styled("●", Style::Success),
-          Span::raw(" "),
-          Span::raw("Ran rg --files"),
+          Span::raw(" Ran rg -"),
         ]),
+        LineComponent::raw("-files"),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
-          Span::raw("fooba..."),
+          Span::raw("foo..."),
         ]),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
@@ -733,7 +674,15 @@ mod tests {
         ]),
         LineComponent::from([
           Span::styled("  │ ", Style::Muted),
-          Span::styled("... 1 more line", Style::Muted),
+          Span::styled("... 1 ", Style::Muted),
+        ]),
+        LineComponent::from([
+          Span::styled("  │ ", Style::Muted),
+          Span::styled("more l", Style::Muted),
+        ]),
+        LineComponent::from([
+          Span::styled("  │ ", Style::Muted),
+          Span::styled("ine", Style::Muted),
         ]),
         LineComponent::blank(),
       ]

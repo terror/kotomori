@@ -6,8 +6,6 @@ pub(crate) struct TranscriptErrorComponent<'a> {
 }
 
 impl<'a> TranscriptErrorComponent<'a> {
-  const GUTTER: &'static str = "  │ ";
-
   pub(crate) fn new(error: &'a str) -> Self {
     Self { error }
   }
@@ -15,23 +13,17 @@ impl<'a> TranscriptErrorComponent<'a> {
 
 impl Component for TranscriptErrorComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    let mut lines = vec![LineComponent::from([
-      Span::styled("●", Style::Danger),
-      Span::raw(" "),
-      Span::raw("Error"),
-    ])];
-
-    let detail_width = width.saturating_sub(4).max(1);
-
-    for detail in self.error.lines() {
-      for line in LineComponent::raw(detail).render(detail_width) {
-        let mut spans = vec![Span::styled(Self::GUTTER, Style::Muted)];
-        spans.extend(Vec::<Span>::from(line));
-        lines.push(LineComponent::from(spans));
-      }
-    }
-
-    lines
+    StackComponent::default()
+      .push(LineComponent::from([
+        Span::styled("●", Style::Danger),
+        Span::raw(" "),
+        Span::raw("Error"),
+      ]))
+      .push(GutterComponent::new(
+        LinesComponent::raw(self.error.lines()),
+        Span::styled("  │ ", Style::Muted),
+      ))
+      .render(width)
   }
 }
 

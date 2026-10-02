@@ -2,12 +2,11 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct TranscriptToolInvocationComponent<'a> {
-  invocation: &'a ToolInvocation,
+  invocation: ToolInvocation,
   result: Option<&'a ToolResult>,
 }
 
 impl<'a> TranscriptToolInvocationComponent<'a> {
-  const GUTTER: &'static str = "  │ ";
   const OUTPUT_LIMIT: usize = 3;
 
   fn details(&self) -> Vec<(&'static str, String)> {
@@ -23,47 +22,15 @@ impl<'a> TranscriptToolInvocationComponent<'a> {
   }
 
   pub(crate) fn new(
-    invocation: &'a ToolInvocation,
+    invocation: ToolInvocation,
     result: Option<&'a ToolResult>,
   ) -> Self {
     Self { invocation, result }
-  }
-
-  fn preview(line: &str, width: usize) -> String {
-    let line = Span::raw(line);
-
-    let (mut preview, mut preview_width) = (String::new(), 0usize);
-
-    for c in line.text.chars() {
-      let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
-
-      if preview_width + char_width > width {
-        while preview_width.saturating_add(3) > width {
-          let Some(c) = preview.pop() else {
-            break;
-          };
-
-          preview_width = preview_width
-            .saturating_sub(UnicodeWidthChar::width(c).unwrap_or(0));
-        }
-
-        preview.push_str("...");
-
-        return preview;
-      }
-
-      preview.push(c);
-      preview_width += char_width;
-    }
-
-    preview
   }
 }
 
 impl Component for TranscriptToolInvocationComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    let mut lines = Vec::new();
-
     let (symbol, symbol_style, tense) = match self.result {
       Some(result) if result.is_error() => {
         ("●", Style::Danger, ToolActionTense::Failed)
@@ -72,52 +39,34 @@ impl Component for TranscriptToolInvocationComponent<'_> {
       None => ("●", Style::Accent, ToolActionTense::Progressive),
     };
 
-    lines.push(LineComponent::from([
-      Span::styled(symbol, symbol_style),
-      Span::raw(" "),
-      Span::raw(self.invocation.title(tense)),
-    ]));
+    let stack = StackComponent::default()
+      .push(LineComponent::from([
+        Span::styled(symbol, symbol_style),
+        Span::raw(" "),
+        Span::raw(self.invocation.title(tense)),
+      ]))
+      .push(GutterComponent::new(
+        LinesComponent::new(self.details().into_iter().map(
+          |(label, value)| {
+            LineComponent::from([
+              Span::styled(format!("{label} "), Style::Muted),
+              Span::raw(value),
+            ])
+          },
+        )),
+        Span::styled("  │ ", Style::Muted),
+      ));
 
-    lines.extend(self.details().into_iter().map(|(label, value)| {
-      LineComponent::from([
-        Span::styled(Self::GUTTER, Style::Muted),
-        Span::styled(format!("{label} "), Style::Muted),
-        Span::raw(value),
-      ])
-    }));
+    let stack = if let Some(output) = self.result.and_then(ToolResult::output) {
+      stack.push(GutterComponent::new(
+        OutputPreviewComponent::new(output, Self::OUTPUT_LIMIT),
+        Span::styled("  │ ", Style::Muted),
+      ))
+    } else {
+      stack
+    };
 
-    if let Some(output) = self.result.and_then(ToolResult::output) {
-      let output_width = usize::from(width.saturating_sub(4).max(8));
-
-      let output_lines = output
-        .lines()
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>();
-
-      lines.extend(output_lines.iter().take(Self::OUTPUT_LIMIT).map(|line| {
-        LineComponent::from([
-          Span::styled(Self::GUTTER, Style::Muted),
-          Span::raw(Self::preview(line, output_width)),
-        ])
-      }));
-
-      let omitted = output_lines.len().saturating_sub(Self::OUTPUT_LIMIT);
-
-      if omitted > 0 {
-        lines.push(LineComponent::from([
-          Span::styled(Self::GUTTER, Style::Muted),
-          Span::styled(
-            format!(
-              "... {omitted} more {}",
-              if omitted == 1 { "line" } else { "lines" }
-            ),
-            Style::Muted,
-          ),
-        ]));
-      }
-    }
-
-    lines
+    stack.render(width)
   }
 }
 
@@ -126,10 +75,39 @@ mod tests {
   use super::*;
 
   #[test]
-  fn preview_escapes_controls_before_measuring_width() {
+  fn wraps_details_inside_gutter() {
+    let invocation = ToolInvocation::new(
+      "foo",
+      ToolInvocationKind::Command(CommandTool {
+        command: "bar".into(),
+        cwd: Some("foobar".into()),
+      }),
+    );
+
+    let result = ToolResult {
+      outcome: ToolOutcome::Success,
+      ..Default::default()
+    };
+
     assert_eq!(
-      TranscriptToolInvocationComponent::preview("\tfoo", 4),
-      r"\...",
+      TranscriptToolInvocationComponent::new(invocation, Some(&result))
+        .render(10),
+      [
+        LineComponent::from([
+          Span::styled("●", Style::Success),
+          Span::raw(" "),
+          Span::raw("Ran bar"),
+        ]),
+        LineComponent::from([
+          Span::styled("  │ ", Style::Muted),
+          Span::styled("cwd ", Style::Muted),
+          Span::raw("fo"),
+        ]),
+        LineComponent::from([
+          Span::styled("  │ ", Style::Muted),
+          Span::raw("obar"),
+        ]),
+      ],
     );
   }
 }

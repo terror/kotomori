@@ -13,16 +13,17 @@ impl<'a> FooterComponent<'a> {
 }
 
 impl Component for FooterComponent<'_> {
-  fn render(&self, _width: u16) -> Vec<LineComponent> {
+  fn render(&self, width: u16) -> Vec<LineComponent> {
     let directory = DirectoryDisplay::new(self.directory);
 
-    vec![LineComponent::from([Span::styled(
+    LineComponent::from([Span::styled(
       format!(
         "{} · {} · {directory}",
         self.model.provider, self.model.name
       ),
       Style::Muted,
-    )])]
+    )])
+    .render(width)
   }
 }
 

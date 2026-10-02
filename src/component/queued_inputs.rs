@@ -7,19 +7,19 @@ pub(crate) struct QueuedInputsComponent<'a> {
 
 impl Component for QueuedInputsComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    if self.inputs.is_empty() {
-      return Vec::new();
-    }
-
     self
       .inputs
       .iter()
-      .flat_map(|input| {
-        once(LineComponent::from([Span::styled("Queued", Style::Muted)]))
-          .chain(GutteredLinesComponent::raw(input.split('\n')).render(width))
-          .chain(once(LineComponent::blank()))
+      .fold(StackComponent::default(), |stack, input| {
+        stack
+          .push(LineComponent::from([Span::styled("Queued", Style::Muted)]))
+          .push(GutterComponent::new(
+            LinesComponent::raw(input.split('\n')),
+            Span::styled("│ ", Style::Accent),
+          ))
+          .push(LineComponent::blank())
       })
-      .collect()
+      .render(width)
   }
 }
 
