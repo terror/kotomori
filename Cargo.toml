@@ -49,7 +49,6 @@ crossterm = "0.29.0"
 futures-util = "0.3.32"
 home = "0.5"
 indoc = "2.0.7"
-lexiclean = "0.0.1"
 process-wrap = { version = "10.0.1", default-features = false, features = ["job-object", "kill-on-drop", "process-group", "tokio1"] }
 ratatui-core = { version = "0.1.0", default-features = false, features = ["anstyle"] }
 ratatui-textarea = "0.9.1"
