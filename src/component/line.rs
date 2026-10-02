@@ -36,8 +36,7 @@ impl Component for LineComponent {
     if line
       .spans
       .iter()
-      .flat_map(|span| span.text.chars())
-      .map(|c| UnicodeWidthChar::width(c).unwrap_or(0))
+      .map(|span| UnicodeWidthStr::width(span.text.as_str()))
       .sum::<usize>()
       <= max_width
     {
@@ -141,6 +140,27 @@ mod tests {
       LineComponent::from([Span::styled("\x1b[31mfoo", Style::Accent)])
         .to_string(),
       "\x1b[36;1m\\u{1b}[31mfoo\x1b[0m",
+    );
+  }
+
+  #[test]
+  fn displays_markdown_style_and_resets_attributes() {
+    assert_eq!(
+      LineComponent::from([
+        Span::styled(
+          "foo",
+          Style::Markdown(
+            anstyle::Style::new()
+              .bold()
+              .italic()
+              .underline()
+              .strikethrough()
+          ),
+        ),
+        Span::raw("bar"),
+      ])
+      .to_string(),
+      "\x1b[1m\x1b[3m\x1b[4m\x1b[9mfoo\x1b[0mbar",
     );
   }
 

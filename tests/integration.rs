@@ -629,6 +629,18 @@ fn interrupt_active_agent() -> Result {
 }
 
 #[test]
+fn markdown_response() -> Result {
+  Test::new()
+    .argument("--model")
+    .argument("mock:slow-streaming")
+    .type_text("**foo**")
+    .enter()
+    .expect_screen_contains("│ **foo**")
+    .expect_screen_contains("queued for mock:slow-streaming: foo")
+    .run()
+}
+
+#[test]
 fn multiline_input() -> Result {
   Test::new()
     .argument("--model")
@@ -637,7 +649,7 @@ fn multiline_input() -> Result {
     .ctrl_j()
     .type_text("bar")
     .enter()
-    .expect_screen_contains("queued for mock:local: foo\n  bar")
+    .expect_screen_contains("queued for mock:local: foo bar")
     .run()
 }
 
