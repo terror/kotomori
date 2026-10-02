@@ -3273,7 +3273,6 @@ dependencies = [
  "confy",
  "crossterm",
  "futures-util",
- "home",
  "indoc",
  "portable-pty",
  "process-wrap",

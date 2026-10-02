@@ -39,7 +39,6 @@ use {
   execution_limit::ExecutionLimit,
   frame::Frame,
   futures_util::StreamExt,
-  home::home_dir,
   indoc::formatdoc,
   loader::Loader,
   message::Message,
