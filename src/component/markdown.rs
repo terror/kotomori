@@ -5,9 +5,6 @@ pub(crate) struct MarkdownComponent {
   text: String,
 }
 
-#[derive(Clone)]
-struct MarkdownStyleSheet;
-
 impl MarkdownComponent {
   pub(crate) fn new(text: &str) -> Self {
     Self { text: text.into() }
@@ -49,6 +46,9 @@ impl Component for MarkdownComponent {
       .collect()
   }
 }
+
+#[derive(Clone)]
+struct MarkdownStyleSheet;
 
 impl tui_markdown::StyleSheet for MarkdownStyleSheet {
   fn code(&self) -> ratatui_core::style::Style {
