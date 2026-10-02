@@ -22,23 +22,24 @@ impl Renderer {
 }
 
 impl<W: Write> Renderer<W> {
-  pub(crate) fn draw(&mut self, component: &impl Component) -> Result {
+  pub(crate) fn draw(
+    &mut self,
+    render: impl FnOnce(Dimensions) -> Vec<LineComponent>,
+  ) -> Result {
     let (width, height) =
       crossterm_terminal::size().context("failed to read terminal size")?;
 
-    let lines = component
-      .render(width)
+    let dimensions = Dimensions {
+      height: usize::from(height),
+      width,
+    };
+
+    let lines = render(dimensions)
       .into_iter()
       .map(|line| format!("{line}{}", Style::None.sequence()))
       .collect::<Vec<_>>();
 
-    self.draw_frame(Frame::new(
-      lines,
-      Dimensions {
-        height: usize::from(height),
-        width,
-      },
-    ))?;
+    self.draw_frame(Frame::new(lines, dimensions))?;
 
     self.stdout.flush()?;
 
