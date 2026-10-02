@@ -3,18 +3,11 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct ProviderSink {
   pub(super) event_sender: UnboundedSender<Event>,
-  pub(super) message: MessageBuffer,
   pub(super) run_id: u64,
 }
 
 impl ProviderSink {
-  pub(crate) fn finish(self) -> AgentMessage {
-    self.message.finish()
-  }
-
-  pub(crate) fn update(&mut self, mut update: MessageUpdate) -> Result {
-    self.message.apply(update.clone());
-
+  pub(crate) fn update(&self, mut update: MessageUpdate) -> Result {
     match &mut update {
       MessageUpdate::Complete(message) => {
         message
@@ -34,18 +27,6 @@ impl ProviderSink {
     })?;
 
     Ok(())
-  }
-}
-
-impl Default for ProviderSink {
-  fn default() -> Self {
-    let (sender, _) = mpsc::unbounded_channel();
-
-    Self {
-      event_sender: sender,
-      message: MessageBuffer::default(),
-      run_id: 0,
-    }
   }
 }
 
@@ -74,10 +55,9 @@ mod tests {
 
     let (event_sender, mut events) = mpsc::unbounded_channel();
 
-    let mut sink = ProviderSink {
+    let sink = ProviderSink {
       event_sender,
-      message: run.message.clone(),
-      ..Default::default()
+      run_id: 0,
     };
 
     let reasoning = AssistantContent::Reasoning(
@@ -96,9 +76,7 @@ mod tests {
       id: Some("quux".into()),
     };
 
-    sink
-      .update(MessageUpdate::Complete(message.clone()))
-      .unwrap();
+    sink.update(MessageUpdate::Complete(message)).unwrap();
 
     let Event::Agent {
       event: AgentEvent::Update(update),
@@ -122,11 +100,6 @@ mod tests {
       Some(TranscriptEntry::Message(Message::Agent(preview)))
     );
 
-    assert_eq!(sink.finish(), message);
-
-    assert_eq!(
-      events.try_recv(),
-      Err(mpsc::error::TryRecvError::Disconnected)
-    );
+    assert_eq!(events.try_recv(), Err(mpsc::error::TryRecvError::Empty));
   }
 }

@@ -24,7 +24,11 @@ impl Rig {
 
 #[async_trait]
 impl Provider for Rig {
-  async fn stream(&self, request: Request, sink: &mut ProviderSink) -> Result {
+  async fn stream(
+    &self,
+    request: Request,
+    sink: &ProviderSink,
+  ) -> Result<AgentMessage> {
     let mut stream = self.model.stream(CompletionRequest::from(&request))?;
 
     let mut message_id = None;
@@ -44,7 +48,7 @@ impl Provider for Rig {
         continue;
       };
 
-      let update = match event {
+      sink.update(match event {
         StreamEvent::Text { part, text } => MessageUpdate::Text {
           delta: text,
           index: part.index(),
@@ -60,16 +64,18 @@ impl Provider for Rig {
           index: part.index(),
         },
         StreamEvent::Start { .. } | StreamEvent::Arguments { .. } => continue,
-      };
-
-      sink.update(update)?;
+      })?;
     }
 
     let response = stream.finish().await?;
 
-    sink.update(MessageUpdate::Complete(AgentMessage {
+    let message = AgentMessage {
       content: response.choice,
       id: response.message_id,
-    }))
+    };
+
+    sink.update(MessageUpdate::Complete(message.clone()))?;
+
+    Ok(message)
   }
 }
