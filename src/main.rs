@@ -84,6 +84,7 @@ use {
   state::State,
   std::{
     backtrace::BacktraceStatus,
+    borrow::Cow,
     collections::{BTreeMap, VecDeque},
     env,
     fmt::{self, Debug, Display, Formatter},

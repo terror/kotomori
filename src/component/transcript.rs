@@ -45,7 +45,7 @@ impl<'a> TranscriptComponent<'a> {
           stack.push_spaced(LinesComponent::raw(reasoning.text().lines()))
         }
         AssistantContent::Text(text) => {
-          stack.push_spaced(LinesComponent::raw(text.text.lines()))
+          stack.push_spaced(MarkdownComponent::new(&text.text))
         }
         AssistantContent::ToolCall(call) => {
           let result = following
@@ -258,11 +258,7 @@ mod tests {
 
     assert_eq!(
       TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
-      [
-        LineComponent::raw("foo"),
-        LineComponent::raw("bar"),
-        LineComponent::blank()
-      ]
+      [LineComponent::raw("foo bar"), LineComponent::blank()]
     );
   }
 
@@ -320,7 +316,7 @@ mod tests {
       TranscriptComponent::new(&transcript, None).render(2),
       [
         LineComponent::raw("fo"),
-        LineComponent::raw("o"),
+        LineComponent::raw("o "),
         LineComponent::raw("ba"),
         LineComponent::raw("r"),
         LineComponent::blank(),
@@ -429,6 +425,49 @@ mod tests {
         )]),
         LineComponent::blank(),
       ]
+    );
+  }
+
+  #[test]
+  fn render_markdown_in_active_draft_and_completed_messages() {
+    #[track_caller]
+    fn case(text: &str, span: Span) {
+      let mut run = Run::new(0);
+
+      run.update(MessageUpdate::Text {
+        delta: text.into(),
+        index: 0,
+      });
+
+      let expected = [LineComponent::from([span]), LineComponent::blank()];
+
+      assert_eq!(
+        TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
+        expected,
+      );
+
+      for entry in [
+        TranscriptEntry::Draft(run.message),
+        TranscriptEntry::Message(Message::agent(vec![AssistantContent::text(
+          text,
+        )])),
+      ] {
+        assert_eq!(
+          TranscriptComponent::new(
+            &Transcript::with_entries(vec![entry]),
+            None
+          )
+          .render(80),
+          expected,
+        );
+      }
+    }
+
+    case("**foo", Span::raw("**foo"));
+
+    case(
+      "**foo**",
+      Span::styled("foo", Style::Markdown(anstyle::Style::new().bold())),
     );
   }
 

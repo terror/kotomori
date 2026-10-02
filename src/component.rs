@@ -8,6 +8,7 @@ mod header;
 mod hint;
 mod line;
 mod lines;
+mod markdown;
 mod output_preview;
 mod padding;
 mod queued_inputs;
@@ -22,10 +23,10 @@ pub(crate) use {
   approval_prompt::ApprovalPromptComponent, composer::ComposerComponent,
   footer::FooterComponent, gutter::GutterComponent, header::HeaderComponent,
   hint::HintComponent, line::LineComponent, lines::LinesComponent,
-  output_preview::OutputPreviewComponent, padding::PaddingComponent,
-  queued_inputs::QueuedInputsComponent, resume_picker::ResumePickerComponent,
-  stack::StackComponent, transcript::TranscriptComponent,
-  transcript_error::TranscriptErrorComponent,
+  markdown::MarkdownComponent, output_preview::OutputPreviewComponent,
+  padding::PaddingComponent, queued_inputs::QueuedInputsComponent,
+  resume_picker::ResumePickerComponent, stack::StackComponent,
+  transcript::TranscriptComponent, transcript_error::TranscriptErrorComponent,
   transcript_tool_invocation::TranscriptToolInvocationComponent,
   view::ViewComponent,
 };
