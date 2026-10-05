@@ -14,6 +14,7 @@ mod padding;
 mod queued_inputs;
 mod resume_picker;
 mod scroll;
+mod session;
 mod stack;
 mod text_field;
 mod transcript;
@@ -28,8 +29,9 @@ pub(crate) use {
   markdown::MarkdownComponent, output_preview::OutputPreviewComponent,
   padding::PaddingComponent, queued_inputs::QueuedInputsComponent,
   resume_picker::ResumePickerComponent, scroll::ScrollComponent,
-  stack::StackComponent, text_field::TextFieldComponent,
-  transcript::TranscriptComponent, transcript_error::TranscriptErrorComponent,
+  session::SessionComponent, stack::StackComponent,
+  text_field::TextFieldComponent, transcript::TranscriptComponent,
+  transcript_error::TranscriptErrorComponent,
   transcript_tool_invocation::TranscriptToolInvocationComponent,
   view::ViewComponent,
 };
