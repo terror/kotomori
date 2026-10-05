@@ -1,23 +1,152 @@
 use super::*;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[must_use]
 pub(crate) struct LineComponent {
-  pub(crate) spans: SmallVec<[Span; 6]>,
+  spans: SmallVec<[Span; 6]>,
 }
 
 impl LineComponent {
+  pub(crate) fn append(mut self, line: impl Into<Self>) -> Self {
+    for span in line.into().spans {
+      self.push(span);
+    }
+
+    self
+  }
+
   pub(crate) fn blank() -> Self {
-    Self::raw("")
+    Self::default()
+  }
+
+  pub(crate) fn clip_end(&self, width: u16) -> Self {
+    if width == 0 {
+      return Self::blank();
+    }
+
+    self.slice(0..Self::fitting_length(Self::graphemes(&self.text()), width))
+  }
+
+  pub(crate) fn clip_start(&self, width: u16) -> Self {
+    if width == 0 {
+      return Self::blank();
+    }
+
+    let text = self.text();
+
+    let start =
+      text.len() - Self::fitting_length(Self::graphemes(&text).rev(), width);
+
+    self.slice(start..text.len())
+  }
+
+  pub(crate) fn ellipsize(&self, width: u16) -> Self {
+    if width == 0 {
+      return Self::blank();
+    }
+
+    if self.width() <= usize::from(width) {
+      return self.clone();
+    }
+
+    self
+      .clip_end(width.saturating_sub(3))
+      .append(Span::raw(".".repeat(usize::from(width.min(3)))))
+  }
+
+  fn fitting_length(
+    graphemes: impl Iterator<Item = (Range<usize>, usize)>,
+    width: u16,
+  ) -> usize {
+    let mut remaining = usize::from(width);
+
+    graphemes
+      .take_while(|(_, width)| {
+        if *width > remaining {
+          return false;
+        }
+
+        remaining -= width;
+
+        true
+      })
+      .map(|(range, _)| range.len())
+      .sum()
+  }
+
+  fn graphemes(
+    text: &str,
+  ) -> impl DoubleEndedIterator<Item = (Range<usize>, usize)> {
+    text.grapheme_indices(true).map(|(index, grapheme)| {
+      (
+        index..index + grapheme.len(),
+        UnicodeWidthStr::width(grapheme),
+      )
+    })
   }
 
   pub(crate) fn is_blank(&self) -> bool {
-    self.spans.iter().all(|span| span.text.is_empty())
+    self.spans.is_empty()
+  }
+
+  fn push(&mut self, span: Span) {
+    if span.text.is_empty() {
+      return;
+    }
+
+    match self.spans.last_mut() {
+      Some(last) if last.style == span.style => last.text.push_str(&span.text),
+      _ => self.spans.push(span),
+    }
   }
 
   pub(crate) fn raw(text: impl Into<String>) -> Self {
-    Self {
-      spans: [Span::raw(text)].into_iter().collect(),
+    Self::from(Span::raw(text))
+  }
+
+  fn slice(&self, range: Range<usize>) -> Self {
+    if range.is_empty() {
+      return Self::blank();
     }
+
+    let mut offset = 0;
+
+    self
+      .spans
+      .iter()
+      .filter_map(|span| {
+        let (start, end) = (
+          range.start.saturating_sub(offset),
+          range.end.saturating_sub(offset).min(span.text.len()),
+        );
+
+        offset += span.text.len();
+
+        if start < end {
+          Some(Span::styled(&span.text[start..end], span.style))
+        } else {
+          None
+        }
+      })
+      .collect()
+  }
+
+  pub(crate) fn styled(text: impl Into<String>, style: Style) -> Self {
+    Self::from(Span::styled(text, style))
+  }
+
+  fn text(&self) -> Cow<'_, str> {
+    match self.spans.as_slice() {
+      [] => Cow::Borrowed(""),
+      [span] => Cow::Borrowed(&span.text),
+      spans => {
+        Cow::Owned(spans.iter().map(|span| span.text.as_str()).collect())
+      }
+    }
+  }
+
+  pub(crate) fn width(&self) -> usize {
+    Self::graphemes(&self.text()).map(|(_, width)| width).sum()
   }
 }
 
@@ -29,55 +158,38 @@ impl Component for LineComponent {
 
     let max_width = usize::from(width);
 
-    let mut line = self.clone();
-
-    line.spans.retain(|span| !span.text.is_empty());
-
-    if line
-      .spans
-      .iter()
-      .map(|span| UnicodeWidthStr::width(span.text.as_str()))
-      .sum::<usize>()
-      <= max_width
-    {
-      return vec![line];
-    }
+    let text = self.text();
 
     let mut lines = Vec::new();
+    let mut line = Self::blank();
 
-    let mut spans = SmallVec::<[Span; 6]>::new();
-    let mut span_width = 0;
+    let (mut start, mut line_width) = (0, 0);
 
-    for source_span in line.spans {
-      for c in source_span.text.chars() {
-        let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
+    for (range, grapheme_width) in Self::graphemes(&text) {
+      let replace = grapheme_width > max_width;
 
-        let (c, char_width) = if char_width > max_width {
-          ('\u{fffd}', 1)
-        } else {
-          (c, char_width)
-        };
+      let grapheme_width = if replace { 1 } else { grapheme_width };
 
-        if span_width > 0 && span_width + char_width > max_width {
-          lines.push(LineComponent {
-            spans: mem::take(&mut spans),
-          });
+      if line_width + grapheme_width > max_width {
+        lines.push(line.append(self.slice(start..range.start)));
 
-          span_width = 0;
-        }
+        line = Self::blank();
 
-        match spans.last_mut() {
-          Some(last) if last.style == source_span.style => {
-            last.push(c);
-          }
-          _ => spans.push(Span::styled(c.to_string(), source_span.style)),
-        }
-
-        span_width += char_width;
+        (start, line_width) = (range.start, 0);
       }
+
+      if replace {
+        line = line
+          .append(self.slice(start..range.start))
+          .append(Span::styled("�", self.slice(range.clone()).spans[0].style));
+
+        start = range.end;
+      }
+
+      line_width += grapheme_width;
     }
 
-    lines.push(LineComponent { spans });
+    lines.push(line.append(self.slice(start..text.len())));
 
     lines
   }
@@ -109,25 +221,74 @@ impl From<LineComponent> for Vec<Span> {
   }
 }
 
+impl From<Span> for LineComponent {
+  fn from(span: Span) -> Self {
+    once(span).collect()
+  }
+}
+
 impl From<Vec<Span>> for LineComponent {
   fn from(spans: Vec<Span>) -> Self {
-    Self {
-      spans: spans.into(),
-    }
+    spans.into_iter().collect()
   }
 }
 
 impl<const N: usize> From<[Span; N]> for LineComponent {
   fn from(spans: [Span; N]) -> Self {
-    Self {
-      spans: spans.into_iter().collect(),
+    spans.into_iter().collect()
+  }
+}
+
+impl FromIterator<Span> for LineComponent {
+  fn from_iter<T: IntoIterator<Item = Span>>(iter: T) -> Self {
+    let mut line = Self::blank();
+
+    for span in iter {
+      line.push(span);
     }
+
+    line
   }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn clips_at_grapheme_boundaries() {
+    #[track_caller]
+    fn case(text: &str, width: u16, prefix: &str, suffix: &str) {
+      let line = LineComponent::raw(text);
+
+      assert_eq!(line.clip_end(width), LineComponent::raw(prefix));
+      assert_eq!(line.clip_start(width), LineComponent::raw(suffix));
+    }
+
+    case("", 1, "", "");
+    case("foo", 0, "", "");
+    case("foo", 2, "fo", "oo");
+    case("foo", 3, "foo", "foo");
+    case("👩‍💻foo👩‍💻", 1, "", "");
+    case("👩‍💻foo👩‍💻", 2, "👩‍💻", "👩‍💻");
+    case("\u{0301}foo", 3, "\u{0301}foo", "\u{0301}foo");
+  }
+
+  #[test]
+  fn construction_normalizes_spans() {
+    let line = LineComponent::from([
+      Span::raw(""),
+      Span::styled("foo", Style::Accent),
+      Span::styled("", Style::Muted),
+    ])
+    .append(Span::styled("bar", Style::Accent))
+    .append(Span::raw("baz"));
+
+    assert_eq!(
+      Vec::<Span>::from(line),
+      [Span::styled("foobar", Style::Accent), Span::raw("baz")],
+    );
+  }
 
   #[test]
   fn displays_blank_line() {
@@ -191,19 +352,25 @@ mod tests {
   }
 
   #[test]
-  fn line_with_six_spans_uses_inline_smallvec_storage() {
-    assert!(
-      !LineComponent::from([
-        Span::raw("a"),
-        Span::raw("b"),
-        Span::raw("c"),
-        Span::raw("d"),
-        Span::raw("e"),
-        Span::raw("f"),
-      ])
-      .spans
-      .spilled()
-    );
+  fn ellipsizes_to_available_width() {
+    #[track_caller]
+    fn case(text: &str, width: u16, expected: &str) {
+      assert_eq!(
+        LineComponent::raw(text).ellipsize(width),
+        LineComponent::raw(expected),
+      );
+    }
+
+    case("foobarbaz", 0, "");
+    case("foobarbaz", 1, ".");
+    case("foobarbaz", 6, "foo...");
+    case("foobarbaz", 9, "foobarbaz");
+    case("👩‍💻foobar", 4, "...");
+  }
+
+  #[test]
+  fn measures_display_width() {
+    assert_eq!(LineComponent::raw("لا").width(), 2);
   }
 
   #[test]
@@ -217,9 +384,9 @@ mod tests {
   #[test]
   fn rendering_accounts_for_wide_characters() {
     #[track_caller]
-    fn case(width: u16, expected: &[&str]) {
+    fn case(text: &str, width: u16, expected: &[&str]) {
       assert_eq!(
-        LineComponent::raw("a界b").render(width),
+        LineComponent::raw(text).render(width),
         expected
           .iter()
           .copied()
@@ -228,10 +395,24 @@ mod tests {
       );
     }
 
-    case(1, &["a", "�", "b"]);
-    case(2, &["a", "界", "b"]);
-    case(3, &["a界", "b"]);
-    case(4, &["a界b"]);
+    case("a界b", 1, &["a", "�", "b"]);
+    case("a界b", 2, &["a", "界", "b"]);
+    case("a界b", 3, &["a界", "b"]);
+    case("a界b", 4, &["a界b"]);
+    case("\u{17d8}foo", 2, &["�f", "oo"]);
+  }
+
+  #[test]
+  fn rendering_keeps_graphemes_across_style_boundaries() {
+    let emoji = LineComponent::styled("👩", Style::Accent)
+      .append(Span::styled("\u{200d}💻", Style::Muted));
+
+    assert_eq!(
+      LineComponent::styled("foo", Style::Accent)
+        .append(emoji.clone())
+        .render(3),
+      [LineComponent::styled("foo", Style::Accent), emoji],
+    );
   }
 
   #[test]
@@ -317,13 +498,14 @@ mod tests {
   fn renders_raw_text_at_various_widths() {
     #[track_caller]
     fn case(width: u16, expected: &[&str]) {
-      let expected = expected
-        .iter()
-        .copied()
-        .map(LineComponent::raw)
-        .collect::<Vec<_>>();
-
-      assert_eq!(LineComponent::raw("foo").render(width), expected);
+      assert_eq!(
+        LineComponent::raw("foo").render(width),
+        expected
+          .iter()
+          .copied()
+          .map(LineComponent::raw)
+          .collect::<Vec<_>>()
+      );
     }
 
     case(0, &[""]);

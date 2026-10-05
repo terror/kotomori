@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct TextFieldComponent<'a> {
-  pub(crate) label: Span,
+  pub(crate) label: LineComponent,
   pub(crate) value: &'a str,
 }
 
@@ -12,49 +12,14 @@ impl Component for TextFieldComponent<'_> {
       return vec![LineComponent::blank()];
     }
 
-    let mut remaining = usize::from(width) - 1;
+    let label = self.label.clip_end(width - 1);
 
-    let label = self
-      .label
-      .text
-      .graphemes(true)
-      .take_while(|grapheme| {
-        let width = UnicodeWidthStr::width(*grapheme);
+    let remaining = width - 1 - u16::try_from(label.width()).unwrap();
 
-        if width > remaining {
-          return false;
-        }
-
-        remaining -= width;
-
-        true
-      })
-      .collect::<String>();
-
-    let value = Span::raw(self.value);
-
-    let mut start = value.text.len();
-
-    for (index, grapheme) in value.text.grapheme_indices(true).rev() {
-      let width = UnicodeWidthStr::width(grapheme);
-
-      if width > remaining {
-        break;
-      }
-
-      if width > 0 {
-        start = index;
-      }
-
-      remaining -= width;
-    }
-
-    LineComponent::from([
-      Span::styled(label, self.label.style),
-      Span::raw(&value.text[start..]),
-      Span::styled(" ", Style::Selection),
-    ])
-    .render(width)
+    label
+      .append(LineComponent::raw(self.value).clip_start(remaining))
+      .append(Span::styled(" ", Style::Selection))
+      .render(width)
   }
 }
 
@@ -68,7 +33,7 @@ mod tests {
     fn case(label: &str, width: u16, expected: &str) {
       assert_eq!(
         TextFieldComponent {
-          label: Span::styled(label, Style::Muted),
+          label: LineComponent::styled(label, Style::Muted),
           value: ""
         }
         .render(width),
@@ -95,7 +60,7 @@ mod tests {
     fn case(value: &str, width: u16, label: &str, expected: &str) {
       assert_eq!(
         TextFieldComponent {
-          label: Span::styled("foo: ", Style::Muted),
+          label: LineComponent::styled("foo: ", Style::Muted),
           value
         }
         .render(width),
@@ -121,5 +86,23 @@ mod tests {
     case("bar", 5, "foo:", "");
     case("bar", 1, "", "");
     case("bar", 0, "", "");
+  }
+
+  #[test]
+  fn preserves_label_styles() {
+    assert_eq!(
+      TextFieldComponent {
+        label: LineComponent::styled("foo", Style::Accent)
+          .append(Span::styled(": ", Style::Muted)),
+        value: "foobar"
+      }
+      .render(9),
+      [LineComponent::from([
+        Span::styled("foo", Style::Accent),
+        Span::styled(": ", Style::Muted),
+        Span::raw("bar"),
+        Span::styled(" ", Style::Selection),
+      ])],
+    );
   }
 }

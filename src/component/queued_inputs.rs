@@ -16,7 +16,7 @@ impl Component for QueuedInputsComponent<'_> {
             .push(LineComponent::from([Span::styled("Queued", Style::Muted)]))
             .push(GutterComponent {
               component: LinesComponent::raw(input.split('\n')),
-              gutter: Span::styled("│ ", Style::Accent),
+              gutter: LineComponent::styled("│ ", Style::Accent),
             }),
         )
       })

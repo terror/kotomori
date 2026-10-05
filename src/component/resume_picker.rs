@@ -29,7 +29,7 @@ impl ResumePickerComponent {
               Span::styled(" to cancel.", Style::Muted),
             ]))
             .push(TextFieldComponent {
-              label: Span::styled("Search: ", Style::Muted),
+              label: LineComponent::styled("Search: ", Style::Muted),
               value: &picker.query,
             }),
         )
