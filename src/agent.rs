@@ -7,7 +7,7 @@ pub(crate) struct Agent {
   provider: Arc<dyn Provider>,
   settings: Settings,
   task: Option<task::JoinHandle<()>>,
-  tool_context: ToolContext,
+  tool_executor: ToolExecutor,
 }
 
 impl Agent {
@@ -51,7 +51,7 @@ impl Agent {
       provider,
       settings: settings.clone(),
       task: None,
-      tool_context: ToolContext {
+      tool_executor: ToolExecutor {
         command_executor: CommandExecutor::default(),
         directory: settings.directory.clone(),
       },
@@ -67,7 +67,7 @@ impl Agent {
       provider: self.provider.clone(),
       settings: self.settings.clone(),
       task: None,
-      tool_context: self.tool_context.clone(),
+      tool_executor: self.tool_executor.clone(),
     };
 
     self.task = Some(tokio::spawn(async move {
@@ -95,6 +95,7 @@ impl Agent {
         messages: messages.clone(),
         model: self.settings.model.clone(),
         system: (!system.is_empty()).then(|| system.clone()),
+        tools: ToolInvocationKind::definitions(),
       };
 
       let message = self.provider.stream(request, &sink).await?;
@@ -147,7 +148,7 @@ impl Agent {
       for tool_call in tool_calls {
         let result = match self.approval(run_id, &tool_call).await? {
           ToolApproval::Approved => {
-            tool_call.kind.execute(&self.tool_context).await
+            self.tool_executor.execute(&tool_call.kind).await
           }
           ToolApproval::Denied => ToolResult {
             stderr: Some("permission denied".into()),
@@ -247,6 +248,8 @@ mod tests {
       request: Request,
       sink: &ProviderSink,
     ) -> Result<AgentMessage> {
+      assert_eq!(request.tools, ToolInvocationKind::definitions());
+
       self.requests.lock().unwrap().push(request.messages);
 
       let mut index = 0;
@@ -348,7 +351,7 @@ mod tests {
           yolo,
         },
         task: None,
-        tool_context: ToolContext {
+        tool_executor: ToolExecutor {
           command_executor: CommandExecutor::default(),
           directory: directory.path().into(),
         },
@@ -741,6 +744,7 @@ mod tests {
       messages,
       model: "mock:foo".parse().unwrap(),
       system: None,
+      tools: Vec::new(),
     });
 
     let result = ToolResult {

@@ -5,6 +5,7 @@ pub(crate) struct Request {
   pub(crate) messages: Vec<Message>,
   pub(crate) model: Model,
   pub(crate) system: Option<String>,
+  pub(crate) tools: Vec<ToolDefinition>,
 }
 
 impl Request {
@@ -37,14 +38,14 @@ impl From<&Request> for CompletionRequest {
       record_telemetry_content: false,
       temperature: None,
       tool_choice: None,
-      tools: ToolInvocationKind::definitions(),
+      tools: request.tools.clone(),
     }
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use {super::*, serde_json::json};
 
   #[test]
   fn completion_request_uses_blank_user_message_for_empty_history() {
@@ -55,6 +56,7 @@ mod tests {
         provider: "mock".into(),
       },
       system: None,
+      tools: Vec::new(),
     });
 
     assert_eq!(
@@ -75,6 +77,7 @@ mod tests {
         provider: "mock".into(),
       },
       system: Some("baz".into()),
+      tools: Vec::new(),
     });
 
     assert_eq!(request.model.as_deref(), Some("foo"));
@@ -91,23 +94,31 @@ mod tests {
 
   #[test]
   fn completion_request_uses_tools() {
-    let request = CompletionRequest::from(&Request {
-      messages: Vec::new(),
-      model: Model {
-        name: "foo".into(),
-        provider: "mock".into(),
-      },
-      system: None,
-    });
+    #[track_caller]
+    fn case(tools: &[ToolDefinition]) {
+      let request = CompletionRequest::from(&Request {
+        messages: Vec::new(),
+        model: Model {
+          name: "foo".into(),
+          provider: "mock".into(),
+        },
+        system: None,
+        tools: tools.to_vec(),
+      });
 
-    assert_eq!(
-      request
-        .tools
-        .iter()
-        .map(|tool| tool.name.as_str())
-        .collect::<Vec<_>>(),
-      ["command"],
-    );
+      assert_eq!(request.tools, tools);
+    }
+
+    case(&[]);
+    case(&[ToolDefinition {
+      description: "bar".into(),
+      name: "foo".into(),
+      parameters: json!({
+        "type": "object",
+        "properties": {"baz": {"type": "string"}},
+        "required": ["baz"],
+      }),
+    }]);
   }
 
   #[test]
@@ -129,6 +140,7 @@ mod tests {
         provider: "mock".into(),
       },
       system: None,
+      tools: Vec::new(),
     };
 
     assert_eq!(request.last_user_text(), Some("baz"));
@@ -150,6 +162,7 @@ mod tests {
         provider: "mock".into(),
       },
       system: None,
+      tools: Vec::new(),
     };
 
     assert_eq!(request.last_user_text(), None);
