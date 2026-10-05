@@ -15,7 +15,9 @@ impl<'a> TranscriptComponent<'a> {
       return StackComponent::default();
     };
 
-    let stack = StackComponent::default().push(self.draft(&run.message, &[]));
+    let stack = StackComponent::default()
+      .gap(1)
+      .push(self.draft(&run.message, &[]));
 
     match run.activity {
       AgentActivity::Reasoning | AgentActivity::Waiting => {
@@ -42,46 +44,45 @@ impl<'a> TranscriptComponent<'a> {
   ) -> StackComponent<'a> {
     content
       .iter()
-      .fold(StackComponent::default(), |stack, content| match content {
-        AssistantContent::Reasoning(reasoning) => {
-          stack.push_spaced(self.reasoning(&reasoning.text()))
-        }
-        AssistantContent::Text(text) => stack.push_spaced(MarkdownComponent {
-          text: text.text.clone(),
-        }),
-        AssistantContent::ToolCall(call) => {
-          let result = following
-            .iter()
-            .take_while(|entry| !matches!(entry, TranscriptEntry::Draft(_)))
-            .filter_map(TranscriptEntry::message)
-            .take_while(|message| matches!(message, Message::User(_)))
-            .find_map(|message| match message {
-              Message::User(content) => {
-                content.iter().find_map(|content| match content {
-                  UserMessageContent::ToolResult {
-                    call: id, result, ..
-                  } if *id == call.id => Some(result),
-                  _ => None,
-                })
-              }
-              Message::Agent(_) => None,
-            });
-
-          match ToolInvocationKind::decode(call.clone()) {
-            Ok(invocation) => {
-              stack.push_spaced(TranscriptToolInvocationComponent {
-                invocation,
-                result,
-              })
-            }
-            Err(_) => stack.push_spaced(LineComponent::raw(format!(
-              "{} {}",
-              call.function.name, call.function.arguments
-            ))),
+      .fold(
+        StackComponent::default().gap(1),
+        |stack, content| match content {
+          AssistantContent::Reasoning(reasoning) => {
+            stack.push(self.reasoning(&reasoning.text()))
           }
-        }
-        AssistantContent::Image(_) => stack,
-      })
+          AssistantContent::Text(text) => stack.push(MarkdownComponent {
+            text: text.text.clone(),
+          }),
+          AssistantContent::ToolCall(call) => {
+            let result = following
+              .iter()
+              .take_while(|entry| !matches!(entry, TranscriptEntry::Draft(_)))
+              .filter_map(TranscriptEntry::message)
+              .take_while(|message| matches!(message, Message::User(_)))
+              .find_map(|message| match message {
+                Message::User(content) => {
+                  content.iter().find_map(|content| match content {
+                    UserMessageContent::ToolResult {
+                      call: id, result, ..
+                    } if *id == call.id => Some(result),
+                    _ => None,
+                  })
+                }
+                Message::Agent(_) => None,
+              });
+
+            match ToolInvocationKind::decode(call.clone()) {
+              Ok(invocation) => stack
+                .push(TranscriptToolInvocationComponent { invocation, result }),
+              Err(_) => stack.push(LineComponent::raw(format!(
+                "{} {}",
+                call.function.name, call.function.arguments
+              ))),
+            }
+          }
+          AssistantContent::Image(_) => stack,
+        },
+      )
   }
 
   fn draft(
@@ -91,56 +92,78 @@ impl<'a> TranscriptComponent<'a> {
   ) -> StackComponent<'a> {
     buffer
       .preview()
-      .fold(StackComponent::default(), |stack, block| match block {
-        MessageDraft::Content(content) => stack
-          .push_spaced(self.agent_content(slice::from_ref(content), following)),
-        MessageDraft::Reasoning(reasoning) => {
-          stack.push_spaced(self.reasoning(reasoning))
-        }
-      })
+      .fold(
+        StackComponent::default().gap(1),
+        |stack, block| match block {
+          MessageDraft::Content(content) => {
+            stack.push(self.agent_content(slice::from_ref(content), following))
+          }
+          MessageDraft::Reasoning(reasoning) => {
+            stack.push(self.reasoning(reasoning))
+          }
+        },
+      )
   }
 
   fn entries(&self) -> StackComponent<'a> {
-    self.state.entries.iter().enumerate().fold(
-      StackComponent::default(),
-      |stack, (index, entry)| match entry {
-        TranscriptEntry::Draft(buffer) => {
-          stack.push_spaced(self.draft(
-            buffer,
-            &self.state.entries[index + 1..],
-          ))
-        }
-        TranscriptEntry::Error(error) => {
-          stack.push_spaced(TranscriptErrorComponent { error })
-        }
-        TranscriptEntry::Interrupted => {
-          stack.push_spaced(LineComponent::from([Span::styled(
-            "■ Conversation interrupted, tell the model what to do differently.",
-            Style::Danger,
-          )]))
-        }
-        TranscriptEntry::Message(Message::Agent(message)) => {
-          stack.push_spaced(self.agent_content(
-            &message.content,
-            &self.state.entries[index + 1..],
-          ))
-        }
-        TranscriptEntry::Message(Message::User(content)) => {
-          content.iter().filter_map(UserMessageContent::text).fold(
-            stack,
-            |stack, text| {
-              stack.push(GutterComponent {
-                component: LinesComponent::raw(text.split('\n')),
-                gutter: Span::styled("│ ", Style::Accent),
-              })
-            },
+    self
+      .state
+      .entries
+      .chunk_by(|left, right| {
+        matches!(
+          (left, right),
+          (
+            TranscriptEntry::Message(Message::User(_)),
+            TranscriptEntry::Message(Message::User(_))
           )
-        }
-        TranscriptEntry::Notice(notice) => {
-          stack.push_spaced(LinesComponent::raw(notice.lines()))
-        }
-      },
-    )
+        )
+      })
+      .fold(
+        (StackComponent::default().gap(1), 0),
+        |(stack, index), entries| {
+          let group = entries.iter().enumerate().fold(
+            StackComponent::default(),
+            |stack, (offset, entry)| match entry {
+              TranscriptEntry::Draft(buffer) => stack.push(self.draft(
+                buffer,
+                &self.state.entries[index + offset + 1..],
+              )),
+              TranscriptEntry::Error(error) => {
+                stack.push(TranscriptErrorComponent { error })
+              }
+              TranscriptEntry::Interrupted => {
+                stack.push(LineComponent::from([Span::styled(
+                  "■ Conversation interrupted, tell the model what to do differently.",
+                  Style::Danger,
+                )]))
+              }
+              TranscriptEntry::Message(Message::Agent(message)) => {
+                stack.push(self.agent_content(
+                  &message.content,
+                  &self.state.entries[index + offset + 1..],
+                ))
+              }
+              TranscriptEntry::Message(Message::User(content)) => {
+                content.iter().filter_map(UserMessageContent::text).fold(
+                  stack,
+                  |stack, text| {
+                    stack.push(GutterComponent {
+                      component: LinesComponent::raw(text.split('\n')),
+                      gutter: Span::styled("│ ", Style::Accent),
+                    })
+                  },
+                )
+              }
+              TranscriptEntry::Notice(notice) => {
+                stack.push(LinesComponent::raw(notice.lines()))
+              }
+            },
+          );
+
+          (stack.push(group), index + entries.len())
+        },
+      )
+      .0
   }
 
   fn reasoning(&self, reasoning: &str) -> StackComponent<'a> {
@@ -167,10 +190,7 @@ impl<'a> TranscriptComponent<'a> {
 
 impl Component for TranscriptComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    self
-      .entries()
-      .push_spaced(self.agent_activity())
-      .render(width)
+    self.entries().push(self.agent_activity()).render(width)
   }
 }
 
@@ -204,7 +224,6 @@ mod tests {
           Span::styled(" Working...", Style::Secondary),
           Span::styled(" (0s • Esc to interrupt)", Style::Muted),
         ]),
-        LineComponent::blank(),
       ]
     );
   }
@@ -247,7 +266,6 @@ mod tests {
         LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
         LineComponent::blank(),
         LineComponent::raw("qux"),
-        LineComponent::blank(),
       ]
     );
   }
@@ -281,7 +299,6 @@ mod tests {
             Span::styled(" Working...", Style::Secondary),
             Span::styled(" (1m 1s • Esc to interrupt)", Style::Muted),
           ]),
-          LineComponent::blank(),
         ]
       );
     }
@@ -303,7 +320,7 @@ mod tests {
         state: &Transcript::default()
       }
       .render(80),
-      [LineComponent::raw("foo bar"), LineComponent::blank()]
+      [LineComponent::raw("foo bar")]
     );
   }
 
@@ -322,14 +339,11 @@ mod tests {
         state: &Transcript::default()
       }
       .render(80),
-      [
-        LineComponent::from([
-          Span::styled("✶", Style::Accent),
-          Span::styled(" Working...", Style::Secondary),
-          Span::styled(" (1m 51s • Esc to interrupt)", Style::Muted),
-        ]),
-        LineComponent::blank(),
-      ]
+      [LineComponent::from([
+        Span::styled("✶", Style::Accent),
+        Span::styled(" Working...", Style::Secondary),
+        Span::styled(" (1m 51s • Esc to interrupt)", Style::Muted),
+      ])]
     );
   }
 
@@ -356,7 +370,6 @@ mod tests {
           "■ Conversation interrupted, tell the model what to do differently.",
           Style::Danger,
         )]),
-        LineComponent::blank(),
       ]
     );
   }
@@ -379,7 +392,6 @@ mod tests {
         LineComponent::raw("o "),
         LineComponent::raw("ba"),
         LineComponent::raw("r"),
-        LineComponent::blank(),
       ]
     );
   }
@@ -419,7 +431,6 @@ mod tests {
         LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
         LineComponent::blank(),
         LineComponent::raw("baz"),
-        LineComponent::blank(),
       ]
     );
   }
@@ -490,7 +501,6 @@ mod tests {
         LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
         LineComponent::blank(),
         LineComponent::raw("baz"),
-        LineComponent::blank(),
       ]
     );
   }
@@ -517,7 +527,6 @@ mod tests {
           Span::styled("  │ ", Style::Muted),
           Span::raw("foo"),
         ]),
-        LineComponent::blank(),
       ]
     );
   }
@@ -549,7 +558,6 @@ mod tests {
       ]),
       LineComponent::blank(),
       LineComponent::raw("baz"),
-      LineComponent::blank(),
     ];
 
     assert_eq!(
@@ -588,13 +596,10 @@ mod tests {
         state: &transcript
       }
       .render(80),
-      [
-        LineComponent::from([Span::styled(
-          "■ Conversation interrupted, tell the model what to do differently.",
-          Style::Danger,
-        )]),
-        LineComponent::blank(),
-      ]
+      [LineComponent::from([Span::styled(
+        "■ Conversation interrupted, tell the model what to do differently.",
+        Style::Danger,
+      )])]
     );
   }
 
@@ -609,7 +614,7 @@ mod tests {
         index: 0,
       });
 
-      let expected = [LineComponent::from([span]), LineComponent::blank()];
+      let expected = [LineComponent::from([span])];
 
       assert_eq!(
         TranscriptComponent {
@@ -650,7 +655,7 @@ mod tests {
   #[test]
   fn render_notice_entry_handles_multiline_content() {
     let transcript = Transcript::with_entries(vec![TranscriptEntry::Notice(
-      "foo\nbar".into(),
+      "\nfoo\n\n\nbar\n\n".into(),
     )]);
 
     assert_eq!(
@@ -661,7 +666,10 @@ mod tests {
       }
       .render(80),
       [
+        LineComponent::blank(),
         LineComponent::raw("foo"),
+        LineComponent::blank(),
+        LineComponent::blank(),
         LineComponent::raw("bar"),
         LineComponent::blank(),
       ]
@@ -707,7 +715,6 @@ mod tests {
           Span::styled("  │ ", Style::Muted),
           Span::raw("qux"),
         ]),
-        LineComponent::blank(),
       ]
     );
   }
@@ -763,7 +770,6 @@ mod tests {
         ]),
         LineComponent::blank(),
         LineComponent::raw("bar"),
-        LineComponent::blank(),
       ]
     );
   }
@@ -779,11 +785,25 @@ mod tests {
     );
 
     let transcript = Transcript::with_entries(vec![
+      TranscriptEntry::Message(Message::User(vec![
+        UserMessageContent::Text("foo".into()),
+        UserMessageContent::Text("bar".into()),
+      ])),
       TranscriptEntry::Message(Message::User(vec![UserMessageContent::Text(
-        "foo".into(),
+        "baz".into(),
       )])),
       TranscriptEntry::Message(Message::agent(vec![
         AssistantContent::ToolCall(invocation.protocol.clone()),
+      ])),
+      TranscriptEntry::Message(Message::User(vec![
+        UserMessageContent::ToolResult {
+          call: invocation.protocol.id.clone(),
+          name: invocation.protocol.function.name.clone(),
+          result: ToolResult {
+            outcome: ToolOutcome::Success,
+            ..Default::default()
+          },
+        },
       ])),
     ]);
 
@@ -799,13 +819,20 @@ mod tests {
           Span::styled("│ ", Style::Accent),
           Span::raw("foo"),
         ]),
-        LineComponent::blank(),
         LineComponent::from([
-          Span::styled("●", Style::Accent),
-          Span::raw(" "),
-          Span::raw("Running rg --files"),
+          Span::styled("│ ", Style::Accent),
+          Span::raw("bar"),
+        ]),
+        LineComponent::from([
+          Span::styled("│ ", Style::Accent),
+          Span::raw("baz"),
         ]),
         LineComponent::blank(),
+        LineComponent::from([
+          Span::styled("●", Style::Success),
+          Span::raw(" "),
+          Span::raw("Ran rg --files"),
+        ]),
       ]
     );
   }
@@ -869,7 +896,6 @@ mod tests {
           Span::styled("  │ ", Style::Muted),
           Span::raw("quux"),
         ]),
-        LineComponent::blank(),
       ]
     );
   }
@@ -939,7 +965,6 @@ mod tests {
           Span::styled("  │ ", Style::Muted),
           Span::styled("ine", Style::Muted),
         ]),
-        LineComponent::blank(),
       ]
     );
   }
@@ -966,14 +991,11 @@ mod tests {
         state: &transcript
       }
       .render(80),
-      [
-        LineComponent::from([
-          Span::styled("●", Style::Accent),
-          Span::raw(" "),
-          Span::raw("Running rg --files"),
-        ]),
-        LineComponent::blank(),
-      ]
+      [LineComponent::from([
+        Span::styled("●", Style::Accent),
+        Span::raw(" "),
+        Span::raw("Running rg --files"),
+      ])]
     );
   }
 
@@ -1029,7 +1051,6 @@ mod tests {
           Span::raw(" "),
           Span::raw("Ran bar"),
         ]),
-        LineComponent::blank(),
       ]
     );
   }
@@ -1055,10 +1076,7 @@ mod tests {
         state: &transcript
       }
       .render(80),
-      [
-        LineComponent::raw("foo {\"bar\":\"baz\"}"),
-        LineComponent::blank(),
-      ]
+      [LineComponent::raw("foo {\"bar\":\"baz\"}")]
     );
   }
 

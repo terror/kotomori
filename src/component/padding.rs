@@ -33,10 +33,13 @@ mod tests {
 
   #[test]
   fn composes_with_gutters_and_spacing() {
-    let stack = StackComponent::default().push_spaced(GutterComponent {
-      component: LinesComponent::raw(["foobar", ""]),
-      gutter: Span::styled("│ ", Style::Accent),
-    });
+    let stack = StackComponent::default()
+      .gap(1)
+      .push(GutterComponent {
+        component: LinesComponent::raw(["foobar", ""]),
+        gutter: Span::styled("│ ", Style::Accent),
+      })
+      .push(LineComponent::raw("baz"));
 
     assert_eq!(
       PaddingComponent {
@@ -61,6 +64,7 @@ mod tests {
           Span::raw(""),
         ]),
         LineComponent::blank(),
+        LineComponent::from([Span::raw("  "), Span::raw("baz")]),
       ],
     );
   }

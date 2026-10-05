@@ -37,18 +37,12 @@ impl Component for ComposerComponent<'_> {
         .collect(),
     };
 
-    let stack = StackComponent::default().push(GutterComponent {
-      component: input,
-      gutter: Span::styled("│ ", Style::Accent),
-    });
-
-    let stack = if selected.is_some() {
-      stack.push(LineComponent::blank())
-    } else {
-      stack
-    };
-
-    stack
+    StackComponent::default()
+      .gap(1)
+      .push(GutterComponent {
+        component: input,
+        gutter: Span::styled("│ ", Style::Accent),
+      })
       .push(LinesComponent {
         lines: self
           .composer

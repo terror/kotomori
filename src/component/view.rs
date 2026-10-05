@@ -26,11 +26,11 @@ impl ViewComponent<'_> {
       }
       Screen::Session(state) => {
         let stack = StackComponent::default()
-          .push(LineComponent::blank())
-          .push_spaced(HeaderComponent {
+          .gap(1)
+          .push(HeaderComponent {
             first_draw_duration: self.first_draw_duration,
           })
-          .push_spaced(HintComponent)
+          .push(HintComponent)
           .push(TranscriptComponent {
             reasoning_expanded: state.reasoning_expanded,
             run: state.run.as_ref(),
@@ -48,10 +48,12 @@ impl ViewComponent<'_> {
             }),
           };
 
-        stack.push(LineComponent::blank()).push(FooterComponent {
-          directory: &state.session.settings.directory,
-          model: &state.session.settings.model,
-        })
+        StackComponent::default()
+          .push(LineComponent::blank())
+          .push(stack.push(FooterComponent {
+            directory: &state.session.settings.directory,
+            model: &state.session.settings.model,
+          }))
       }
     };
 
