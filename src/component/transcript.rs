@@ -17,7 +17,7 @@ impl<'a> TranscriptComponent<'a> {
 
     let stack = StackComponent::default()
       .gap(1)
-      .push(self.draft(&run.message, &[]));
+      .push(self.agent_content(TranscriptBlock::draft(&run.message, &[])));
 
     match run.activity {
       AgentActivity::Reasoning | AgentActivity::Waiting => {
@@ -39,67 +39,22 @@ impl<'a> TranscriptComponent<'a> {
 
   fn agent_content(
     &self,
-    content: &'a [AssistantContent],
-    following: &'a [TranscriptEntry],
+    blocks: impl IntoIterator<Item = TranscriptBlock<'a>>,
   ) -> StackComponent<'a> {
-    content
-      .iter()
-      .fold(
-        StackComponent::default().gap(1),
-        |stack, content| match content {
-          AssistantContent::Reasoning(reasoning) => {
-            stack.push(self.reasoning(&reasoning.text()))
-          }
-          AssistantContent::Text(text) => {
-            stack.push(MarkdownComponent { text: &text.text })
-          }
-          AssistantContent::ToolCall(call) => {
-            let result = following
-              .iter()
-              .take_while(|entry| !matches!(entry, TranscriptEntry::Draft(_)))
-              .filter_map(TranscriptEntry::message)
-              .take_while(|message| matches!(message, Message::User(_)))
-              .find_map(|message| match message {
-                Message::User(content) => {
-                  content.iter().find_map(|content| match content {
-                    UserMessageContent::ToolResult {
-                      call: id, result, ..
-                    } if *id == call.id => Some(result),
-                    _ => None,
-                  })
-                }
-                Message::Agent(_) => None,
-              });
-
-            match ToolInvocationKind::decode(call.clone()) {
-              Ok(invocation) => stack
-                .push(TranscriptToolInvocationComponent { invocation, result }),
-              Err(_) => stack.push(LineComponent::raw(format!(
-                "{} {}",
-                call.function.name, call.function.arguments
-              ))),
-            }
-          }
-          AssistantContent::Image(_) => stack,
-        },
-      )
-  }
-
-  fn draft(
-    &self,
-    buffer: &'a MessageBuffer,
-    following: &'a [TranscriptEntry],
-  ) -> StackComponent<'a> {
-    buffer
-      .preview()
+    blocks
+      .into_iter()
       .fold(
         StackComponent::default().gap(1),
         |stack, block| match block {
-          MessageDraft::Content(content) => {
-            stack.push(self.agent_content(slice::from_ref(content), following))
+          TranscriptBlock::Markdown(text) => {
+            stack.push(MarkdownComponent { text })
           }
-          MessageDraft::Reasoning(reasoning) => {
-            stack.push(self.reasoning(reasoning))
+          TranscriptBlock::Raw(text) => stack.push(LineComponent::raw(text)),
+          TranscriptBlock::Reasoning(reasoning) => {
+            stack.push(self.reasoning(&reasoning))
+          }
+          TranscriptBlock::Tool { invocation, result } => {
+            stack.push(TranscriptToolInvocationComponent { invocation, result })
           }
         },
       )
@@ -124,10 +79,12 @@ impl<'a> TranscriptComponent<'a> {
           let group = entries.iter().enumerate().fold(
             StackComponent::default(),
             |stack, (offset, entry)| match entry {
-              TranscriptEntry::Draft(buffer) => stack.push(self.draft(
-                buffer,
-                &self.state.entries[index + offset + 1..],
-              )),
+              TranscriptEntry::Draft(buffer) => {
+                stack.push(self.agent_content(TranscriptBlock::draft(
+                  buffer,
+                  &self.state.entries[index + offset + 1..],
+                )))
+              }
               TranscriptEntry::Error(error) => {
                 stack.push(TranscriptErrorComponent { error })
               }
@@ -138,10 +95,10 @@ impl<'a> TranscriptComponent<'a> {
                 )]))
               }
               TranscriptEntry::Message(Message::Agent(message)) => {
-                stack.push(self.agent_content(
+                stack.push(self.agent_content(TranscriptBlock::content(
                   &message.content,
                   &self.state.entries[index + offset + 1..],
-                ))
+                )))
               }
               TranscriptEntry::Message(Message::User(content)) => {
                 content.iter().filter_map(UserMessageContent::text).fold(

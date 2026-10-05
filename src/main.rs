@@ -97,7 +97,6 @@ use {
     ops::Range,
     path::{Component, Path, PathBuf},
     process::{self, Stdio},
-    slice,
     str::{self, FromStr},
     sync::{Arc, LazyLock, OnceLock},
     thread,
@@ -126,6 +125,7 @@ use {
   tool_outcome::ToolOutcome,
   tool_result::ToolResult,
   transcript::Transcript,
+  transcript_block::TranscriptBlock,
   transcript_entry::TranscriptEntry,
   unicode_segmentation::UnicodeSegmentation,
   unicode_width::UnicodeWidthStr,
@@ -218,6 +218,7 @@ mod tool_invocation;
 mod tool_outcome;
 mod tool_result;
 mod transcript;
+mod transcript_block;
 mod transcript_entry;
 mod user_message_content;
 mod write_ext;
