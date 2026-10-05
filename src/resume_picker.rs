@@ -2,8 +2,8 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ResumePicker {
-  pub(crate) offset: Cell<usize>,
   pub(crate) query: String,
+  pub(crate) scroll: ScrollState,
   pub(crate) selected: usize,
   sessions: Vec<SessionSummary>,
 }
@@ -91,8 +91,8 @@ impl ResumePicker {
 
   pub(crate) fn new(sessions: Vec<SessionSummary>) -> Self {
     Self {
-      offset: Cell::new(0),
       query: String::new(),
+      scroll: ScrollState::default(),
       selected: 0,
       sessions,
     }

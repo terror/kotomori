@@ -3,18 +3,26 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct ViewComponent<'a> {
   pub(crate) first_draw_duration: Option<Duration>,
-  pub(crate) screen: &'a Screen,
+  pub(crate) screen: &'a mut Screen,
 }
 
 impl ViewComponent<'_> {
-  pub(crate) fn render(&self, dimensions: Dimensions) -> Vec<LineComponent> {
+  pub(crate) fn layout(
+    &mut self,
+    dimensions: Dimensions,
+  ) -> Vec<LineComponent> {
+    let padding = 2.min(dimensions.width.saturating_sub(1) / 2);
+
     let stack = match self.screen {
       Screen::Quit => StackComponent::default(),
       Screen::Resume(picker) => {
-        StackComponent::default().push(ResumePickerComponent {
-          height: dimensions.height,
+        StackComponent::default().push(ResumePickerComponent::layout(
           picker,
-        })
+          Dimensions {
+            width: dimensions.width - padding * 2,
+            ..dimensions
+          },
+        ))
       }
       Screen::Session(state) => {
         let stack = StackComponent::default()
@@ -49,7 +57,7 @@ impl ViewComponent<'_> {
 
     PaddingComponent {
       component: stack,
-      padding: 2,
+      padding,
     }
     .render(dimensions.width)
   }
