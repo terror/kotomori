@@ -156,9 +156,9 @@ impl App {
       renderer.draw(|dimensions| {
         ViewComponent {
           first_draw_duration,
-          screen: &self.screen,
+          screen: &mut self.screen,
         }
-        .render(dimensions)
+        .layout(dimensions)
       })?;
 
       if let Some(started_at) = first_draw_started_at.take() {

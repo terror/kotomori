@@ -77,6 +77,7 @@ use {
   saved_session::SavedSession,
   schemars::JsonSchema,
   screen::Screen,
+  scroll_state::ScrollState,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
   session::Session,
   session_summary::SessionSummary,
@@ -87,7 +88,6 @@ use {
   std::{
     backtrace::BacktraceStatus,
     borrow::Cow,
-    cell::Cell,
     collections::{BTreeMap, VecDeque},
     env,
     fmt::{self, Debug, Display, Formatter},
@@ -95,6 +95,7 @@ use {
     io::{self, BufWriter, Stdout, Write},
     iter::once,
     mem,
+    ops::Range,
     path::{Component, Path, PathBuf},
     process::{self, Stdio},
     slice,
@@ -200,6 +201,7 @@ mod resume_picker_action;
 mod run;
 mod saved_session;
 mod screen;
+mod scroll_state;
 mod session;
 mod session_summary;
 mod settings;
