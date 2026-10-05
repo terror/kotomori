@@ -2,32 +2,16 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct State {
-  composer: Composer,
-  next_run_id: u64,
-  queued_inputs: VecDeque<String>,
-  reasoning_expanded: bool,
-  run: Option<Run>,
-  session: Session,
-  should_quit: bool,
+  pub(crate) composer: Composer,
+  pub(crate) next_run_id: u64,
+  pub(crate) queued_inputs: VecDeque<String>,
+  pub(crate) reasoning_expanded: bool,
+  pub(crate) run: Option<Run>,
+  pub(crate) session: Session,
+  pub(crate) should_quit: bool,
 }
 
 impl State {
-  pub(crate) fn active_run(&self) -> Option<&Run> {
-    self.run.as_ref()
-  }
-
-  pub(crate) fn approval(&self) -> Option<&ApprovalRequest> {
-    self.run.as_ref().and_then(|run| run.approval.as_ref())
-  }
-
-  pub(crate) fn composer(&self) -> &Composer {
-    &self.composer
-  }
-
-  pub(crate) fn directory(&self) -> &Path {
-    &self.session.settings.directory
-  }
-
   fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
     if let Some(entry) = self.run.take().and_then(Run::finish) {
       self.session.transcript.entries.push(entry);
@@ -41,7 +25,7 @@ impl State {
       return self.interrupt_agent();
     }
 
-    match self.approval() {
+    match self.run.as_ref().and_then(|run| run.approval.as_ref()) {
       Some(_) => match action {
         Action::Edit(input) if input.key == Key::Char('y') => {
           self.resolve_approval(ToolApproval::Approved);
@@ -207,10 +191,6 @@ impl State {
     vec![Effect::InterruptAgent, Effect::SaveSession]
   }
 
-  pub(crate) fn model(&self) -> &Model {
-    &self.session.settings.model
-  }
-
   pub(crate) fn new(session: Session) -> Self {
     let history = session
       .transcript
@@ -235,16 +215,8 @@ impl State {
     }
   }
 
-  pub(crate) fn queued_inputs(&self) -> &VecDeque<String> {
-    &self.queued_inputs
-  }
-
   fn quit(&mut self) {
     self.should_quit = true;
-  }
-
-  pub(crate) fn reasoning_expanded(&self) -> bool {
-    self.reasoning_expanded
   }
 
   fn reset_input(&mut self) {
@@ -280,14 +252,6 @@ impl State {
       .pop_front()
       .map(|input| vec![self.run(input)])
       .unwrap_or_default()
-  }
-
-  pub(crate) fn session(&self) -> &Session {
-    &self.session
-  }
-
-  pub(crate) fn should_quit(&self) -> bool {
-    self.should_quit
   }
 
   fn submit(&mut self, action: &Action) -> Vec<Effect> {
@@ -333,10 +297,6 @@ impl State {
       }
       _ => vec![Effect::SaveSession, self.run(input)],
     }
-  }
-
-  pub(crate) fn transcript(&self) -> &Transcript {
-    &self.session.transcript
   }
 }
 
@@ -558,7 +518,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.approval().unwrap().invocation, invocation);
+    assert_eq!(state.run.unwrap().approval.unwrap().invocation, invocation);
   }
 
   #[tokio::test]
@@ -711,7 +671,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.approval().unwrap().invocation, invocation);
+    assert_eq!(state.run.unwrap().approval.unwrap().invocation, invocation);
   }
 
   #[test]
@@ -747,7 +707,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.approval().unwrap().invocation, invocation);
+    assert_eq!(state.run.unwrap().approval.unwrap().invocation, invocation);
   }
 
   #[test]
@@ -783,7 +743,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.approval().unwrap().invocation, invocation);
+    assert_eq!(state.run.unwrap().approval.unwrap().invocation, invocation);
   }
 
   #[test]
@@ -819,7 +779,7 @@ mod tests {
       Vec::new()
     );
 
-    assert_eq!(state.approval().unwrap().invocation, invocation);
+    assert_eq!(state.run.unwrap().approval.unwrap().invocation, invocation);
   }
 
   #[tokio::test]
@@ -1630,7 +1590,7 @@ mod tests {
     assert_eq!(state.run, Some(Run::new(1)));
 
     assert_eq!(state.composer.input_text(), "");
-    assert_eq!(state.queued_inputs(), &VecDeque::from(["baz".into()]));
+    assert_eq!(state.queued_inputs, VecDeque::from(["baz".into()]));
 
     state.handle_event(Event::Action(Action::SelectPrevious));
 
@@ -1682,7 +1642,7 @@ mod tests {
       ]
     );
 
-    assert!(state.queued_inputs().is_empty());
+    assert!(state.queued_inputs.is_empty());
     assert_eq!(state.run, Some(Run::new(1)));
   }
 
@@ -2085,7 +2045,7 @@ mod tests {
       state.handle_event(Event::Action(Action::Submit));
     }
 
-    assert_eq!(state.queued_inputs().len(), 2);
+    assert_eq!(state.queued_inputs.len(), 2);
 
     assert_matches!(
       state
@@ -2183,7 +2143,7 @@ mod tests {
       run_id: 0,
     });
 
-    assert!(state.approval().is_some());
+    assert!(state.run.as_ref().unwrap().approval.is_some());
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Quit)),
@@ -2193,7 +2153,10 @@ mod tests {
     assert!(!state.should_quit);
     assert_eq!(state.run, None);
 
-    assert_eq!(state.approval(), None);
+    assert_eq!(
+      state.run.as_ref().and_then(|run| run.approval.as_ref()),
+      None
+    );
     assert!(response_receiver.await.is_err());
   }
 
@@ -2299,7 +2262,10 @@ mod tests {
       "channel closed"
     );
 
-    assert_eq!(state.approval(), None);
+    assert_eq!(
+      state.run.as_ref().and_then(|run| run.approval.as_ref()),
+      None
+    );
 
     assert_eq!(state.run, Some(Run::new(1)));
 
@@ -2364,7 +2330,7 @@ mod tests {
     );
 
     assert_eq!(state.composer.input_text(), "");
-    assert_eq!(state.queued_inputs().len(), 1);
+    assert_eq!(state.queued_inputs.len(), 1);
 
     assert_eq!(
       state.session.transcript.messages(),
@@ -2388,7 +2354,7 @@ mod tests {
       ]
     );
 
-    assert!(state.queued_inputs().is_empty());
+    assert!(state.queued_inputs.is_empty());
   }
 
   #[test]
@@ -2451,8 +2417,8 @@ mod tests {
       Vec::new(),
     );
     assert_eq!(
-      state.session(),
-      &Session {
+      state.session,
+      Session {
         created_at: 1,
         id: Some(2),
         settings,
@@ -2463,7 +2429,7 @@ mod tests {
         updated_at: 3,
       }
     );
-    assert_eq!(state.directory(), Path::new("foo"));
+    assert_eq!(state.session.settings.directory, Path::new("foo"));
   }
 
   #[test]

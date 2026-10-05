@@ -24,24 +24,25 @@ impl ViewComponent<'_> {
           })
           .push_spaced(HintComponent)
           .push(TranscriptComponent {
-            reasoning_expanded: state.reasoning_expanded(),
-            run: state.active_run(),
-            state: state.transcript(),
+            reasoning_expanded: state.reasoning_expanded,
+            run: state.run.as_ref(),
+            state: &state.session.transcript,
           })
           .push(QueuedInputsComponent {
-            inputs: state.queued_inputs(),
+            inputs: &state.queued_inputs,
           });
 
-        let stack = match state.approval() {
-          Some(request) => stack.push(ApprovalPromptComponent { request }),
-          None => stack.push(ComposerComponent {
-            composer: state.composer(),
-          }),
-        };
+        let stack =
+          match state.run.as_ref().and_then(|run| run.approval.as_ref()) {
+            Some(request) => stack.push(ApprovalPromptComponent { request }),
+            None => stack.push(ComposerComponent {
+              composer: &state.composer,
+            }),
+          };
 
         stack.push(LineComponent::blank()).push(FooterComponent {
-          directory: state.directory(),
-          model: state.model(),
+          directory: &state.session.settings.directory,
+          model: &state.session.settings.model,
         })
       }
     };
