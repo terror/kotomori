@@ -2,8 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ResumePickerComponent {
-  header: LinesComponent,
-  sessions: ScrollComponent<LinesComponent>,
+  stack: StackComponent<'static>,
 }
 
 impl ResumePickerComponent {
@@ -11,39 +10,47 @@ impl ResumePickerComponent {
     picker: &mut ResumePicker,
     dimensions: Dimensions,
   ) -> Self {
-    let header = if dimensions.height == 0 {
-      Vec::new()
+    let (header, gap) = if dimensions.height == 0 {
+      (Vec::new(), 0)
     } else {
       let mut lines = StackComponent::default()
         .push(LineComponent::blank())
-        .push_spaced(HeaderComponent {
-          first_draw_duration: None,
-        })
-        .push_spaced(LineComponent::from([
-          Span::styled("Search previous sessions. Press ", Style::Muted),
-          Span::styled("Enter", Style::Secondary),
-          Span::styled(" to resume, ", Style::Muted),
-          Span::styled("Esc", Style::Secondary),
-          Span::styled(" to cancel.", Style::Muted),
-        ]))
-        .push_spaced(TextFieldComponent {
-          label: Span::styled("Search: ", Style::Muted),
-          value: &picker.query,
-        })
+        .push(
+          StackComponent::default()
+            .gap(1)
+            .push(HeaderComponent {
+              first_draw_duration: None,
+            })
+            .push(LineComponent::from([
+              Span::styled("Search previous sessions. Press ", Style::Muted),
+              Span::styled("Enter", Style::Secondary),
+              Span::styled(" to resume, ", Style::Muted),
+              Span::styled("Esc", Style::Secondary),
+              Span::styled(" to cancel.", Style::Muted),
+            ]))
+            .push(TextFieldComponent {
+              label: Span::styled("Search: ", Style::Muted),
+              value: &picker.query,
+            }),
+        )
         .render(dimensions.width);
 
       let height = dimensions.height.saturating_sub(1).max(1);
 
-      if lines.len() > height {
+      let gap = if lines.len() + 1 > height {
         lines.retain(|line| !line.is_blank());
 
         lines.drain(..lines.len().saturating_sub(height));
-      }
 
-      lines
+        0
+      } else {
+        1
+      };
+
+      (lines, gap)
     };
 
-    let height = dimensions.height.saturating_sub(header.len());
+    let height = dimensions.height.saturating_sub(header.len() + gap);
 
     let filtered = picker.filtered();
 
@@ -95,23 +102,20 @@ impl ResumePickerComponent {
     picker.scroll.update(focus, height, rows.len());
 
     Self {
-      header: LinesComponent { lines: header },
-      sessions: ScrollComponent {
-        component: LinesComponent { lines: rows },
-        height,
-        offset: picker.scroll.offset,
-      },
+      stack: StackComponent::default()
+        .gap(gap)
+        .push(LinesComponent { lines: header })
+        .push(ScrollComponent {
+          component: LinesComponent { lines: rows },
+          height,
+          offset: picker.scroll.offset,
+        }),
     }
   }
 }
 
 impl Component for ResumePickerComponent {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    self
-      .header
-      .render(width)
-      .into_iter()
-      .chain(self.sessions.render(width))
-      .collect()
+    self.stack.render(width)
   }
 }

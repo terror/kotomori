@@ -10,14 +10,15 @@ impl Component for QueuedInputsComponent<'_> {
     self
       .inputs
       .iter()
-      .fold(StackComponent::default(), |stack, input| {
-        stack
-          .push(LineComponent::from([Span::styled("Queued", Style::Muted)]))
-          .push(GutterComponent {
-            component: LinesComponent::raw(input.split('\n')),
-            gutter: Span::styled("│ ", Style::Accent),
-          })
-          .push(LineComponent::blank())
+      .fold(StackComponent::default().gap(1), |stack, input| {
+        stack.push(
+          StackComponent::default()
+            .push(LineComponent::from([Span::styled("Queued", Style::Muted)]))
+            .push(GutterComponent {
+              component: LinesComponent::raw(input.split('\n')),
+              gutter: Span::styled("│ ", Style::Accent),
+            }),
+        )
       })
       .render(width)
   }
@@ -29,31 +30,39 @@ mod tests {
 
   #[test]
   fn rendering() {
-    let inputs = VecDeque::from([
-      "first follow-up".to_string(),
-      "second\nfollow-up".to_string(),
-    ]);
+    #[track_caller]
+    fn case(inputs: &[&str], expected: &[LineComponent]) {
+      let inputs = inputs.iter().map(|input| (*input).into()).collect();
 
-    assert_eq!(
-      QueuedInputsComponent { inputs: &inputs }.render(80),
-      [
+      assert_eq!(
+        QueuedInputsComponent { inputs: &inputs }.render(80),
+        expected
+      );
+    }
+
+    case(&[], &[]);
+
+    case(
+      &["foo", "bar\n\nbaz\n"],
+      &[
         LineComponent::from([Span::styled("Queued", Style::Muted)]),
         LineComponent::from([
           Span::styled("│ ", Style::Accent),
-          Span::raw("first follow-up"),
+          Span::raw("foo"),
         ]),
         LineComponent::blank(),
         LineComponent::from([Span::styled("Queued", Style::Muted)]),
         LineComponent::from([
           Span::styled("│ ", Style::Accent),
-          Span::raw("second"),
+          Span::raw("bar"),
         ]),
+        LineComponent::from([Span::styled("│ ", Style::Accent), Span::raw("")]),
         LineComponent::from([
           Span::styled("│ ", Style::Accent),
-          Span::raw("follow-up"),
+          Span::raw("baz"),
         ]),
-        LineComponent::blank(),
-      ]
+        LineComponent::from([Span::styled("│ ", Style::Accent), Span::raw("")]),
+      ],
     );
   }
 }
