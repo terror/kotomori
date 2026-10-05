@@ -51,7 +51,23 @@ impl<'a> TranscriptComponent<'a> {
           }
           TranscriptBlock::Raw(text) => stack.push(LineComponent::raw(text)),
           TranscriptBlock::Reasoning(reasoning) => {
-            stack.push(self.reasoning(&reasoning))
+            if reasoning.is_empty() {
+              return stack;
+            }
+
+            let component =
+              StackComponent::default().push(LineComponent::from([
+                Span::styled("Thinking...", Style::Muted),
+              ]));
+
+            stack.push(if self.reasoning_expanded {
+              component.push(
+                LinesComponent::raw(reasoning.lines())
+                  .gutter(Span::styled("  │ ", Style::Muted)),
+              )
+            } else {
+              component
+            })
           }
           TranscriptBlock::Tool { invocation, result } => {
             stack.push(TranscriptToolInvocationComponent { invocation, result })
@@ -121,27 +137,6 @@ impl<'a> TranscriptComponent<'a> {
         },
       )
       .0
-  }
-
-  fn reasoning(&self, reasoning: &str) -> StackComponent<'a> {
-    if reasoning.is_empty() {
-      return StackComponent::default();
-    }
-
-    let stack =
-      StackComponent::default().push(LineComponent::from([Span::styled(
-        "Thinking...",
-        Style::Muted,
-      )]));
-
-    if self.reasoning_expanded {
-      stack.push(
-        LinesComponent::raw(reasoning.lines())
-          .gutter(Span::styled("  │ ", Style::Muted)),
-      )
-    } else {
-      stack
-    }
   }
 }
 
