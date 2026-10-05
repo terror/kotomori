@@ -29,6 +29,34 @@ mod tests {
   use super::*;
 
   #[test]
+  fn scrolls_wrapped_rows_inside_padding() {
+    assert_eq!(
+      PaddingComponent {
+        component: ScrollComponent {
+          component: LineComponent::from([Span::styled(
+            "foobarbaz",
+            Style::Accent
+          )]),
+          height: 2,
+          offset: 1
+        },
+        padding: 2
+      }
+      .render(7),
+      [
+        LineComponent::from([
+          Span::raw("  "),
+          Span::styled("bar", Style::Accent),
+        ]),
+        LineComponent::from([
+          Span::raw("  "),
+          Span::styled("baz", Style::Accent),
+        ]),
+      ],
+    );
+  }
+
+  #[test]
   fn selects_rendered_rows() {
     #[track_caller]
     fn case(offset: usize, height: usize, len: usize, expected: Range<usize>) {
@@ -57,33 +85,5 @@ mod tests {
     case(usize::MAX, 3, 5, 5..5);
     case(0, 4, 2, 0..2);
     case(0, 4, 0, 0..0);
-  }
-
-  #[test]
-  fn scrolls_wrapped_rows_inside_padding() {
-    assert_eq!(
-      PaddingComponent {
-        component: ScrollComponent {
-          component: LineComponent::from([Span::styled(
-            "foobarbaz",
-            Style::Accent
-          )]),
-          height: 2,
-          offset: 1
-        },
-        padding: 2
-      }
-      .render(7),
-      [
-        LineComponent::from([
-          Span::raw("  "),
-          Span::styled("bar", Style::Accent),
-        ]),
-        LineComponent::from([
-          Span::raw("  "),
-          Span::styled("baz", Style::Accent),
-        ]),
-      ],
-    );
   }
 }

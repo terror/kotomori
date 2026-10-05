@@ -94,7 +94,6 @@ use {
     fs,
     io::{self, BufWriter, Stdout, Write},
     iter::once,
-    mem,
     ops::Range,
     path::{Component, Path, PathBuf},
     process::{self, Stdio},
@@ -129,7 +128,7 @@ use {
   transcript::Transcript,
   transcript_entry::TranscriptEntry,
   unicode_segmentation::UnicodeSegmentation,
-  unicode_width::{UnicodeWidthChar, UnicodeWidthStr},
+  unicode_width::UnicodeWidthStr,
   user_message_content::UserMessageContent,
   write_ext::WriteExt,
 };

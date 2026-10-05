@@ -15,7 +15,7 @@ impl Component for TranscriptErrorComponent<'_> {
       ]))
       .push(GutterComponent {
         component: LinesComponent::raw(self.error.lines()),
-        gutter: Span::styled("  │ ", Style::Muted),
+        gutter: LineComponent::styled("  │ ", Style::Muted),
       })
       .render(width)
   }

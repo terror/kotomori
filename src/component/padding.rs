@@ -14,14 +14,12 @@ impl<C: Component> Component for PaddingComponent<C> {
       .component
       .render(width - padding * 2)
       .into_iter()
-      .map(|mut line| {
-        if !line.is_blank() && padding > 0 {
+      .map(|line| {
+        if line.is_blank() {
           line
-            .spans
-            .insert(0, Span::raw(" ".repeat(usize::from(padding))));
+        } else {
+          LineComponent::raw(" ".repeat(usize::from(padding))).append(line)
         }
-
-        line
       })
       .collect()
   }
@@ -37,7 +35,7 @@ mod tests {
       .gap(1)
       .push(GutterComponent {
         component: LinesComponent::raw(["foobar", ""]),
-        gutter: Span::styled("│ ", Style::Accent),
+        gutter: LineComponent::styled("│ ", Style::Accent),
       })
       .push(LineComponent::raw("baz"));
 

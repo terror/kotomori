@@ -149,7 +149,7 @@ impl<'a> TranscriptComponent<'a> {
                   |stack, text| {
                     stack.push(GutterComponent {
                       component: LinesComponent::raw(text.split('\n')),
-                      gutter: Span::styled("│ ", Style::Accent),
+                      gutter: LineComponent::styled("│ ", Style::Accent),
                     })
                   },
                 )
@@ -180,7 +180,7 @@ impl<'a> TranscriptComponent<'a> {
     if self.reasoning_expanded {
       stack.push(GutterComponent {
         component: LinesComponent::raw(reasoning.lines()),
-        gutter: Span::styled("  │ ", Style::Muted),
+        gutter: LineComponent::styled("  │ ", Style::Muted),
       })
     } else {
       stack

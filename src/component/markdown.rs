@@ -18,24 +18,14 @@ impl Component for MarkdownComponent {
       .flat_map(|line| {
         let style = text.style.patch(line.style);
 
-        LineComponent::from(line.spans.into_iter().fold(
-          Vec::<Span>::new(),
-          |mut spans, span| {
-            let span =
-              Span::styled(span.content, style.patch(span.style).into());
-
-            if let Some(last) =
-              spans.last_mut().filter(|last| last.style == span.style)
-            {
-              last.text.push_str(&span.text);
-            } else {
-              spans.push(span);
-            }
-
-            spans
-          },
-        ))
-        .render(width)
+        line
+          .spans
+          .into_iter()
+          .map(|span| {
+            Span::styled(span.content, style.patch(span.style).into())
+          })
+          .collect::<LineComponent>()
+          .render(width)
       })
       .collect()
   }
@@ -84,8 +74,7 @@ mod tests {
         MarkdownComponent { text: text.into() }
           .render(80)
           .into_iter()
-          .map(|line| line
-            .spans
+          .map(|line| Vec::<Span>::from(line)
             .into_iter()
             .map(|span| span.text)
             .collect::<String>())
@@ -147,8 +136,7 @@ mod tests {
         MarkdownComponent { text: text.into() }
           .render(width)
           .into_iter()
-          .map(|line| line
-            .spans
+          .map(|line| Vec::<Span>::from(line)
             .into_iter()
             .map(|span| span.text)
             .collect::<String>())

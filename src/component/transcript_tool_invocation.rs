@@ -51,7 +51,7 @@ impl Component for TranscriptToolInvocationComponent<'_> {
             })
             .collect(),
         },
-        gutter: Span::styled("  │ ", Style::Muted),
+        gutter: LineComponent::styled("  │ ", Style::Muted),
       });
 
     let stack = if let Some(output) = self.result.and_then(ToolResult::output) {
@@ -60,7 +60,7 @@ impl Component for TranscriptToolInvocationComponent<'_> {
           limit: Self::OUTPUT_LIMIT,
           output,
         },
-        gutter: Span::styled("  │ ", Style::Muted),
+        gutter: LineComponent::styled("  │ ", Style::Muted),
       })
     } else {
       stack

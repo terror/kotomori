@@ -29,14 +29,6 @@ impl Span {
     Self { style, text }
   }
 
-  pub(crate) fn push(&mut self, c: char) {
-    if c.is_control() {
-      self.text.extend(c.escape_default());
-    } else {
-      self.text.push(c);
-    }
-  }
-
   pub(crate) fn raw(text: impl Into<String>) -> Self {
     Self::new(text, Style::None)
   }
