@@ -2,11 +2,11 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct TranscriptToolInvocationComponent<'a> {
-  invocation: ToolInvocation,
-  result: Option<&'a ToolResult>,
+  pub(crate) invocation: ToolInvocation,
+  pub(crate) result: Option<&'a ToolResult>,
 }
 
-impl<'a> TranscriptToolInvocationComponent<'a> {
+impl TranscriptToolInvocationComponent<'_> {
   const OUTPUT_LIMIT: usize = 3;
 
   fn details(&self) -> Vec<(&'static str, String)> {
@@ -19,13 +19,6 @@ impl<'a> TranscriptToolInvocationComponent<'a> {
     }
 
     details
-  }
-
-  pub(crate) fn new(
-    invocation: ToolInvocation,
-    result: Option<&'a ToolResult>,
-  ) -> Self {
-    Self { invocation, result }
   }
 }
 
@@ -45,23 +38,30 @@ impl Component for TranscriptToolInvocationComponent<'_> {
         Span::raw(" "),
         Span::raw(self.invocation.title(tense)),
       ]))
-      .push(GutterComponent::new(
-        LinesComponent::new(self.details().into_iter().map(
-          |(label, value)| {
-            LineComponent::from([
-              Span::styled(format!("{label} "), Style::Muted),
-              Span::raw(value),
-            ])
-          },
-        )),
-        Span::styled("  │ ", Style::Muted),
-      ));
+      .push(GutterComponent {
+        component: LinesComponent {
+          lines: self
+            .details()
+            .into_iter()
+            .map(|(label, value)| {
+              LineComponent::from([
+                Span::styled(format!("{label} "), Style::Muted),
+                Span::raw(value),
+              ])
+            })
+            .collect(),
+        },
+        gutter: Span::styled("  │ ", Style::Muted),
+      });
 
     let stack = if let Some(output) = self.result.and_then(ToolResult::output) {
-      stack.push(GutterComponent::new(
-        OutputPreviewComponent::new(output, Self::OUTPUT_LIMIT),
-        Span::styled("  │ ", Style::Muted),
-      ))
+      stack.push(GutterComponent {
+        component: OutputPreviewComponent {
+          limit: Self::OUTPUT_LIMIT,
+          output,
+        },
+        gutter: Span::styled("  │ ", Style::Muted),
+      })
     } else {
       stack
     };
@@ -90,8 +90,11 @@ mod tests {
     };
 
     assert_eq!(
-      TranscriptToolInvocationComponent::new(invocation, Some(&result))
-        .render(10),
+      TranscriptToolInvocationComponent {
+        invocation,
+        result: Some(&result)
+      }
+      .render(10),
       [
         LineComponent::from([
           Span::styled("●", Style::Success),

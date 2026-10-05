@@ -2,18 +2,11 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct OutputPreviewComponent {
-  limit: usize,
-  output: String,
+  pub(crate) limit: usize,
+  pub(crate) output: String,
 }
 
 impl OutputPreviewComponent {
-  pub(crate) fn new(output: impl Into<String>, limit: usize) -> Self {
-    Self {
-      limit,
-      output: output.into(),
-    }
-  }
-
   fn preview(line: &str, width: usize) -> String {
     let line = Span::raw(line);
     let ellipsis = ".".repeat(width.min(3));

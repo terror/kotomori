@@ -2,14 +2,8 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct TextFieldComponent<'a> {
-  label: Span,
-  value: &'a str,
-}
-
-impl<'a> TextFieldComponent<'a> {
-  pub(crate) fn new(label: Span, value: &'a str) -> Self {
-    Self { label, value }
-  }
+  pub(crate) label: Span,
+  pub(crate) value: &'a str,
 }
 
 impl Component for TextFieldComponent<'_> {
@@ -73,8 +67,11 @@ mod tests {
     #[track_caller]
     fn case(label: &str, width: u16, expected: &str) {
       assert_eq!(
-        TextFieldComponent::new(Span::styled(label, Style::Muted), "")
-          .render(width),
+        TextFieldComponent {
+          label: Span::styled(label, Style::Muted),
+          value: ""
+        }
+        .render(width),
         LineComponent::from([
           Span::styled(expected, Style::Muted),
           Span::styled(" ", Style::Selection),
@@ -97,8 +94,11 @@ mod tests {
     #[track_caller]
     fn case(value: &str, width: u16, label: &str, expected: &str) {
       assert_eq!(
-        TextFieldComponent::new(Span::styled("foo: ", Style::Muted), value)
-          .render(width),
+        TextFieldComponent {
+          label: Span::styled("foo: ", Style::Muted),
+          value
+        }
+        .render(width),
         LineComponent::from([
           Span::styled(label, Style::Muted),
           Span::raw(expected),

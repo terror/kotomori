@@ -2,15 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct HeaderComponent {
-  first_draw_duration: Option<Duration>,
-}
-
-impl HeaderComponent {
-  pub(crate) fn new(first_draw_duration: Option<Duration>) -> Self {
-    Self {
-      first_draw_duration,
-    }
-  }
+  pub(crate) first_draw_duration: Option<Duration>,
 }
 
 impl Component for HeaderComponent {
@@ -42,7 +34,10 @@ mod tests {
   #[test]
   fn rendering_first_draw_duration() {
     assert_eq!(
-      HeaderComponent::new(Some(Duration::from_millis(42))).render(80),
+      HeaderComponent {
+        first_draw_duration: Some(Duration::from_millis(42))
+      }
+      .render(80),
       [LineComponent::from([
         Span::styled(env!("CARGO_PKG_NAME"), Style::Accent),
         Span::raw("  "),

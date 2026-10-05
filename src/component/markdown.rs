@@ -2,13 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct MarkdownComponent {
-  text: String,
-}
-
-impl MarkdownComponent {
-  pub(crate) fn new(text: &str) -> Self {
-    Self { text: text.into() }
-  }
+  pub(crate) text: String,
 }
 
 impl Component for MarkdownComponent {
@@ -71,7 +65,10 @@ mod tests {
   #[test]
   fn escapes_terminal_controls() {
     assert_eq!(
-      MarkdownComponent::new("**foo\x1b[2J**").render(80),
+      MarkdownComponent {
+        text: "**foo\x1b[2J**".into()
+      }
+      .render(80),
       [LineComponent::from([Span::styled(
         r"foo\u{1b}[2J",
         Style::Markdown(anstyle::Style::new().bold()),
@@ -84,7 +81,7 @@ mod tests {
     #[track_caller]
     fn case(text: &str, expected: &[&str]) {
       assert_eq!(
-        MarkdownComponent::new(text)
+        MarkdownComponent { text: text.into() }
           .render(80)
           .into_iter()
           .map(|line| line
@@ -106,7 +103,10 @@ mod tests {
   #[test]
   fn renders_styles() {
     assert_eq!(
-      MarkdownComponent::new("# *foo*\n\n**bar** ~~baz~~ `qux`").render(80),
+      MarkdownComponent {
+        text: "# *foo*\n\n**bar** ~~baz~~ `qux`".into()
+      }
+      .render(80),
       [
         LineComponent::from([Span::styled(
           "foo",
@@ -144,7 +144,7 @@ mod tests {
     #[track_caller]
     fn case(text: &str, width: u16, expected: &[&str]) {
       assert_eq!(
-        MarkdownComponent::new(text)
+        MarkdownComponent { text: text.into() }
           .render(width)
           .into_iter()
           .map(|line| line
@@ -204,7 +204,10 @@ mod tests {
   #[test]
   fn wraps_styled_text() {
     assert_eq!(
-      MarkdownComponent::new("**foobar**").render(3),
+      MarkdownComponent {
+        text: "**foobar**".into()
+      }
+      .render(3),
       ["foo", "bar"].map(|text| LineComponent::from([Span::styled(
         text,
         Style::Markdown(anstyle::Style::new().bold()),

@@ -2,9 +2,9 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct TranscriptComponent<'a> {
-  reasoning_expanded: bool,
-  run: Option<&'a Run>,
-  state: &'a Transcript,
+  pub(crate) reasoning_expanded: bool,
+  pub(crate) run: Option<&'a Run>,
+  pub(crate) state: &'a Transcript,
 }
 
 impl<'a> TranscriptComponent<'a> {
@@ -46,9 +46,9 @@ impl<'a> TranscriptComponent<'a> {
         AssistantContent::Reasoning(reasoning) => {
           stack.push_spaced(self.reasoning(&reasoning.text()))
         }
-        AssistantContent::Text(text) => {
-          stack.push_spaced(MarkdownComponent::new(&text.text))
-        }
+        AssistantContent::Text(text) => stack.push_spaced(MarkdownComponent {
+          text: text.text.clone(),
+        }),
         AssistantContent::ToolCall(call) => {
           let result = following
             .iter()
@@ -68,9 +68,12 @@ impl<'a> TranscriptComponent<'a> {
             });
 
           match ToolInvocationKind::decode(call.clone()) {
-            Ok(invocation) => stack.push_spaced(
-              TranscriptToolInvocationComponent::new(invocation, result),
-            ),
+            Ok(invocation) => {
+              stack.push_spaced(TranscriptToolInvocationComponent {
+                invocation,
+                result,
+              })
+            }
             Err(_) => stack.push_spaced(LineComponent::raw(format!(
               "{} {}",
               call.function.name, call.function.arguments
@@ -108,7 +111,7 @@ impl<'a> TranscriptComponent<'a> {
           ))
         }
         TranscriptEntry::Error(error) => {
-          stack.push_spaced(TranscriptErrorComponent::new(error))
+          stack.push_spaced(TranscriptErrorComponent { error })
         }
         TranscriptEntry::Interrupted => {
           stack.push_spaced(LineComponent::from([Span::styled(
@@ -125,10 +128,12 @@ impl<'a> TranscriptComponent<'a> {
         TranscriptEntry::Message(Message::User(content)) => {
           content.iter().filter_map(UserMessageContent::text).fold(
             stack,
-            |stack, text| stack.push(GutterComponent::new(
-              LinesComponent::raw(text.split('\n')),
-              Span::styled("│ ", Style::Accent),
-            )),
+            |stack, text| {
+              stack.push(GutterComponent {
+                component: LinesComponent::raw(text.split('\n')),
+                gutter: Span::styled("│ ", Style::Accent),
+              })
+            },
           )
         }
         TranscriptEntry::Notice(notice) => {
@@ -136,14 +141,6 @@ impl<'a> TranscriptComponent<'a> {
         }
       },
     )
-  }
-
-  pub(crate) fn new(state: &'a Transcript, run: Option<&'a Run>) -> Self {
-    Self {
-      reasoning_expanded: false,
-      run,
-      state,
-    }
   }
 
   fn reasoning(&self, reasoning: &str) -> StackComponent<'a> {
@@ -158,18 +155,13 @@ impl<'a> TranscriptComponent<'a> {
       )]));
 
     if self.reasoning_expanded {
-      stack.push(GutterComponent::new(
-        LinesComponent::raw(reasoning.lines()),
-        Span::styled("  │ ", Style::Muted),
-      ))
+      stack.push(GutterComponent {
+        component: LinesComponent::raw(reasoning.lines()),
+        gutter: Span::styled("  │ ", Style::Muted),
+      })
     } else {
       stack
     }
-  }
-
-  pub(crate) fn with_reasoning_expanded(mut self, expanded: bool) -> Self {
-    self.reasoning_expanded = expanded;
-    self
   }
 }
 
@@ -195,7 +187,12 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, Some(&run)).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: Some(&run),
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::from([
           Span::styled("│ ", Style::Accent),
@@ -236,7 +233,12 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: Some(&run),
+        state: &Transcript::default()
+      }
+      .render(80),
       [
         LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
         LineComponent::blank(),
@@ -265,7 +267,12 @@ mod tests {
       });
 
       assert_eq!(
-        TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
+        TranscriptComponent {
+          reasoning_expanded: false,
+          run: Some(&run),
+          state: &Transcript::default()
+        }
+        .render(80),
         [
           LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
           LineComponent::blank(),
@@ -290,7 +297,12 @@ mod tests {
     });
 
     assert_eq!(
-      TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: Some(&run),
+        state: &Transcript::default()
+      }
+      .render(80),
       [LineComponent::raw("foo bar"), LineComponent::blank()]
     );
   }
@@ -304,7 +316,12 @@ mod tests {
     };
 
     assert_eq!(
-      TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: Some(&run),
+        state: &Transcript::default()
+      }
+      .render(80),
       [
         LineComponent::from([
           Span::styled("✶", Style::Accent),
@@ -326,7 +343,12 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::blank(),
@@ -346,7 +368,12 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(2),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(2),
       [
         LineComponent::raw("fo"),
         LineComponent::raw("o "),
@@ -380,7 +407,12 @@ mod tests {
       Transcript::with_entries(vec![TranscriptEntry::Draft(buffer)]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::blank(),
@@ -405,9 +437,12 @@ mod tests {
 
       for expanded in [false, true] {
         assert_eq!(
-          TranscriptComponent::new(&transcript, None)
-            .with_reasoning_expanded(expanded)
-            .render(80),
+          TranscriptComponent {
+            reasoning_expanded: expanded,
+            run: None,
+            state: &transcript
+          }
+          .render(80),
           [],
         );
       }
@@ -421,7 +456,15 @@ mod tests {
   fn render_empty_transcript() {
     let transcript = Transcript::default();
 
-    assert_eq!(TranscriptComponent::new(&transcript, None).render(80), []);
+    assert_eq!(
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
+      []
+    );
   }
 
   #[test]
@@ -435,7 +478,12 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::blank(),
@@ -453,7 +501,12 @@ mod tests {
       Transcript::with_entries(vec![TranscriptEntry::Error("foo".into())]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),
@@ -500,9 +553,12 @@ mod tests {
     ];
 
     assert_eq!(
-      TranscriptComponent::new(&Transcript::default(), Some(&run))
-        .with_reasoning_expanded(true)
-        .render(80),
+      TranscriptComponent {
+        reasoning_expanded: true,
+        run: Some(&run),
+        state: &Transcript::default()
+      }
+      .render(80),
       expected,
     );
 
@@ -510,9 +566,12 @@ mod tests {
       Transcript::with_entries(vec![TranscriptEntry::Draft(run.message)]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None)
-        .with_reasoning_expanded(true)
-        .render(80),
+      TranscriptComponent {
+        reasoning_expanded: true,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       expected,
     );
   }
@@ -523,7 +582,12 @@ mod tests {
       Transcript::with_entries(vec![TranscriptEntry::Interrupted]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::from([Span::styled(
           "■ Conversation interrupted, tell the model what to do differently.",
@@ -548,7 +612,12 @@ mod tests {
       let expected = [LineComponent::from([span]), LineComponent::blank()];
 
       assert_eq!(
-        TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
+        TranscriptComponent {
+          reasoning_expanded: false,
+          run: Some(&run),
+          state: &Transcript::default()
+        }
+        .render(80),
         expected,
       );
 
@@ -559,10 +628,11 @@ mod tests {
         )])),
       ] {
         assert_eq!(
-          TranscriptComponent::new(
-            &Transcript::with_entries(vec![entry]),
-            None
-          )
+          TranscriptComponent {
+            reasoning_expanded: false,
+            run: None,
+            state: &Transcript::with_entries(vec![entry])
+          }
           .render(80),
           expected,
         );
@@ -584,7 +654,12 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::raw("bar"),
@@ -612,9 +687,12 @@ mod tests {
       ))]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None)
-        .with_reasoning_expanded(true)
-        .render(80),
+      TranscriptComponent {
+        reasoning_expanded: true,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
         LineComponent::from([
@@ -665,7 +743,12 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::raw("foo"),
         LineComponent::blank(),
@@ -705,7 +788,12 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::from([
           Span::styled("│ ", Style::Accent),
@@ -751,7 +839,12 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),
@@ -810,7 +903,12 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(10),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(10),
       [
         LineComponent::from([
           Span::styled("●", Style::Success),
@@ -862,7 +960,12 @@ mod tests {
       ))]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::from([
           Span::styled("●", Style::Accent),
@@ -908,7 +1011,12 @@ mod tests {
     ]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::from([
           Span::styled("●", Style::Accent),
@@ -941,7 +1049,12 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(80),
       [
         LineComponent::raw("foo {\"bar\":\"baz\"}"),
         LineComponent::blank(),
@@ -956,7 +1069,12 @@ mod tests {
     )]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(5),
+      TranscriptComponent {
+        reasoning_expanded: false,
+        run: None,
+        state: &transcript
+      }
+      .render(5),
       [
         LineComponent::from([
           Span::styled("│ ", Style::Accent),

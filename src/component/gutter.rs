@@ -2,14 +2,8 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct GutterComponent<C> {
-  component: C,
-  gutter: Span,
-}
-
-impl<C> GutterComponent<C> {
-  pub(crate) fn new(component: C, gutter: Span) -> Self {
-    Self { component, gutter }
-  }
+  pub(crate) component: C,
+  pub(crate) gutter: Span,
 }
 
 impl<C: Component> Component for GutterComponent<C> {
@@ -55,10 +49,10 @@ mod tests {
       };
 
       assert_eq!(
-        GutterComponent::new(
-          LineComponent::raw("foo"),
-          Span::styled(input, Style::Muted),
-        )
+        GutterComponent {
+          component: LineComponent::raw("foo"),
+          gutter: Span::styled(input, Style::Muted)
+        }
         .render(width),
         [expected],
       );
@@ -76,10 +70,10 @@ mod tests {
   #[test]
   fn wraps_lines_with_an_accent_gutter() {
     assert_eq!(
-      GutterComponent::new(
-        LinesComponent::raw(["foobar"]),
-        Span::styled("│ ", Style::Accent),
-      )
+      GutterComponent {
+        component: LinesComponent::raw(["foobar"]),
+        gutter: Span::styled("│ ", Style::Accent)
+      }
       .render(5),
       [
         LineComponent::from([

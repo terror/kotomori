@@ -2,13 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct TranscriptErrorComponent<'a> {
-  error: &'a str,
-}
-
-impl<'a> TranscriptErrorComponent<'a> {
-  pub(crate) fn new(error: &'a str) -> Self {
-    Self { error }
-  }
+  pub(crate) error: &'a str,
 }
 
 impl Component for TranscriptErrorComponent<'_> {
@@ -19,10 +13,10 @@ impl Component for TranscriptErrorComponent<'_> {
         Span::raw(" "),
         Span::raw("Error"),
       ]))
-      .push(GutterComponent::new(
-        LinesComponent::raw(self.error.lines()),
-        Span::styled("  │ ", Style::Muted),
-      ))
+      .push(GutterComponent {
+        component: LinesComponent::raw(self.error.lines()),
+        gutter: Span::styled("  │ ", Style::Muted),
+      })
       .render(width)
   }
 }
@@ -34,7 +28,7 @@ mod tests {
   #[test]
   fn renders_error() {
     assert_eq!(
-      TranscriptErrorComponent::new("foo\nbar").render(80),
+      TranscriptErrorComponent { error: "foo\nbar" }.render(80),
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),
@@ -56,7 +50,7 @@ mod tests {
   #[test]
   fn wraps_details_inside_gutter() {
     assert_eq!(
-      TranscriptErrorComponent::new("foobar").render(8),
+      TranscriptErrorComponent { error: "foobar" }.render(8),
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),

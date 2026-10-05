@@ -2,31 +2,27 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ApprovalPromptComponent<'a> {
-  request: &'a ApprovalRequest,
-}
-
-impl<'a> ApprovalPromptComponent<'a> {
-  pub(crate) fn new(request: &'a ApprovalRequest) -> Self {
-    Self { request }
-  }
+  pub(crate) request: &'a ApprovalRequest,
 }
 
 impl Component for ApprovalPromptComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    LinesComponent::new([
-      LineComponent::from([
-        Span::styled("?", Style::Accent),
-        Span::raw(" Approve "),
-        Span::raw(self.request.invocation.to_string()),
-        Span::raw("?"),
-      ]),
-      LineComponent::from([
-        Span::styled("y", Style::Success),
-        Span::styled(" approve · ", Style::Muted),
-        Span::styled("n/Esc", Style::Danger),
-        Span::styled(" deny", Style::Muted),
-      ]),
-    ])
+    LinesComponent {
+      lines: vec![
+        LineComponent::from([
+          Span::styled("?", Style::Accent),
+          Span::raw(" Approve "),
+          Span::raw(self.request.invocation.to_string()),
+          Span::raw("?"),
+        ]),
+        LineComponent::from([
+          Span::styled("y", Style::Success),
+          Span::styled(" approve · ", Style::Muted),
+          Span::styled("n/Esc", Style::Danger),
+          Span::styled(" deny", Style::Muted),
+        ]),
+      ],
+    }
     .render(width)
   }
 }
@@ -46,7 +42,9 @@ mod tests {
         }),
       ));
 
-    let line = ApprovalPromptComponent::new(&request).render(200).remove(0);
+    let line = ApprovalPromptComponent { request: &request }
+      .render(200)
+      .remove(0);
 
     let text = Vec::<Span>::from(line)
       .iter()
