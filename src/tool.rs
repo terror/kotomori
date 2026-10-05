@@ -66,12 +66,6 @@ macro_rules! define_tools {
         }
       }
 
-      pub(crate) async fn execute(&self, context: &ToolContext) -> ToolResult {
-        match self {
-          $(Self::$variant(tool) => tool.execute(context).await,)*
-        }
-      }
-
       #[cfg(test)]
       pub(crate) fn name(&self) -> &'static str {
         match self {

@@ -120,7 +120,7 @@ use {
   tool_action_tense::ToolActionTense,
   tool_approval::ToolApproval,
   tool_call::ToolCall,
-  tool_context::ToolContext,
+  tool_executor::ToolExecutor,
   tool_invocation::ToolInvocation,
   tool_outcome::ToolOutcome,
   tool_result::ToolResult,
@@ -213,7 +213,7 @@ mod tool;
 mod tool_action_tense;
 mod tool_approval;
 mod tool_call;
-mod tool_context;
+mod tool_executor;
 mod tool_invocation;
 mod tool_outcome;
 mod tool_result;

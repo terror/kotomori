@@ -1,6 +1,5 @@
 use super::*;
 
-#[async_trait]
 pub(crate) trait ToolCall:
   DeserializeOwned + Display + JsonSchema + Send + Sync
 {
@@ -16,7 +15,4 @@ pub(crate) trait ToolCall:
   fn details(&self) -> Vec<(&'static str, String)> {
     Vec::new()
   }
-
-  #[allow(clippy::double_must_use)]
-  async fn execute(&self, context: &ToolContext) -> ToolResult;
 }
