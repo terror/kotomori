@@ -2,14 +2,8 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct PaddingComponent<C> {
-  component: C,
-  padding: u16,
-}
-
-impl<C> PaddingComponent<C> {
-  pub(crate) fn new(component: C, padding: u16) -> Self {
-    Self { component, padding }
-  }
+  pub(crate) component: C,
+  pub(crate) padding: u16,
 }
 
 impl<C: Component> Component for PaddingComponent<C> {
@@ -39,13 +33,17 @@ mod tests {
 
   #[test]
   fn composes_with_gutters_and_spacing() {
-    let stack = StackComponent::default().push_spaced(GutterComponent::new(
-      LinesComponent::raw(["foobar", ""]),
-      Span::styled("│ ", Style::Accent),
-    ));
+    let stack = StackComponent::default().push_spaced(GutterComponent {
+      component: LinesComponent::raw(["foobar", ""]),
+      gutter: Span::styled("│ ", Style::Accent),
+    });
 
     assert_eq!(
-      PaddingComponent::new(stack, 2).render(9),
+      PaddingComponent {
+        component: stack,
+        padding: 2
+      }
+      .render(9),
       [
         LineComponent::from([
           Span::raw("  "),
@@ -72,11 +70,14 @@ mod tests {
     #[track_caller]
     fn case(width: u16, expected: &[&str]) {
       assert_eq!(
-        PaddingComponent::new(LineComponent::raw("foo"), 2)
-          .render(width)
-          .into_iter()
-          .map(|line| line.to_string())
-          .collect::<Vec<_>>(),
+        PaddingComponent {
+          component: LineComponent::raw("foo"),
+          padding: 2
+        }
+        .render(width)
+        .into_iter()
+        .map(|line| line.to_string())
+        .collect::<Vec<_>>(),
         expected,
       );
     }

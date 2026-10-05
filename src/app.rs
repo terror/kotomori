@@ -129,7 +129,11 @@ impl App {
 
     while !self.screen.should_quit() {
       renderer.draw(|dimensions| {
-        ViewComponent::new(&self.screen, first_draw_duration).render(dimensions)
+        ViewComponent {
+          first_draw_duration,
+          screen: &self.screen,
+        }
+        .render(dimensions)
       })?;
 
       if let Some(started_at) = first_draw_started_at.take() {

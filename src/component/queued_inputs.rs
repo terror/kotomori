@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct QueuedInputsComponent<'a> {
-  pub(super) inputs: &'a VecDeque<String>,
+  pub(crate) inputs: &'a VecDeque<String>,
 }
 
 impl Component for QueuedInputsComponent<'_> {
@@ -13,10 +13,10 @@ impl Component for QueuedInputsComponent<'_> {
       .fold(StackComponent::default(), |stack, input| {
         stack
           .push(LineComponent::from([Span::styled("Queued", Style::Muted)]))
-          .push(GutterComponent::new(
-            LinesComponent::raw(input.split('\n')),
-            Span::styled("│ ", Style::Accent),
-          ))
+          .push(GutterComponent {
+            component: LinesComponent::raw(input.split('\n')),
+            gutter: Span::styled("│ ", Style::Accent),
+          })
           .push(LineComponent::blank())
       })
       .render(width)

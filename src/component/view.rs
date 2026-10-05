@@ -2,52 +2,54 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ViewComponent<'a> {
-  first_draw_duration: Option<Duration>,
-  screen: &'a Screen,
+  pub(crate) first_draw_duration: Option<Duration>,
+  pub(crate) screen: &'a Screen,
 }
 
-impl<'a> ViewComponent<'a> {
-  pub(crate) fn new(
-    screen: &'a Screen,
-    first_draw_duration: Option<Duration>,
-  ) -> Self {
-    Self {
-      first_draw_duration,
-      screen,
-    }
-  }
-
+impl ViewComponent<'_> {
   pub(crate) fn render(&self, dimensions: Dimensions) -> Vec<LineComponent> {
     let stack = match self.screen {
       Screen::Quit => StackComponent::default(),
-      Screen::Resume(picker) => StackComponent::default()
-        .push(ResumePickerComponent::new(picker, dimensions.height)),
+      Screen::Resume(picker) => {
+        StackComponent::default().push(ResumePickerComponent {
+          height: dimensions.height,
+          picker,
+        })
+      }
       Screen::Session(state) => {
         let stack = StackComponent::default()
           .push(LineComponent::blank())
-          .push_spaced(HeaderComponent::new(self.first_draw_duration))
+          .push_spaced(HeaderComponent {
+            first_draw_duration: self.first_draw_duration,
+          })
           .push_spaced(HintComponent)
-          .push(
-            TranscriptComponent::new(state.transcript(), state.active_run())
-              .with_reasoning_expanded(state.reasoning_expanded()),
-          )
+          .push(TranscriptComponent {
+            reasoning_expanded: state.reasoning_expanded(),
+            run: state.active_run(),
+            state: state.transcript(),
+          })
           .push(QueuedInputsComponent {
             inputs: state.queued_inputs(),
           });
 
         let stack = match state.approval() {
-          Some(request) => stack.push(ApprovalPromptComponent::new(request)),
+          Some(request) => stack.push(ApprovalPromptComponent { request }),
           None => stack.push(ComposerComponent {
             composer: state.composer(),
           }),
         };
 
-        stack
-          .push(LineComponent::blank())
-          .push(FooterComponent::new(state.model(), state.directory()))
+        stack.push(LineComponent::blank()).push(FooterComponent {
+          directory: state.directory(),
+          model: state.model(),
+        })
       }
     };
 
-    PaddingComponent::new(stack, 2).render(dimensions.width)
+    PaddingComponent {
+      component: stack,
+      padding: 2,
+    }
+    .render(dimensions.width)
   }
 }

@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct LineComponent {
-  pub(super) spans: SmallVec<[Span; 6]>,
+  pub(crate) spans: SmallVec<[Span; 6]>,
 }
 
 impl LineComponent {

@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ComposerComponent<'a> {
-  pub(super) composer: &'a Composer,
+  pub(crate) composer: &'a Composer,
 }
 
 impl Component for ComposerComponent<'_> {
@@ -11,30 +11,36 @@ impl Component for ComposerComponent<'_> {
 
     let selected = self.composer.selected_command_index();
 
-    let input = LinesComponent::new(
-      self.composer.lines().iter().enumerate().map(|(row, line)| {
-        if cursor.0 != row {
-          return LineComponent::raw(line);
-        }
+    let input = LinesComponent {
+      lines: self
+        .composer
+        .lines()
+        .iter()
+        .enumerate()
+        .map(|(row, line)| {
+          if cursor.0 != row {
+            return LineComponent::raw(line);
+          }
 
-        let mut chars = line.chars();
+          let mut chars = line.chars();
 
-        let before = chars.by_ref().take(cursor.1).collect::<String>();
-        let under_cursor = chars.next().unwrap_or(' ');
-        let after = chars.collect::<String>();
+          let before = chars.by_ref().take(cursor.1).collect::<String>();
+          let under_cursor = chars.next().unwrap_or(' ');
+          let after = chars.collect::<String>();
 
-        LineComponent::from([
-          Span::raw(before),
-          Span::styled(under_cursor.to_string(), Style::Selection),
-          Span::raw(after),
-        ])
-      }),
-    );
+          LineComponent::from([
+            Span::raw(before),
+            Span::styled(under_cursor.to_string(), Style::Selection),
+            Span::raw(after),
+          ])
+        })
+        .collect(),
+    };
 
-    let stack = StackComponent::default().push(GutterComponent::new(
-      input,
-      Span::styled("│ ", Style::Accent),
-    ));
+    let stack = StackComponent::default().push(GutterComponent {
+      component: input,
+      gutter: Span::styled("│ ", Style::Accent),
+    });
 
     let stack = if selected.is_some() {
       stack.push(LineComponent::blank())
@@ -43,8 +49,8 @@ impl Component for ComposerComponent<'_> {
     };
 
     stack
-      .push(LinesComponent::new(
-        self
+      .push(LinesComponent {
+        lines: self
           .composer
           .commands()
           .enumerate()
@@ -59,8 +65,9 @@ impl Component for ComposerComponent<'_> {
               Span::styled("  ", Style::Muted),
               Span::styled(command.description(), Style::Muted),
             ])
-          }),
-      ))
+          })
+          .collect(),
+      })
       .render(width)
   }
 }

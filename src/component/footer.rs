@@ -2,14 +2,8 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct FooterComponent<'a> {
-  directory: &'a Path,
-  model: &'a Model,
-}
-
-impl<'a> FooterComponent<'a> {
-  pub(crate) fn new(model: &'a Model, directory: &'a Path) -> Self {
-    Self { directory, model }
-  }
+  pub(crate) directory: &'a Path,
+  pub(crate) model: &'a Model,
 }
 
 impl Component for FooterComponent<'_> {
@@ -34,10 +28,10 @@ mod tests {
   #[test]
   fn rendering() {
     assert_eq!(
-      FooterComponent::new(
-        &Model::new("foo", "bar").unwrap(),
-        &PathBuf::from("baz")
-      )
+      FooterComponent {
+        directory: &PathBuf::from("baz"),
+        model: &Model::new("foo", "bar").unwrap()
+      }
       .render(80),
       [LineComponent::from([Span::styled(
         "foo · bar · baz",

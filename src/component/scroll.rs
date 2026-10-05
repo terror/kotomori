@@ -3,34 +3,11 @@ use super::*;
 #[derive(Debug)]
 #[must_use]
 pub(crate) struct ScrollComponent<'a, C> {
-  component: C,
-  focus: usize,
-  header: Option<Box<dyn Component + 'a>>,
-  height: usize,
-  offset: &'a Cell<usize>,
-}
-
-impl<'a, C> ScrollComponent<'a, C> {
-  pub(crate) fn header(mut self, component: impl Component + 'a) -> Self {
-    self.header = Some(Box::new(component));
-
-    self
-  }
-
-  pub(crate) fn new(
-    component: C,
-    height: usize,
-    focus: usize,
-    offset: &'a Cell<usize>,
-  ) -> Self {
-    Self {
-      component,
-      focus,
-      header: None,
-      height,
-      offset,
-    }
-  }
+  pub(crate) component: C,
+  pub(crate) focus: usize,
+  pub(crate) header: Option<Box<dyn Component + 'a>>,
+  pub(crate) height: usize,
+  pub(crate) offset: &'a Cell<usize>,
 }
 
 impl<C: Component> Component for ScrollComponent<'_, C> {
@@ -92,14 +69,17 @@ mod tests {
       expected: std::ops::Range<usize>,
     ) {
       assert_eq!(
-        ScrollComponent::new(
-          LinesComponent::new(
-            (0..len).map(|index| LineComponent::raw(format!("foo{index}"))),
-          ),
-          height,
+        ScrollComponent {
+          component: LinesComponent {
+            lines: (0..len)
+              .map(|index| LineComponent::raw(format!("foo{index}")))
+              .collect()
+          },
           focus,
-          offset,
-        )
+          header: None,
+          height,
+          offset
+        }
         .render(80),
         expected
           .map(|index| LineComponent::raw(format!("foo{index}")))
@@ -129,17 +109,17 @@ mod tests {
     #[track_caller]
     fn case(height: usize, expected: &[&str]) {
       assert_eq!(
-        ScrollComponent::new(
-          LinesComponent::raw(["foo", "bar", "baz"]),
+        ScrollComponent {
+          component: LinesComponent::raw(["foo", "bar", "baz"]),
+          focus: 2,
+          header: Some(Box::new(
+            StackComponent::default()
+              .push_spaced(LineComponent::raw("qux"))
+              .push(LineComponent::raw("quux")),
+          )),
           height,
-          2,
-          &Cell::new(0),
-        )
-        .header(
-          StackComponent::default()
-            .push_spaced(LineComponent::raw("qux"))
-            .push(LineComponent::raw("quux")),
-        )
+          offset: &Cell::new(0)
+        }
         .render(80),
         expected
           .iter()
@@ -161,15 +141,19 @@ mod tests {
   #[test]
   fn scrolls_wrapped_rows_inside_padding() {
     assert_eq!(
-      PaddingComponent::new(
-        ScrollComponent::new(
-          LineComponent::from([Span::styled("foobarbaz", Style::Accent)]),
-          2,
-          2,
-          &Cell::new(0),
-        ),
-        2,
-      )
+      PaddingComponent {
+        component: ScrollComponent {
+          component: LineComponent::from([Span::styled(
+            "foobarbaz",
+            Style::Accent
+          )]),
+          focus: 2,
+          header: None,
+          height: 2,
+          offset: &Cell::new(0)
+        },
+        padding: 2
+      }
       .render(7),
       [
         LineComponent::from([
