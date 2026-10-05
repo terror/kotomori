@@ -4,4 +4,5 @@ use super::*;
 pub(crate) enum Effect {
   InterruptAgent,
   RunAgent { messages: Vec<Message>, run_id: u64 },
+  SaveSession,
 }

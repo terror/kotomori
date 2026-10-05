@@ -1,9 +1,8 @@
 use super::*;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct Session {
   pub(crate) created_at: u64,
-  pub(crate) directory: PathBuf,
   pub(crate) id: Option<i64>,
   pub(crate) settings: Settings,
   pub(crate) title: Option<String>,
@@ -14,30 +13,8 @@ pub(crate) struct Session {
 impl Session {
   const TITLE_LENGTH: usize = 80;
 
-  pub(crate) fn new(settings: &Settings) -> Result<Self> {
-    let now = SystemTime::now()
-      .duration_since(UNIX_EPOCH)
-      .context("system clock is before the unix epoch")?
-      .as_secs();
-
-    Ok(Self {
-      created_at: now,
-      directory: env::current_dir()
-        .context("failed to read current directory")?,
-      id: None,
-      settings: settings.clone(),
-      title: None,
-      transcript: Transcript::default(),
-      updated_at: now,
-    })
-  }
-
-  pub(crate) fn save(&mut self, database: &Database) -> Result {
-    if self.transcript.is_empty() && self.id.is_none() {
-      return Ok(());
-    }
-
-    self.title = self
+  pub(crate) fn generate_title(&self) -> Option<String> {
+    self
       .transcript
       .entries
       .iter()
@@ -52,15 +29,17 @@ impl Session {
           .truncate(Self::TITLE_LENGTH);
 
         (!title.is_empty()).then_some(title)
-      });
+      })
+  }
 
-    self.updated_at = SystemTime::now()
-      .duration_since(UNIX_EPOCH)
-      .context("system clock is before the unix epoch")?
-      .as_secs();
-
-    database.save_session(self)?;
-
-    Ok(())
+  pub(crate) fn new(settings: &Settings, now: u64) -> Self {
+    Self {
+      created_at: now,
+      id: None,
+      settings: settings.clone(),
+      title: None,
+      transcript: Transcript::default(),
+      updated_at: now,
+    }
   }
 }

@@ -3,8 +3,6 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct State {
   composer: Composer,
-  database: Database,
-  directory: PathBuf,
   next_run_id: u64,
   queued_inputs: VecDeque<String>,
   reasoning_expanded: bool,
@@ -27,7 +25,7 @@ impl State {
   }
 
   pub(crate) fn directory(&self) -> &Path {
-    &self.directory
+    &self.session.settings.directory
   }
 
   fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
@@ -36,8 +34,6 @@ impl State {
     }
 
     self.session.transcript.entries.extend(entry);
-
-    self.save_session();
   }
 
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
@@ -116,12 +112,10 @@ impl State {
         self.composer.clear_history();
         self.queued_inputs.clear();
 
-        self.save_session();
-
         if interrupt_agent {
-          vec![Effect::InterruptAgent]
+          vec![Effect::InterruptAgent, Effect::SaveSession]
         } else {
-          Vec::new()
+          vec![Effect::SaveSession]
         }
       }
       Command::Quit => self.handle_action(Action::Quit),
@@ -143,7 +137,10 @@ impl State {
         match event {
           AgentEvent::Done => {
             self.finish_run(None);
-            return self.run_next_queued();
+
+            return once(Effect::SaveSession)
+              .chain(self.run_next_queued())
+              .collect();
           }
           AgentEvent::Update(update) => {
             run.update(update);
@@ -151,11 +148,14 @@ impl State {
           AgentEvent::Message(message) => {
             run.reset_message();
             self.session.transcript.push_message(message);
-            self.save_session();
+            return vec![Effect::SaveSession];
           }
           AgentEvent::Error(error) => {
             self.finish_run(Some(TranscriptEntry::Error(error)));
-            return self.run_next_queued();
+
+            return once(Effect::SaveSession)
+              .chain(self.run_next_queued())
+              .collect();
           }
           AgentEvent::ToolApprovalRequest(request) => {
             run.approval = Some(request);
@@ -171,8 +171,22 @@ impl State {
 
         self.finish_run(Some(TranscriptEntry::Error(error)));
 
-        return effects;
+        return effects
+          .into_iter()
+          .chain(once(Effect::SaveSession))
+          .collect();
       }
+      Event::SessionSaved(result) => match result {
+        Ok(saved) => {
+          self.session.id = Some(saved.id);
+          self.session.title = saved.title;
+          self.session.updated_at = saved.updated_at;
+        }
+        Err(error) => self
+          .session
+          .transcript
+          .error(format!("failed to save session: {error}")),
+      },
       Event::Tick(elapsed) => {
         if let Some(run) = &mut self.run {
           run.tick(elapsed);
@@ -190,14 +204,14 @@ impl State {
 
     self.finish_run(Some(TranscriptEntry::Interrupted));
 
-    vec![Effect::InterruptAgent]
+    vec![Effect::InterruptAgent, Effect::SaveSession]
   }
 
   pub(crate) fn model(&self) -> &Model {
     &self.session.settings.model
   }
 
-  pub(crate) fn new(database: Database, session: Session) -> Result<Self> {
+  pub(crate) fn new(session: Session) -> Self {
     let history = session
       .transcript
       .entries
@@ -207,20 +221,18 @@ impl State {
       .map(str::to_owned)
       .collect();
 
-    Ok(Self {
+    Self {
       composer: Composer::new(
         session.settings.prompt.as_deref().unwrap_or_default(),
         history,
       ),
-      database,
-      directory: env::current_dir()?,
       next_run_id: 0,
       queued_inputs: VecDeque::new(),
       reasoning_expanded: false,
       run: None,
       session,
       should_quit: false,
-    })
+    }
   }
 
   pub(crate) fn queued_inputs(&self) -> &VecDeque<String> {
@@ -248,8 +260,6 @@ impl State {
   fn run(&mut self, input: String) -> Effect {
     self.session.transcript.send(input);
 
-    self.save_session();
-
     let messages = self.session.transcript.messages();
 
     let run_id = self.next_run_id;
@@ -272,13 +282,8 @@ impl State {
       .unwrap_or_default()
   }
 
-  fn save_session(&mut self) {
-    if let Err(error) = self.session.save(&self.database) {
-      self
-        .session
-        .transcript
-        .error(format!("failed to save session: {error}"));
-    }
+  pub(crate) fn session(&self) -> &Session {
+    &self.session
   }
 
   pub(crate) fn should_quit(&self) -> bool {
@@ -317,7 +322,7 @@ impl State {
     self.reset_input();
 
     match action {
-      Action::SubmitImmediately => self
+      Action::SubmitImmediately if self.run.is_some() => self
         .interrupt_agent()
         .into_iter()
         .chain(once(self.run(input)))
@@ -326,7 +331,7 @@ impl State {
         self.queued_inputs.push_back(input);
         Vec::new()
       }
-      _ => vec![self.run(input)],
+      _ => vec![Effect::SaveSession, self.run(input)],
     }
   }
 
@@ -341,25 +346,27 @@ mod tests {
 
   #[test]
   fn agent_events_update_transcript() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
+      vec![
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages: vec![Message::User(vec![UserMessageContent::Text(
+            "foo".into()
+          )])],
+          run_id: 0,
+        }
+      ]
     );
 
     state.handle_event(Event::Agent {
@@ -385,14 +392,17 @@ mod tests {
       }),
     );
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Message(Message::agent(vec![
-        AssistantContent::reasoning("foo", "bar"),
-        AssistantContent::text("baz"),
-        AssistantContent::ToolCall(invocation.protocol.clone()),
-      ])),
-      run_id: 0,
-    });
+    assert_eq!(
+      state.handle_event(Event::Agent {
+        event: AgentEvent::Message(Message::agent(vec![
+          AssistantContent::reasoning("foo", "bar"),
+          AssistantContent::text("baz"),
+          AssistantContent::ToolCall(invocation.protocol.clone()),
+        ])),
+        run_id: 0,
+      }),
+      vec![Effect::SaveSession]
+    );
 
     let result = ToolResult {
       exit_status: Some(0),
@@ -439,16 +449,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_approves_with_lowercase_y() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -479,16 +488,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_approves_with_uppercase_y() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -519,16 +527,15 @@ mod tests {
 
   #[test]
   fn approval_complete_command_leaves_request_pending() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, _response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -556,16 +563,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_denies_with_escape() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -593,16 +599,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_denies_with_lowercase_n() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -633,16 +638,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_denies_with_uppercase_n() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -673,16 +677,15 @@ mod tests {
 
   #[test]
   fn approval_edit_other_key_leaves_request_pending() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, _response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -713,16 +716,15 @@ mod tests {
 
   #[test]
   fn approval_select_next_command_leaves_request_pending() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, _response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -750,16 +752,15 @@ mod tests {
 
   #[test]
   fn approval_select_previous_command_leaves_request_pending() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, _response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -787,16 +788,15 @@ mod tests {
 
   #[test]
   fn approval_submit_leaves_request_pending() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, _response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -824,16 +824,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_terminal_agent_tool_result_drops_pending_request() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -869,16 +868,15 @@ mod tests {
 
   #[tokio::test]
   async fn approval_terminal_error_drops_pending_request() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     let (request, response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
@@ -905,16 +903,15 @@ mod tests {
 
   #[test]
   fn blank_submit_does_nothing() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("  ".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
@@ -928,16 +925,15 @@ mod tests {
 
   #[test]
   fn command_autocomplete_select_next() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("/".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state
@@ -956,16 +952,15 @@ mod tests {
 
   #[test]
   fn command_autocomplete_select_previous() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("/".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state
@@ -984,25 +979,27 @@ mod tests {
 
   #[test]
   fn command_clear_from_empty_slash() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
+      vec![
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages: vec![Message::User(vec![UserMessageContent::Text(
+            "foo".into()
+          )])],
+          run_id: 0,
+        }
+      ]
     );
 
     state.handle_event(Event::Agent {
@@ -1024,7 +1021,7 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      Vec::new()
+      vec![Effect::SaveSession]
     );
 
     assert_eq!(state.session.transcript.messages(), Vec::new());
@@ -1034,25 +1031,27 @@ mod tests {
 
   #[test]
   fn command_clear_from_name() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
+      vec![
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages: vec![Message::User(vec![UserMessageContent::Text(
+            "foo".into()
+          )])],
+          run_id: 0,
+        }
+      ]
     );
 
     state.handle_event(Event::Agent {
@@ -1076,7 +1075,7 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      Vec::new()
+      vec![Effect::SaveSession]
     );
 
     assert_eq!(state.session.transcript.messages(), Vec::new());
@@ -1086,25 +1085,27 @@ mod tests {
 
   #[test]
   fn command_clear_from_prefix() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
+      vec![
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages: vec![Message::User(vec![UserMessageContent::Text(
+            "foo".into()
+          )])],
+          run_id: 0,
+        }
+      ]
     );
 
     state.handle_event(Event::Agent {
@@ -1128,7 +1129,7 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      Vec::new()
+      vec![Effect::SaveSession]
     );
 
     assert_eq!(state.session.transcript.messages(), Vec::new());
@@ -1138,16 +1139,15 @@ mod tests {
 
   #[test]
   fn command_clear_interrupts_active_agent_and_ignores_late_events() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -1160,7 +1160,7 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::InterruptAgent]
+      vec![Effect::InterruptAgent, Effect::SaveSession]
     );
 
     assert_eq!(state.run, None);
@@ -1203,16 +1203,15 @@ mod tests {
 
   #[test]
   fn command_quit_from_name() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("/quit".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
@@ -1226,16 +1225,15 @@ mod tests {
 
   #[test]
   fn command_quit_from_prefix() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("/q".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
@@ -1249,16 +1247,15 @@ mod tests {
 
   #[test]
   fn command_quit_interrupts_active_agent_and_saves_partial_output() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -1279,7 +1276,7 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::InterruptAgent]
+      vec![Effect::InterruptAgent, Effect::SaveSession]
     );
 
     assert!(!state.should_quit);
@@ -1287,13 +1284,8 @@ mod tests {
 
     assert_eq!(state.composer.input_text(), "");
 
-    let saved = state
-      .database
-      .load_session(state.session.id.unwrap(), &state.session.settings)
-      .unwrap();
-
     assert_eq!(
-      saved.transcript.entries,
+      state.session.transcript.entries,
       [
         TranscriptEntry::Message(Message::User(vec![
           UserMessageContent::Text("foo".into())
@@ -1310,22 +1302,21 @@ mod tests {
   fn command_submission_returns_effects() {
     #[track_caller]
     fn case(input: &str, action: Action) {
-      let mut state = State::new(
-        Database::new().unwrap(),
-        Session::new(&Settings {
+      let mut state = State::new(Session::new(
+        &Settings {
+          directory: "foo".into(),
           model: "mock:local".parse().unwrap(),
           prompt: Some(input.into()),
           yolo: false,
-        })
-        .unwrap(),
-      )
-      .unwrap();
+        },
+        0,
+      ));
 
       state.run("foo".into());
 
       assert_eq!(
         state.handle_event(Event::Action(action)),
-        vec![Effect::InterruptAgent]
+        vec![Effect::InterruptAgent, Effect::SaveSession]
       );
 
       assert_eq!(state.run, None);
@@ -1342,14 +1333,13 @@ mod tests {
   #[test]
   fn completed_messages_survive_resumption() {
     let settings = Settings {
+      directory: "foo".into(),
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
     };
 
-    let mut state =
-      State::new(Database::new().unwrap(), Session::new(&settings).unwrap())
-        .unwrap();
+    let mut state = State::new(Session::new(&settings, 0));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -1428,15 +1418,9 @@ mod tests {
       run_id: 0,
     });
 
-    let session = state
-      .database
-      .load_session(state.session.id.unwrap(), &state.session.settings)
-      .unwrap();
+    let session = state.session;
 
-    assert_eq!(session.transcript.entries, state.session.transcript.entries);
-    assert_eq!(session.title.as_deref(), Some("foo"));
-
-    let mut state = State::new(state.database, session).unwrap();
+    let mut state = State::new(session);
 
     let messages =
       once(Message::User(vec![UserMessageContent::Text("foo".into())]))
@@ -1448,34 +1432,39 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      [Effect::RunAgent {
-        messages,
-        run_id: 0
-      }]
+      [
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages,
+          run_id: 0
+        }
+      ]
     );
   }
 
   #[test]
   fn error_is_not_included_in_next_request() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
+      vec![
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages: vec![Message::User(vec![UserMessageContent::Text(
+            "foo".into()
+          )])],
+          run_id: 0,
+        }
+      ]
     );
 
     state.handle_event(Event::Agent {
@@ -1497,28 +1486,30 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![
-          Message::User(vec![UserMessageContent::Text("foo".into())]),
-          Message::User(vec![UserMessageContent::Text("baz".into())]),
-        ],
-        run_id: 1,
-      }]
+      vec![
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages: vec![
+            Message::User(vec![UserMessageContent::Text("foo".into())]),
+            Message::User(vec![UserMessageContent::Text("baz".into())]),
+          ],
+          run_id: 1,
+        }
+      ]
     );
   }
 
   #[test]
   fn failed_save_preserves_run() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.run = Some({
       let mut run = Run::new(0);
@@ -1531,7 +1522,10 @@ mod tests {
 
     state.session.id = Some(0);
 
-    state.save_session();
+    assert_eq!(
+      state.handle_event(Event::SessionSaved(Err("foo".into()))),
+      Vec::new()
+    );
 
     assert_eq!(
       state.run,
@@ -1546,24 +1540,21 @@ mod tests {
     );
     assert_eq!(
       state.session.transcript.entries,
-      [TranscriptEntry::Error(
-        "failed to save session: session `0` no longer exists".into()
-      )]
+      [TranscriptEntry::Error("failed to save session: foo".into())]
     );
   }
 
   #[test]
   fn finish_run_saves_partial_output() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.run = Some({
       let mut run = Run::new(0);
@@ -1574,33 +1565,32 @@ mod tests {
       run
     });
 
-    state.finish_run(None);
-
-    let session = state
-      .database
-      .load_session(state.session.id.unwrap(), &state.session.settings)
-      .unwrap();
+    assert_eq!(
+      state.handle_event(Event::Agent {
+        event: AgentEvent::Done,
+        run_id: 0
+      }),
+      [Effect::SaveSession]
+    );
 
     assert_eq!(state.run, None);
     assert_eq!(
       state.session.transcript.messages(),
       [Message::agent(vec![AssistantContent::text("foo")])]
     );
-    assert_eq!(session.transcript, state.session.transcript);
   }
 
   #[test]
   fn immediate_submit_interrupts_active_agent_and_starts_new_run() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -1625,6 +1615,7 @@ mod tests {
       state.handle_event(Event::Action(Action::SubmitImmediately)),
       vec![
         Effect::InterruptAgent,
+        Effect::SaveSession,
         Effect::RunAgent {
           messages: vec![
             Message::User(vec![UserMessageContent::Text("foo".into())]),
@@ -1659,16 +1650,15 @@ mod tests {
 
   #[test]
   fn interrupt_advances_to_next_queued_submission() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("first".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -1685,7 +1675,11 @@ mod tests {
       state
         .handle_event(Event::Action(Action::Interrupt))
         .as_slice(),
-      [Effect::InterruptAgent, Effect::RunAgent { run_id: 1, .. }]
+      [
+        Effect::InterruptAgent,
+        Effect::SaveSession,
+        Effect::RunAgent { run_id: 1, .. }
+      ]
     );
 
     assert!(state.queued_inputs().is_empty());
@@ -1694,30 +1688,32 @@ mod tests {
 
   #[test]
   fn interrupt_stops_active_agent() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
+      vec![
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages: vec![Message::User(vec![UserMessageContent::Text(
+            "foo".into()
+          )])],
+          run_id: 0,
+        }
+      ]
     );
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Interrupt)),
-      vec![Effect::InterruptAgent]
+      vec![Effect::InterruptAgent, Effect::SaveSession]
     );
 
     assert_eq!(state.run, None);
@@ -1730,16 +1726,15 @@ mod tests {
 
   #[test]
   fn interruption_preserves_streamed_protocol() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:foo".parse().unwrap(),
         prompt: None,
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.run = Some(Run::new(0));
 
@@ -1791,10 +1786,7 @@ mod tests {
 
     state.handle_event(Event::Action(Action::Interrupt));
 
-    let session = state
-      .database
-      .load_session(state.session.id.unwrap(), &state.session.settings)
-      .unwrap();
+    let session = state.session;
 
     assert_eq!(
       session.transcript.entries,
@@ -1807,16 +1799,15 @@ mod tests {
 
   #[test]
   fn multiline_input() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     for c in "foo".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -1839,43 +1830,44 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo\nbar".into()
-        )])],
-        run_id: 0,
-      }]
+      vec![
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages: vec![Message::User(vec![UserMessageContent::Text(
+            "foo\nbar".into()
+          )])],
+          run_id: 0,
+        }
+      ]
     );
   }
 
   #[test]
   fn new_uses_empty_prompt_by_default() {
-    let state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(state.composer.input_text(), "");
   }
 
   #[test]
   fn prompt_history_edit_detaches_navigation() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("history".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -1903,16 +1895,15 @@ mod tests {
 
   #[test]
   fn prompt_history_is_cleared_by_clear_command() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("history".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -1937,12 +1928,13 @@ mod tests {
   #[test]
   fn prompt_history_loads_session() {
     let settings = Settings {
+      directory: "foo".into(),
       model: "mock:local".parse().unwrap(),
       prompt: Some("draft".into()),
       yolo: false,
     };
 
-    let mut session = Session::new(&settings).unwrap();
+    let mut session = Session::new(&settings, 0);
 
     session.transcript.entries = vec![
       TranscriptEntry::Message(Message::User(vec![UserMessageContent::Text(
@@ -1956,7 +1948,7 @@ mod tests {
       )])),
     ];
 
-    let mut state = State::new(Database::new().unwrap(), session).unwrap();
+    let mut state = State::new(session);
 
     state.handle_event(Event::Action(Action::SelectPrevious));
     assert_eq!(state.composer.input_text(), "baz\nqux");
@@ -1970,16 +1962,15 @@ mod tests {
 
   #[test]
   fn prompt_history_navigates_and_restores_draft() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -2023,16 +2014,15 @@ mod tests {
 
   #[test]
   fn prompt_history_preserves_multiline_navigation() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("history".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -2072,16 +2062,15 @@ mod tests {
 
   #[test]
   fn queued_submissions_run_in_order() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("first".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -2105,7 +2094,7 @@ mod tests {
           run_id: 0,
         })
         .as_slice(),
-      [Effect::RunAgent { run_id: 1, .. }]
+      [Effect::SaveSession, Effect::RunAgent { run_id: 1, .. }]
     );
 
     assert_matches!(
@@ -2115,7 +2104,7 @@ mod tests {
           run_id: 1,
         })
         .as_slice(),
-      [Effect::RunAgent { run_id: 2, .. }]
+      [Effect::SaveSession, Effect::RunAgent { run_id: 2, .. }]
     );
 
     assert_eq!(
@@ -2130,30 +2119,32 @@ mod tests {
 
   #[test]
   fn quit_interrupts_active_agent() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
+      vec![
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages: vec![Message::User(vec![UserMessageContent::Text(
+            "foo".into()
+          )])],
+          run_id: 0,
+        }
+      ]
     );
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Quit)),
-      vec![Effect::InterruptAgent]
+      vec![Effect::InterruptAgent, Effect::SaveSession]
     );
 
     assert!(!state.should_quit);
@@ -2166,16 +2157,15 @@ mod tests {
 
   #[tokio::test]
   async fn quit_interrupts_active_approval() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -2197,7 +2187,7 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Quit)),
-      vec![Effect::InterruptAgent]
+      vec![Effect::InterruptAgent, Effect::SaveSession]
     );
 
     assert!(!state.should_quit);
@@ -2208,17 +2198,16 @@ mod tests {
   }
 
   #[test]
-  fn save_excludes_streaming_content() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+  fn session_excludes_streaming_content() {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.session.transcript.send("foo".into());
 
@@ -2231,12 +2220,7 @@ mod tests {
       run
     });
 
-    state.save_session();
-
-    let session = state
-      .database
-      .load_session(state.session.id.unwrap(), &state.session.settings)
-      .unwrap();
+    let session = state.session;
 
     assert_eq!(
       session.transcript.messages(),
@@ -2246,16 +2230,15 @@ mod tests {
 
   #[tokio::test]
   async fn stale_agent_events_do_not_mutate_new_run() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("old".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
     state.handle_event(Event::Action(Action::Interrupt));
@@ -2269,7 +2252,7 @@ mod tests {
 
     assert_matches!(
       state.handle_event(Event::Action(Action::Submit)).as_slice(),
-      [Effect::RunAgent { run_id: 1, .. }]
+      [Effect::SaveSession, Effect::RunAgent { run_id: 1, .. }]
     );
 
     let invocation = ToolInvocation::new(
@@ -2345,25 +2328,27 @@ mod tests {
 
   #[test]
   fn submit_is_queued_while_agent_active() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::RunAgent {
-        messages: vec![Message::User(vec![UserMessageContent::Text(
-          "foo".into()
-        )])],
-        run_id: 0,
-      }]
+      vec![
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages: vec![Message::User(vec![UserMessageContent::Text(
+            "foo".into()
+          )])],
+          run_id: 0,
+        }
+      ]
     );
 
     for c in "bar".chars() {
@@ -2391,13 +2376,16 @@ mod tests {
         event: AgentEvent::Done,
         run_id: 0,
       }),
-      vec![Effect::RunAgent {
-        messages: vec![
-          Message::User(vec![UserMessageContent::Text("foo".into())]),
-          Message::User(vec![UserMessageContent::Text("bar".into())]),
-        ],
-        run_id: 1,
-      }]
+      vec![
+        Effect::SaveSession,
+        Effect::RunAgent {
+          messages: vec![
+            Message::User(vec![UserMessageContent::Text("foo".into())]),
+            Message::User(vec![UserMessageContent::Text("bar".into())]),
+          ],
+          run_id: 1,
+        }
+      ]
     );
 
     assert!(state.queued_inputs().is_empty());
@@ -2407,25 +2395,27 @@ mod tests {
   fn submit_trims_input() {
     #[track_caller]
     fn case(action: Action) {
-      let mut state = State::new(
-        Database::new().unwrap(),
-        Session::new(&Settings {
+      let mut state = State::new(Session::new(
+        &Settings {
+          directory: "foo".into(),
           model: "mock:local".parse().unwrap(),
           prompt: Some("  foo  ".into()),
           yolo: false,
-        })
-        .unwrap(),
-      )
-      .unwrap();
+        },
+        0,
+      ));
 
       assert_eq!(
         state.handle_event(Event::Action(action)),
-        vec![Effect::RunAgent {
-          messages: vec![Message::User(vec![UserMessageContent::Text(
-            "foo".into()
-          )])],
-          run_id: 0,
-        }]
+        vec![
+          Effect::SaveSession,
+          Effect::RunAgent {
+            messages: vec![Message::User(vec![UserMessageContent::Text(
+              "foo".into()
+            )])],
+            run_id: 0,
+          }
+        ]
       );
 
       assert_eq!(state.composer.input_text(), "");
@@ -2440,23 +2430,59 @@ mod tests {
   }
 
   #[test]
+  fn successful_save_updates_metadata_without_saving_again() {
+    let settings = Settings {
+      directory: "foo".into(),
+      model: "mock:foo".parse().unwrap(),
+      prompt: None,
+      yolo: false,
+    };
+
+    let mut state = State::new(Session::new(&settings, 1));
+
+    state.session.transcript.send("bar".into());
+
+    assert_eq!(
+      state.handle_event(Event::SessionSaved(Ok(SavedSession {
+        id: 2,
+        title: Some("bar".into()),
+        updated_at: 3,
+      }))),
+      Vec::new(),
+    );
+    assert_eq!(
+      state.session(),
+      &Session {
+        created_at: 1,
+        id: Some(2),
+        settings,
+        title: Some("bar".into()),
+        transcript: Transcript::with_entries(vec![TranscriptEntry::Message(
+          Message::User(vec![UserMessageContent::Text("bar".into())]),
+        )]),
+        updated_at: 3,
+      }
+    );
+    assert_eq!(state.directory(), Path::new("foo"));
+  }
+
+  #[test]
   fn terminal_error_interrupts_run() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.run = Some(Run::new(0));
 
     assert_eq!(
       state.handle_event(Event::Error("foo".into())),
-      vec![Effect::InterruptAgent]
+      vec![Effect::InterruptAgent, Effect::SaveSession]
     );
     assert_eq!(state.run, None);
     assert_eq!(
@@ -2467,18 +2493,20 @@ mod tests {
 
   #[test]
   fn terminal_error_without_run() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
-    assert_eq!(state.handle_event(Event::Error("foo".into())), Vec::new());
+    assert_eq!(
+      state.handle_event(Event::Error("foo".into())),
+      vec![Effect::SaveSession]
+    );
     assert_eq!(state.run, None);
     assert_eq!(
       state.session.transcript.entries,
@@ -2491,14 +2519,13 @@ mod tests {
     #[track_caller]
     fn case(event: Event, entry: TranscriptEntry) {
       let settings = Settings {
+        directory: "foo".into(),
         model: "mock:foo".parse().unwrap(),
         prompt: Some("qux".into()),
         yolo: false,
       };
 
-      let mut state =
-        State::new(Database::new().unwrap(), Session::new(&settings).unwrap())
-          .unwrap();
+      let mut state = State::new(Session::new(&settings, 0));
 
       let reasoning =
         Reasoning::new_with_signature("foo", Some("bar".into())).sealed("foo");
@@ -2525,30 +2552,30 @@ mod tests {
       state.run = Some(run);
       state.handle_event(event);
 
-      let session = state
-        .database
-        .load_session(state.session.id.unwrap(), &state.session.settings)
-        .unwrap();
+      let session = state.session;
 
       assert_eq!(
         session.transcript.entries,
         [TranscriptEntry::Draft(draft), entry]
       );
 
-      let mut state = State::new(state.database, session).unwrap();
+      let mut state = State::new(session);
 
       assert_eq!(
         state.handle_event(Event::Action(Action::Submit)),
-        [Effect::RunAgent {
-          messages: vec![
-            Message::agent(vec![
-              AssistantContent::Reasoning(reasoning),
-              AssistantContent::text("baz"),
-            ]),
-            Message::User(vec![UserMessageContent::Text("qux".into())]),
-          ],
-          run_id: 0,
-        }]
+        [
+          Effect::SaveSession,
+          Effect::RunAgent {
+            messages: vec![
+              Message::agent(vec![
+                AssistantContent::Reasoning(reasoning),
+                AssistantContent::text("baz"),
+              ]),
+              Message::User(vec![UserMessageContent::Text("qux".into())]),
+            ],
+            run_id: 0,
+          }
+        ]
       );
     }
 
@@ -2568,16 +2595,15 @@ mod tests {
 
   #[test]
   fn unknown_command() {
-    let mut state = State::new(
-      Database::new().unwrap(),
-      Session::new(&Settings {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
         model: "mock:local".parse().unwrap(),
         prompt: Some("/foobar".into()),
         yolo: false,
-      })
-      .unwrap(),
-    )
-    .unwrap();
+      },
+      0,
+    ));
 
     state.handle_event(Event::Action(Action::Submit));
 

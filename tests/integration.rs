@@ -751,8 +751,9 @@ fn resume_filters_and_loads_session() -> Result {
     .run()?;
 
   Test::new()
-    .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
+    .argument("--directory")
+    .argument(workspace.path().to_str().unwrap())
     .argument("--model")
     .argument("mock:local")
     .type_text("bar")
@@ -763,6 +764,8 @@ fn resume_filters_and_loads_session() -> Result {
 
   Test::new()
     .cwd(workspace.path())
+    .argument("--directory")
+    .argument(".")
     .env("KOTOMORI_HOME", state)
     .argument("--model")
     .argument("mock:local")
@@ -773,11 +776,12 @@ fn resume_filters_and_loads_session() -> Result {
     .run()?;
 
   Test::new()
-    .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
     .argument("--model")
     .argument("mock:other")
     .argument("resume")
+    .argument("--directory")
+    .argument(workspace.path().to_str().unwrap())
     .expect_screen_contains("foo")
     .expect_screen_contains("bar")
     .expect_screen_excludes("qux")

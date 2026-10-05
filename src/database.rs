@@ -6,14 +6,13 @@ pub(crate) struct Database {
 }
 
 impl Database {
-  const DATABASE_NAME: &str = "kotomori.db";
   const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
   const SCHEMA_VERSION: usize = Self::MIGRATIONS.len();
 
-  pub(crate) fn get_sessions(&self) -> Result<Vec<SessionSummary>> {
-    let directory =
-      env::current_dir().context("failed to read current directory")?;
-
+  pub(crate) fn get_sessions(
+    &self,
+    directory: &Path,
+  ) -> Result<Vec<SessionSummary>> {
     let directory = directory
       .to_str()
       .context("current directory is not valid UTF-8")?;
@@ -53,9 +52,9 @@ impl Database {
         |row| {
           Ok(Session {
             created_at: row.get(1)?,
-            directory: row.get::<_, String>(3)?.into(),
             id: Some(row.get(0)?),
             settings: Settings {
+              directory: row.get::<_, String>(3)?.into(),
               model: row.get(4)?,
               ..settings.clone()
             },
@@ -76,32 +75,25 @@ impl Database {
       .with_context(|| format!("failed to load session `{id}`"))
   }
 
-  pub(crate) fn new() -> Result<Self> {
-    if cfg!(test) {
-      Self::try_from(Connection::open_in_memory()?)
-    } else {
-      let root = if let Some(path) = env::var_os("KOTOMORI_HOME") {
-        PathBuf::from(path)
-      } else if let Some(path) = env::var_os("XDG_STATE_HOME") {
-        PathBuf::from(path).join("kotomori")
-      } else {
-        let Some(home) = env::var_os("HOME") else {
-          bail!("HOME is not set");
-        };
+  pub(crate) fn new(path: &Path) -> Result<Self> {
+    let directory = path
+      .parent()
+      .context("database path has no parent directory")?;
 
-        PathBuf::from(home).join(".local/state/kotomori")
-      };
+    fs::create_dir_all(directory).with_context(|| {
+      format!("failed to create state directory {}", directory.display())
+    })?;
 
-      fs::create_dir_all(&root).with_context(|| {
-        format!("failed to create state directory {}", root.display())
-      })?;
-
-      Self::try_from(root.join(Self::DATABASE_NAME).as_path())
-    }
+    Self::try_from(path)
   }
 
-  pub(crate) fn save_session(&self, session: &mut Session) -> Result {
+  pub(crate) fn save_session(
+    &self,
+    session: &Session,
+    updated_at: u64,
+  ) -> Result<SavedSession> {
     let directory = session
+      .settings
       .directory
       .to_str()
       .context("session directory is not valid UTF-8")?;
@@ -109,7 +101,9 @@ impl Database {
     let entries = serde_json::to_string(&session.transcript.entries)
       .context("failed to serialize session transcript")?;
 
-    if let Some(id) = session.id {
+    let title = session.generate_title();
+
+    let id = if let Some(id) = session.id {
       let updated = self.connection.execute(
         "UPDATE sessions SET
            updated_at = ?1,
@@ -119,10 +113,10 @@ impl Database {
            entries = ?5
          WHERE id = ?6",
         params![
-          session.updated_at,
+          updated_at,
           directory,
           session.settings.model.to_string(),
-          session.title,
+          title,
           entries,
           id,
         ],
@@ -131,25 +125,31 @@ impl Database {
       if updated == 0 {
         bail!("session `{id}` no longer exists");
       }
+
+      id
     } else {
-      session.id = Some(self.connection.query_row(
+      self.connection.query_row(
         "INSERT INTO sessions (
            created_at, updated_at, directory, model, title, entries
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          RETURNING id",
         params![
           session.created_at,
-          session.updated_at,
+          updated_at,
           directory,
           session.settings.model.to_string(),
-          session.title,
+          title,
           entries,
         ],
         |row| row.get(0),
-      )?);
-    }
+      )?
+    };
 
-    Ok(())
+    Ok(SavedSession {
+      id,
+      title,
+      updated_at,
+    })
   }
 }
 
@@ -249,7 +249,8 @@ mod tests {
 
   #[test]
   fn save_session_rejects_out_of_range_timestamps() {
-    let database = Database::new().unwrap();
+    let database =
+      Database::try_from(Connection::open_in_memory().unwrap()).unwrap();
 
     let timestamp = u64::try_from(i64::MAX).unwrap() + 1;
 
@@ -258,11 +259,11 @@ mod tests {
       (None, 0, timestamp),
       (Some(1), 0, timestamp),
     ] {
-      let mut session = Session {
+      let session = Session {
         created_at,
-        directory: env::current_dir().unwrap(),
         id,
         settings: Settings {
+          directory: "foo".into(),
           model: "mock:foo".parse().unwrap(),
           prompt: None,
           yolo: false,
@@ -274,7 +275,7 @@ mod tests {
 
       assert_matches!(
         database
-          .save_session(&mut session)
+          .save_session(&session, updated_at)
           .unwrap_err()
           .downcast::<rusqlite::Error>()
           .unwrap(),
@@ -293,11 +294,11 @@ mod tests {
 
     let timestamp = u64::try_from(i64::MAX).unwrap();
 
-    let mut session = Session {
+    let session = Session {
       created_at: timestamp,
-      directory: env::current_dir().unwrap(),
       id: None,
       settings: Settings {
+        directory: "foo".into(),
         model: "mock:foo".parse().unwrap(),
         prompt: Some("bar".into()),
         yolo: true,
@@ -307,9 +308,14 @@ mod tests {
       updated_at: 0,
     };
 
-    database.save_session(&mut session).unwrap();
-
-    assert_eq!(session.id, Some(1));
+    assert_eq!(
+      database.save_session(&session, 0).unwrap(),
+      SavedSession {
+        id: 1,
+        title: None,
+        updated_at: 0,
+      },
+    );
 
     assert_eq!(
       database
@@ -319,19 +325,29 @@ mod tests {
       session.settings,
     );
 
-    let mut session = Session {
+    let session = Session {
+      id: Some(1),
       settings: Settings {
         model: "mock:bar".parse().unwrap(),
         ..session.settings
       },
-      title: Some("foo".into()),
-      updated_at: timestamp,
+      transcript: Transcript::with_entries(vec![TranscriptEntry::Message(
+        Message::User(vec![UserMessageContent::Text("foo".into())]),
+      )]),
       ..session
     };
 
-    database.save_session(&mut session).unwrap();
+    assert_eq!(
+      database.save_session(&session, timestamp).unwrap(),
+      SavedSession {
+        id: 1,
+        title: Some("foo".into()),
+        updated_at: timestamp,
+      },
+    );
 
     let settings = Settings {
+      directory: "bar".into(),
       model: "mock:baz".parse().unwrap(),
       prompt: Some("qux".into()),
       yolo: false,
@@ -342,6 +358,7 @@ mod tests {
     assert_eq!(
       loaded.settings,
       Settings {
+        directory: "foo".into(),
         model: "mock:bar".parse().unwrap(),
         ..settings.clone()
       },
@@ -353,9 +370,9 @@ mod tests {
     );
 
     assert_eq!(
-      database.get_sessions().unwrap(),
+      database.get_sessions(Path::new("foo")).unwrap(),
       [SessionSummary {
-        directory: env::current_dir().unwrap(),
+        directory: "foo".into(),
         id: 1,
         model: "mock:bar".parse().unwrap(),
         title: Some("foo".into()),
@@ -366,9 +383,11 @@ mod tests {
 
   #[test]
   fn session_reads_reject_invalid_models() {
-    let database = Database::new().unwrap();
+    let database =
+      Database::try_from(Connection::open_in_memory().unwrap()).unwrap();
 
     let settings = Settings {
+      directory: "foo".into(),
       model: "mock:foo".parse().unwrap(),
       prompt: None,
       yolo: false,
@@ -380,7 +399,7 @@ mod tests {
         "INSERT INTO sessions (
            created_at, updated_at, directory, model, entries
          ) VALUES (0, 0, ?1, 'foo', '[]')",
-        [env::current_dir().unwrap().to_str().unwrap()],
+        ["foo"],
       )
       .unwrap();
 
@@ -390,7 +409,10 @@ mod tests {
     );
 
     assert_eq!(
-      database.get_sessions().unwrap_err().to_string(),
+      database
+        .get_sessions(Path::new("foo"))
+        .unwrap_err()
+        .to_string(),
       "Conversion error from type Text at index: 3, model must be PROVIDER:MODEL",
     );
   }
@@ -398,13 +420,15 @@ mod tests {
   #[test]
   fn session_reads_reject_negative_timestamps() {
     let settings = Settings {
+      directory: "foo".into(),
       model: "mock:foo".parse().unwrap(),
       prompt: None,
       yolo: false,
     };
 
     for (created_at, updated_at, index) in [(-1, 0, 1), (0, -1, 2)] {
-      let database = Database::new().unwrap();
+      let database =
+        Database::try_from(Connection::open_in_memory().unwrap()).unwrap();
 
       database
         .connection
@@ -417,11 +441,7 @@ mod tests {
           "INSERT INTO sessions (
              created_at, updated_at, directory, model, entries
            ) VALUES (?1, ?2, ?3, 'mock:foo', '[]')",
-          params![
-            created_at,
-            updated_at,
-            env::current_dir().unwrap().to_str().unwrap(),
-          ],
+          params![created_at, updated_at, "foo"],
         )
         .unwrap();
 
@@ -434,7 +454,10 @@ mod tests {
 
       if updated_at < 0 {
         assert_eq!(
-          database.get_sessions().unwrap_err().to_string(),
+          database
+            .get_sessions(Path::new("foo"))
+            .unwrap_err()
+            .to_string(),
           "Integer -1 out of range at index 1",
         );
       }
@@ -446,9 +469,10 @@ mod tests {
     let database =
       Database::try_from(Connection::open_in_memory().unwrap()).unwrap();
 
-    let directory = env::current_dir().unwrap();
+    let directory = PathBuf::from("foo");
 
     let settings = Settings {
+      directory: "foo".into(),
       model: "mock:foo".parse().unwrap(),
       prompt: None,
       yolo: false,
@@ -465,7 +489,7 @@ mod tests {
       .unwrap();
 
     assert_eq!(
-      database.get_sessions().unwrap(),
+      database.get_sessions(Path::new("foo")).unwrap(),
       [SessionSummary {
         directory,
         id: 1,
