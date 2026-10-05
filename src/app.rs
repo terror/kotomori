@@ -42,7 +42,7 @@ impl App {
           return Ok(());
         };
 
-        let session = state.session();
+        let session = &state.session;
 
         if session.transcript.is_empty() && session.id.is_none() {
           return Ok(());

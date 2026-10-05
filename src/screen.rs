@@ -15,7 +15,7 @@ impl Screen {
     match self {
       Self::Quit | Self::Resume(_) => Ok(None),
       Self::Session(state) => {
-        Agent::new(event_sender, &state.session().settings).map(Some)
+        Agent::new(event_sender, &state.session.settings).map(Some)
       }
     }
   }
@@ -24,7 +24,7 @@ impl Screen {
     match self {
       Self::Quit => true,
       Self::Resume(_) => false,
-      Self::Session(state) => state.should_quit(),
+      Self::Session(state) => state.should_quit,
     }
   }
 }
