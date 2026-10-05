@@ -41,10 +41,8 @@ impl Loader {
       .map(|agents| agents.join("\n\n"))
   }
 
-  pub(crate) fn new() -> Result<Self> {
-    Ok(Self {
-      cwd: env::current_dir().context("failed to get current directory")?,
-    })
+  pub(crate) fn new(cwd: impl Into<PathBuf>) -> Self {
+    Self { cwd: cwd.into() }
   }
 
   fn repository_root(&self) -> PathBuf {
@@ -54,11 +52,6 @@ impl Loader {
       .find(|ancestor| ancestor.join(".git").exists())
       .unwrap_or(&self.cwd)
       .to_path_buf()
-  }
-
-  #[cfg(test)]
-  pub(crate) fn with_cwd(cwd: impl Into<PathBuf>) -> Self {
-    Self { cwd: cwd.into() }
   }
 }
 
@@ -83,7 +76,7 @@ mod tests {
     fs::write(&child_agents, "bar\n").unwrap();
 
     assert_eq!(
-      Loader::with_cwd(child).load().unwrap(),
+      Loader::new(child).load().unwrap(),
       format!(
         "{}:\nfoo\n\n{}:\nbar",
         root_agents.display(),
@@ -98,6 +91,6 @@ mod tests {
 
     fs::create_dir(directory.path().join(".git")).unwrap();
 
-    assert_eq!(Loader::with_cwd(directory.path()).load().unwrap(), "");
+    assert_eq!(Loader::new(directory.path()).load().unwrap(), "");
   }
 }

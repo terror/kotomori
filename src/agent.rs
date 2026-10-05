@@ -47,11 +47,14 @@ impl Agent {
 
     Ok(Self {
       event_sender,
-      loader: Loader::new()?,
+      loader: Loader::new(&settings.directory),
       provider,
       settings: settings.clone(),
       task: None,
-      tool_context: ToolContext::default(),
+      tool_context: ToolContext {
+        command_executor: CommandExecutor::default(),
+        directory: settings.directory.clone(),
+      },
     })
   }
 
@@ -64,7 +67,7 @@ impl Agent {
       provider: self.provider.clone(),
       settings: self.settings.clone(),
       task: None,
-      tool_context: self.tool_context,
+      tool_context: self.tool_context.clone(),
     };
 
     self.task = Some(tokio::spawn(async move {
@@ -333,18 +336,22 @@ mod tests {
 
       let agent = Agent {
         event_sender,
-        loader: Loader::with_cwd(directory.path()),
+        loader: Loader::new(directory.path()),
         provider: Arc::new(TestProvider {
           outputs: Mutex::new(outputs.into()),
           requests: requests.clone(),
         }),
         settings: Settings {
+          directory: directory.path().into(),
           model: "mock:local".parse().unwrap(),
           prompt: None,
           yolo,
         },
         task: None,
-        tool_context: ToolContext::default(),
+        tool_context: ToolContext {
+          command_executor: CommandExecutor::default(),
+          directory: directory.path().into(),
+        },
       };
 
       Self {

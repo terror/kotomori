@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct App {
   agent: Option<Agent>,
+  database: Database,
   event_receiver: UnboundedReceiver<Event>,
   event_sender: UnboundedSender<Event>,
   screen: Screen,
@@ -13,26 +14,51 @@ impl App {
   const TICK_INTERVAL: Duration = Duration::from_millis(120);
 
   fn drain_pending_events(&mut self) -> Result {
-    while let Ok(event) = self.event_receiver.try_recv() {
+    while !self.screen.should_quit() {
+      let Ok(event) = self.event_receiver.try_recv() else {
+        break;
+      };
+
       self.handle_event(event)?;
     }
 
     Ok(())
   }
 
-  fn handle_effect(&mut self, effect: Effect) {
-    let Some(agent) = &mut self.agent else {
-      return;
-    };
-
+  fn handle_effect(&mut self, effect: Effect) -> Result {
     match effect {
       Effect::InterruptAgent => {
-        agent.interrupt();
+        if let Some(agent) = &mut self.agent {
+          agent.interrupt();
+        }
       }
       Effect::RunAgent { messages, run_id } => {
-        agent.spawn(run_id, messages);
+        if let Some(agent) = &mut self.agent {
+          agent.spawn(run_id, messages);
+        }
+      }
+      Effect::SaveSession => {
+        let Screen::Session(state) = &self.screen else {
+          return Ok(());
+        };
+
+        let session = state.session();
+
+        if session.transcript.is_empty() && session.id.is_none() {
+          return Ok(());
+        }
+
+        let result = now()
+          .and_then(|updated_at| {
+            self.database.save_session(session, updated_at)
+          })
+          .map_err(|error| error.to_string());
+
+        self.handle_event(Event::SessionSaved(result))?;
       }
     }
+
+    Ok(())
   }
 
   fn handle_event(&mut self, event: Event) -> Result {
@@ -45,18 +71,18 @@ impl App {
           };
 
           match action {
-            ResumePickerAction::Cancel => self.screen = Screen::Quit,
+            ResumePickerAction::Cancel => self.set_screen(Screen::Quit)?,
             ResumePickerAction::Resume(id) => self.resume(id)?,
           }
         }
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
-        Event::Agent { .. } | Event::Tick(_) => {}
+        Event::Agent { .. } | Event::SessionSaved(_) | Event::Tick(_) => {}
       },
       Screen::Session(state) => {
         let effects = state.handle_event(event);
 
         for effect in effects {
-          self.handle_effect(effect);
+          self.handle_effect(effect)?;
         }
       }
     }
@@ -94,27 +120,26 @@ impl App {
     });
   }
 
-  pub(crate) fn new(settings: &Settings) -> Result<Self> {
-    Self::with_screen(
-      settings,
-      Screen::Session(Box::new(State::new(
-        Database::new()?,
-        Session::new(settings)?,
-      )?)),
-    )
+  pub(crate) fn new(database: Database, settings: &Settings) -> Result<Self> {
+    let (event_sender, event_receiver) = mpsc::unbounded_channel();
+
+    let screen =
+      Screen::Session(Box::new(State::new(Session::new(settings, now()?))));
+
+    Ok(Self {
+      agent: screen.agent(event_sender.clone())?,
+      database,
+      event_receiver,
+      event_sender,
+      screen,
+      settings: settings.clone(),
+    })
   }
 
   pub(crate) fn resume(&mut self, id: i64) -> Result {
-    let database = Database::new()?;
-
-    let session = database.load_session(id, &self.settings)?;
-
-    self.agent =
-      Some(Agent::new(self.event_sender.clone(), &session.settings)?);
-
-    self.screen = Screen::Session(Box::new(State::new(database, session)?));
-
-    Ok(())
+    self.set_screen(Screen::Session(Box::new(State::new(
+      self.database.load_session(id, &self.settings)?,
+    ))))
   }
 
   pub(crate) async fn run(mut self) -> Result {
@@ -160,24 +185,11 @@ impl App {
     Ok(())
   }
 
-  pub(crate) fn with_screen(
-    settings: &Settings,
-    screen: Screen,
-  ) -> Result<Self> {
-    let (event_sender, event_receiver) = mpsc::unbounded_channel();
+  pub(crate) fn set_screen(&mut self, screen: Screen) -> Result {
+    self.agent = screen.agent(self.event_sender.clone())?;
 
-    let agent = if matches!(screen, Screen::Session(_)) {
-      Some(Agent::new(event_sender.clone(), settings)?)
-    } else {
-      None
-    };
+    self.screen = screen;
 
-    Ok(Self {
-      agent,
-      event_receiver,
-      event_sender,
-      screen,
-      settings: settings.clone(),
-    })
+    Ok(())
   }
 }

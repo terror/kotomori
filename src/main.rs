@@ -74,6 +74,7 @@ use {
     Connection, TransactionBehavior, params,
     types::{FromSql, FromSqlError, FromSqlResult, ValueRef},
   },
+  saved_session::SavedSession,
   schemars::JsonSchema,
   screen::Screen,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
@@ -197,6 +198,7 @@ mod request;
 mod resume_picker;
 mod resume_picker_action;
 mod run;
+mod saved_session;
 mod screen;
 mod session;
 mod session_summary;
@@ -226,6 +228,15 @@ pub(crate) static SYSTEM_PROMPT: LazyLock<String> =
 
 type AsyncCommand = tokio::process::Command;
 type Result<T = (), E = Error> = std::result::Result<T, E>;
+
+fn now() -> Result<u64> {
+  Ok(
+    SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .context("system clock is before the unix epoch")?
+      .as_secs(),
+  )
+}
 
 fn main() {
   let first_draw_started_at = Instant::now();
