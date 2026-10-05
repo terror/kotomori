@@ -7,6 +7,7 @@ pub(crate) struct State {
   directory: PathBuf,
   next_run_id: u64,
   queued_inputs: VecDeque<String>,
+  reasoning_expanded: bool,
   run: Option<Run>,
   session: Session,
   should_quit: bool,
@@ -61,6 +62,9 @@ impl State {
         Action::Interrupt => {
           self.resolve_approval(ToolApproval::Denied);
         }
+        Action::ToggleReasoning => {
+          self.reasoning_expanded = !self.reasoning_expanded;
+        }
         Action::CompleteCommand
         | Action::Edit(_)
         | Action::Quit
@@ -93,6 +97,9 @@ impl State {
         Action::SelectPrevious => self.composer.select_previous(),
         Action::Submit | Action::SubmitImmediately => {
           return self.submit(&action);
+        }
+        Action::ToggleReasoning => {
+          self.reasoning_expanded = !self.reasoning_expanded;
         }
       },
     }
@@ -209,6 +216,7 @@ impl State {
       directory: env::current_dir()?,
       next_run_id: 0,
       queued_inputs: VecDeque::new(),
+      reasoning_expanded: false,
       run: None,
       session,
       should_quit: false,
@@ -221,6 +229,10 @@ impl State {
 
   fn quit(&mut self) {
     self.should_quit = true;
+  }
+
+  pub(crate) fn reasoning_expanded(&self) -> bool {
+    self.reasoning_expanded
   }
 
   fn reset_input(&mut self) {

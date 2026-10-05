@@ -2,6 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct TranscriptComponent<'a> {
+  reasoning_expanded: bool,
   run: Option<&'a Run>,
   state: &'a Transcript,
 }
@@ -14,7 +15,7 @@ impl<'a> TranscriptComponent<'a> {
       return StackComponent::default();
     };
 
-    let stack = StackComponent::default().push(Self::draft(&run.message, &[]));
+    let stack = StackComponent::default().push(self.draft(&run.message, &[]));
 
     match run.activity {
       AgentActivity::Reasoning | AgentActivity::Waiting => {
@@ -35,6 +36,7 @@ impl<'a> TranscriptComponent<'a> {
   }
 
   fn agent_content(
+    &self,
     content: &[AssistantContent],
     following: &'a [TranscriptEntry],
   ) -> StackComponent<'a> {
@@ -42,7 +44,7 @@ impl<'a> TranscriptComponent<'a> {
       .iter()
       .fold(StackComponent::default(), |stack, content| match content {
         AssistantContent::Reasoning(reasoning) => {
-          stack.push_spaced(LinesComponent::raw(reasoning.text().lines()))
+          stack.push_spaced(self.reasoning(&reasoning.text()))
         }
         AssistantContent::Text(text) => {
           stack.push_spaced(MarkdownComponent::new(&text.text))
@@ -80,17 +82,17 @@ impl<'a> TranscriptComponent<'a> {
   }
 
   fn draft(
+    &self,
     buffer: &MessageBuffer,
     following: &'a [TranscriptEntry],
   ) -> StackComponent<'a> {
     buffer
       .preview()
       .fold(StackComponent::default(), |stack, block| match block {
-        MessageDraft::Content(content) => stack.push_spaced(
-          Self::agent_content(slice::from_ref(content), following),
-        ),
+        MessageDraft::Content(content) => stack
+          .push_spaced(self.agent_content(slice::from_ref(content), following)),
         MessageDraft::Reasoning(reasoning) => {
-          stack.push_spaced(LinesComponent::raw(reasoning.lines()))
+          stack.push_spaced(self.reasoning(reasoning))
         }
       })
   }
@@ -100,7 +102,7 @@ impl<'a> TranscriptComponent<'a> {
       StackComponent::default(),
       |stack, (index, entry)| match entry {
         TranscriptEntry::Draft(buffer) => {
-          stack.push_spaced(Self::draft(
+          stack.push_spaced(self.draft(
             buffer,
             &self.state.entries[index + 1..],
           ))
@@ -115,7 +117,7 @@ impl<'a> TranscriptComponent<'a> {
           )]))
         }
         TranscriptEntry::Message(Message::Agent(message)) => {
-          stack.push_spaced(Self::agent_content(
+          stack.push_spaced(self.agent_content(
             &message.content,
             &self.state.entries[index + 1..],
           ))
@@ -137,7 +139,37 @@ impl<'a> TranscriptComponent<'a> {
   }
 
   pub(crate) fn new(state: &'a Transcript, run: Option<&'a Run>) -> Self {
-    Self { run, state }
+    Self {
+      reasoning_expanded: false,
+      run,
+      state,
+    }
+  }
+
+  fn reasoning(&self, reasoning: &str) -> StackComponent<'a> {
+    if reasoning.is_empty() {
+      return StackComponent::default();
+    }
+
+    let stack =
+      StackComponent::default().push(LineComponent::from([Span::styled(
+        "Thinking...",
+        Style::Muted,
+      )]));
+
+    if self.reasoning_expanded {
+      stack.push(GutterComponent::new(
+        LinesComponent::raw(reasoning.lines()),
+        Span::styled("  │ ", Style::Muted),
+      ))
+    } else {
+      stack
+    }
+  }
+
+  pub(crate) fn with_reasoning_expanded(mut self, expanded: bool) -> Self {
+    self.reasoning_expanded = expanded;
+    self
   }
 }
 
@@ -206,11 +238,11 @@ mod tests {
     assert_eq!(
       TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
       [
-        LineComponent::raw("foo"),
+        LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
         LineComponent::blank(),
         LineComponent::raw("bar"),
         LineComponent::blank(),
-        LineComponent::raw("baz"),
+        LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
         LineComponent::blank(),
         LineComponent::raw("qux"),
         LineComponent::blank(),
@@ -226,25 +258,26 @@ mod tests {
       ..Run::new(0)
     };
 
-    run.update(MessageUpdate::ReasoningDelta {
-      index: 0,
-      delta: "foo\nbar".into(),
-    });
+    for delta in ["foo\nbar", "\nbaz"] {
+      run.update(MessageUpdate::ReasoningDelta {
+        index: 0,
+        delta: delta.into(),
+      });
 
-    assert_eq!(
-      TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
-      [
-        LineComponent::raw("foo"),
-        LineComponent::raw("bar"),
-        LineComponent::blank(),
-        LineComponent::from([
-          Span::styled("✧", Style::Accent),
-          Span::styled(" Working...", Style::Secondary),
-          Span::styled(" (1m 1s • Esc to interrupt)", Style::Muted),
-        ]),
-        LineComponent::blank(),
-      ]
-    );
+      assert_eq!(
+        TranscriptComponent::new(&Transcript::default(), Some(&run)).render(80),
+        [
+          LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
+          LineComponent::blank(),
+          LineComponent::from([
+            Span::styled("✧", Style::Accent),
+            Span::styled(" Working...", Style::Secondary),
+            Span::styled(" (1m 1s • Esc to interrupt)", Style::Muted),
+          ]),
+          LineComponent::blank(),
+        ]
+      );
+    }
   }
 
   #[test]
@@ -351,12 +384,37 @@ mod tests {
       [
         LineComponent::raw("foo"),
         LineComponent::blank(),
-        LineComponent::raw("bar"),
+        LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
         LineComponent::blank(),
         LineComponent::raw("baz"),
         LineComponent::blank(),
       ]
     );
+  }
+
+  #[test]
+  fn render_empty_reasoning() {
+    #[track_caller]
+    fn case(reasoning: Reasoning) {
+      let transcript =
+        Transcript::with_entries(vec![TranscriptEntry::Message(
+          Message::agent(vec![AssistantContent::Reasoning(
+            reasoning.sealed("foo"),
+          )]),
+        )]);
+
+      for expanded in [false, true] {
+        assert_eq!(
+          TranscriptComponent::new(&transcript, None)
+            .with_reasoning_expanded(expanded)
+            .render(80),
+          [],
+        );
+      }
+    }
+
+    case(Reasoning::new(""));
+    case(Reasoning::encrypted("foo"));
   }
 
   #[test]
@@ -381,7 +439,7 @@ mod tests {
       [
         LineComponent::raw("foo"),
         LineComponent::blank(),
-        LineComponent::raw("bar"),
+        LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
         LineComponent::blank(),
         LineComponent::raw("baz"),
         LineComponent::blank(),
@@ -408,6 +466,54 @@ mod tests {
         ]),
         LineComponent::blank(),
       ]
+    );
+  }
+
+  #[test]
+  fn render_expanded_draft_reasoning() {
+    let mut run = Run::new(0);
+
+    run.update_many(&[
+      MessageUpdate::ReasoningDelta {
+        index: 0,
+        delta: "foo\nbar".into(),
+      },
+      MessageUpdate::Text {
+        index: 1,
+        delta: "baz".into(),
+      },
+    ]);
+
+    let expected = [
+      LineComponent::from([Span::styled("Thinking...", Style::Muted)]),
+      LineComponent::from([
+        Span::styled("  │ ", Style::Muted),
+        Span::raw("foo"),
+      ]),
+      LineComponent::from([
+        Span::styled("  │ ", Style::Muted),
+        Span::raw("bar"),
+      ]),
+      LineComponent::blank(),
+      LineComponent::raw("baz"),
+      LineComponent::blank(),
+    ];
+
+    assert_eq!(
+      TranscriptComponent::new(&Transcript::default(), Some(&run))
+        .with_reasoning_expanded(true)
+        .render(80),
+      expected,
+    );
+
+    let transcript =
+      Transcript::with_entries(vec![TranscriptEntry::Draft(run.message)]);
+
+    assert_eq!(
+      TranscriptComponent::new(&transcript, None)
+        .with_reasoning_expanded(true)
+        .render(80),
+      expected,
     );
   }
 
@@ -506,11 +612,23 @@ mod tests {
       ))]);
 
     assert_eq!(
-      TranscriptComponent::new(&transcript, None).render(80),
+      TranscriptComponent::new(&transcript, None)
+        .with_reasoning_expanded(true)
+        .render(80),
       [
-        LineComponent::raw("foo"),
-        LineComponent::raw("bar"),
-        LineComponent::raw("qux"),
+        LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
+        LineComponent::from([
+          Span::styled("  │ ", Style::Muted),
+          Span::raw("foo"),
+        ]),
+        LineComponent::from([
+          Span::styled("  │ ", Style::Muted),
+          Span::raw("bar"),
+        ]),
+        LineComponent::from([
+          Span::styled("  │ ", Style::Muted),
+          Span::raw("qux"),
+        ]),
         LineComponent::blank(),
       ]
     );
