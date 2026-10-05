@@ -10,6 +10,7 @@ pub(crate) enum Action {
   SelectPrevious,
   Submit,
   SubmitImmediately,
+  ToggleReasoning,
 }
 
 impl Action {
@@ -23,6 +24,9 @@ impl Action {
           key: Key::Enter,
           ..Default::default()
         })
+      }
+      KeyCode::Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+        Self::ToggleReasoning
       }
       KeyCode::Esc => Self::Interrupt,
       KeyCode::Enter if key.modifiers == KeyModifiers::ALT => {
@@ -60,6 +64,17 @@ mod tests {
         key: Key::Enter,
         ..Default::default()
       })
+    );
+  }
+
+  #[test]
+  fn ctrl_t_toggles_reasoning() {
+    assert_eq!(
+      Action::from_key(&KeyEvent::new(
+        KeyCode::Char('t'),
+        KeyModifiers::CONTROL
+      )),
+      Action::ToggleReasoning
     );
   }
 

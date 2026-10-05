@@ -83,7 +83,7 @@ impl ResumePicker {
           };
         }
       }
-      Action::CompleteCommand | Action::Edit(_) => {}
+      Action::CompleteCommand | Action::Edit(_) | Action::ToggleReasoning => {}
     }
 
     None

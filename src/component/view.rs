@@ -27,10 +27,10 @@ impl<'a> ViewComponent<'a> {
           .push(LineComponent::blank())
           .push_spaced(HeaderComponent::new(self.first_draw_duration))
           .push_spaced(HintComponent)
-          .push(TranscriptComponent::new(
-            state.transcript(),
-            state.active_run(),
-          ))
+          .push(
+            TranscriptComponent::new(state.transcript(), state.active_run())
+              .with_reasoning_expanded(state.reasoning_expanded()),
+          )
           .push(QueuedInputsComponent {
             inputs: state.queued_inputs(),
           });
