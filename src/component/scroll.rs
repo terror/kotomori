@@ -31,18 +31,10 @@ mod tests {
   #[test]
   fn scrolls_wrapped_rows_inside_padding() {
     assert_eq!(
-      PaddingComponent {
-        component: ScrollComponent {
-          component: LineComponent::from([Span::styled(
-            "foobarbaz",
-            Style::Accent
-          )]),
-          height: 2,
-          offset: 1
-        },
-        padding: 2
-      }
-      .render(7),
+      LineComponent::from([Span::styled("foobarbaz", Style::Accent)])
+        .scrolled(1, 2)
+        .padded(2)
+        .render(7),
       [
         LineComponent::from([
           Span::raw("  "),
@@ -61,15 +53,12 @@ mod tests {
     #[track_caller]
     fn case(offset: usize, height: usize, len: usize, expected: Range<usize>) {
       assert_eq!(
-        ScrollComponent {
-          component: LinesComponent {
-            lines: (0..len)
-              .map(|index| LineComponent::raw(format!("foo{index}")))
-              .collect()
-          },
-          height,
-          offset
+        LinesComponent {
+          lines: (0..len)
+            .map(|index| LineComponent::raw(format!("foo{index}")))
+            .collect()
         }
+        .scrolled(offset, height)
         .render(80),
         expected
           .map(|index| LineComponent::raw(format!("foo{index}")))

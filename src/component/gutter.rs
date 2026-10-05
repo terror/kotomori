@@ -31,11 +31,9 @@ mod tests {
     #[track_caller]
     fn case(input: &str, width: u16, gutter: &str) {
       assert_eq!(
-        GutterComponent {
-          component: LineComponent::raw("foo"),
-          gutter: LineComponent::styled(input, Style::Muted)
-        }
-        .render(width),
+        LineComponent::raw("foo")
+          .gutter(Span::styled(input, Style::Muted))
+          .render(width),
         [LineComponent::styled(gutter, Style::Muted)],
       );
     }
@@ -53,12 +51,12 @@ mod tests {
   #[test]
   fn wraps_lines_with_a_styled_gutter() {
     assert_eq!(
-      GutterComponent {
-        component: LinesComponent::raw(["foobar"]),
-        gutter: LineComponent::styled("│", Style::Accent)
-          .append(Span::styled(" ", Style::Muted))
-      }
-      .render(5),
+      LinesComponent::raw(["foobar"])
+        .gutter(
+          LineComponent::styled("│", Style::Accent)
+            .append(Span::styled(" ", Style::Muted)),
+        )
+        .render(5),
       [
         LineComponent::from([
           Span::styled("│", Style::Accent),

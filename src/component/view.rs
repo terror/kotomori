@@ -57,10 +57,6 @@ impl ViewComponent<'_> {
       }
     };
 
-    PaddingComponent {
-      component: stack,
-      padding,
-    }
-    .render(dimensions.width)
+    stack.padded(padding).render(dimensions.width)
   }
 }

@@ -147,10 +147,10 @@ impl<'a> TranscriptComponent<'a> {
                 content.iter().filter_map(UserMessageContent::text).fold(
                   stack,
                   |stack, text| {
-                    stack.push(GutterComponent {
-                      component: LinesComponent::raw(text.split('\n')),
-                      gutter: LineComponent::styled("│ ", Style::Accent),
-                    })
+                    stack.push(
+                      LinesComponent::raw(text.split('\n'))
+                        .gutter(Span::styled("│ ", Style::Accent)),
+                    )
                   },
                 )
               }
@@ -178,10 +178,10 @@ impl<'a> TranscriptComponent<'a> {
       )]));
 
     if self.reasoning_expanded {
-      stack.push(GutterComponent {
-        component: LinesComponent::raw(reasoning.lines()),
-        gutter: LineComponent::styled("  │ ", Style::Muted),
-      })
+      stack.push(
+        LinesComponent::raw(reasoning.lines())
+          .gutter(Span::styled("  │ ", Style::Muted)),
+      )
     } else {
       stack
     }
