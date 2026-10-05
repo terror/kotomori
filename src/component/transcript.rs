@@ -39,7 +39,7 @@ impl<'a> TranscriptComponent<'a> {
 
   fn agent_content(
     &self,
-    content: &[AssistantContent],
+    content: &'a [AssistantContent],
     following: &'a [TranscriptEntry],
   ) -> StackComponent<'a> {
     content
@@ -50,9 +50,9 @@ impl<'a> TranscriptComponent<'a> {
           AssistantContent::Reasoning(reasoning) => {
             stack.push(self.reasoning(&reasoning.text()))
           }
-          AssistantContent::Text(text) => stack.push(MarkdownComponent {
-            text: text.text.clone(),
-          }),
+          AssistantContent::Text(text) => {
+            stack.push(MarkdownComponent { text: &text.text })
+          }
           AssistantContent::ToolCall(call) => {
             let result = following
               .iter()
@@ -87,7 +87,7 @@ impl<'a> TranscriptComponent<'a> {
 
   fn draft(
     &self,
-    buffer: &MessageBuffer,
+    buffer: &'a MessageBuffer,
     following: &'a [TranscriptEntry],
   ) -> StackComponent<'a> {
     buffer

@@ -1,14 +1,14 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct MarkdownComponent {
-  pub(crate) text: String,
+pub(crate) struct MarkdownComponent<'a> {
+  pub(crate) text: &'a str,
 }
 
-impl Component for MarkdownComponent {
+impl Component for MarkdownComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     let text = tui_markdown::from_str_with_options(
-      &self.text,
+      self.text,
       &tui_markdown::Options::new(MarkdownStyleSheet).table_width(width),
     );
 
@@ -56,7 +56,7 @@ mod tests {
   fn escapes_terminal_controls() {
     assert_eq!(
       MarkdownComponent {
-        text: "**foo\x1b[2J**".into()
+        text: "**foo\x1b[2J**"
       }
       .render(80),
       [LineComponent::from([Span::styled(
@@ -71,7 +71,7 @@ mod tests {
     #[track_caller]
     fn case(text: &str, expected: &[&str]) {
       assert_eq!(
-        MarkdownComponent { text: text.into() }
+        MarkdownComponent { text }
           .render(80)
           .into_iter()
           .map(|line| Vec::<Span>::from(line)
@@ -93,7 +93,7 @@ mod tests {
   fn renders_styles() {
     assert_eq!(
       MarkdownComponent {
-        text: "# *foo*\n\n**bar** ~~baz~~ `qux`".into()
+        text: "# *foo*\n\n**bar** ~~baz~~ `qux`"
       }
       .render(80),
       [
@@ -133,7 +133,7 @@ mod tests {
     #[track_caller]
     fn case(text: &str, width: u16, expected: &[&str]) {
       assert_eq!(
-        MarkdownComponent { text: text.into() }
+        MarkdownComponent { text }
           .render(width)
           .into_iter()
           .map(|line| Vec::<Span>::from(line)
@@ -192,10 +192,7 @@ mod tests {
   #[test]
   fn wraps_styled_text() {
     assert_eq!(
-      MarkdownComponent {
-        text: "**foobar**".into()
-      }
-      .render(3),
+      MarkdownComponent { text: "**foobar**" }.render(3),
       ["foo", "bar"].map(|text| LineComponent::from([Span::styled(
         text,
         Style::Markdown(anstyle::Style::new().bold()),
