@@ -35,5 +35,36 @@ pub(crate) use {
 };
 
 pub(crate) trait Component: Debug {
+  fn gutter(self, gutter: impl Into<LineComponent>) -> GutterComponent<Self>
+  where
+    Self: Sized,
+  {
+    GutterComponent {
+      component: self,
+      gutter: gutter.into(),
+    }
+  }
+
+  fn padded(self, padding: u16) -> PaddingComponent<Self>
+  where
+    Self: Sized,
+  {
+    PaddingComponent {
+      component: self,
+      padding,
+    }
+  }
+
   fn render(&self, width: u16) -> Vec<LineComponent>;
+
+  fn scrolled(self, offset: usize, height: usize) -> ScrollComponent<Self>
+  where
+    Self: Sized,
+  {
+    ScrollComponent {
+      component: self,
+      height,
+      offset,
+    }
+  }
 }

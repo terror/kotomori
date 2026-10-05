@@ -13,10 +13,10 @@ impl Component for TranscriptErrorComponent<'_> {
         Span::raw(" "),
         Span::raw("Error"),
       ]))
-      .push(GutterComponent {
-        component: LinesComponent::raw(self.error.lines()),
-        gutter: LineComponent::styled("  │ ", Style::Muted),
-      })
+      .push(
+        LinesComponent::raw(self.error.lines())
+          .gutter(Span::styled("  │ ", Style::Muted)),
+      )
       .render(width)
   }
 }

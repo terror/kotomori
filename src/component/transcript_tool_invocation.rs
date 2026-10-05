@@ -38,8 +38,8 @@ impl Component for TranscriptToolInvocationComponent<'_> {
         Span::raw(" "),
         Span::raw(self.invocation.title(tense)),
       ]))
-      .push(GutterComponent {
-        component: LinesComponent {
+      .push(
+        LinesComponent {
           lines: self
             .details()
             .into_iter()
@@ -50,18 +50,18 @@ impl Component for TranscriptToolInvocationComponent<'_> {
               ])
             })
             .collect(),
-        },
-        gutter: LineComponent::styled("  │ ", Style::Muted),
-      });
+        }
+        .gutter(Span::styled("  │ ", Style::Muted)),
+      );
 
     let stack = if let Some(output) = self.result.and_then(ToolResult::output) {
-      stack.push(GutterComponent {
-        component: OutputPreviewComponent {
+      stack.push(
+        OutputPreviewComponent {
           limit: Self::OUTPUT_LIMIT,
           output,
-        },
-        gutter: LineComponent::styled("  │ ", Style::Muted),
-      })
+        }
+        .gutter(Span::styled("  │ ", Style::Muted)),
+      )
     } else {
       stack
     };

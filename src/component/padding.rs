@@ -33,18 +33,14 @@ mod tests {
   fn composes_with_gutters_and_spacing() {
     let stack = StackComponent::default()
       .gap(1)
-      .push(GutterComponent {
-        component: LinesComponent::raw(["foobar", ""]),
-        gutter: LineComponent::styled("│ ", Style::Accent),
-      })
+      .push(
+        LinesComponent::raw(["foobar", ""])
+          .gutter(Span::styled("│ ", Style::Accent)),
+      )
       .push(LineComponent::raw("baz"));
 
     assert_eq!(
-      PaddingComponent {
-        component: stack,
-        padding: 2
-      }
-      .render(9),
+      stack.padded(2).render(9),
       [
         LineComponent::from([
           Span::raw("  "),
@@ -72,14 +68,12 @@ mod tests {
     #[track_caller]
     fn case(width: u16, expected: &[&str]) {
       assert_eq!(
-        PaddingComponent {
-          component: LineComponent::raw("foo"),
-          padding: 2
-        }
-        .render(width)
-        .into_iter()
-        .map(|line| line.to_string())
-        .collect::<Vec<_>>(),
+        LineComponent::raw("foo")
+          .padded(2)
+          .render(width)
+          .into_iter()
+          .map(|line| line.to_string())
+          .collect::<Vec<_>>(),
         expected,
       );
     }

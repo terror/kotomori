@@ -39,10 +39,7 @@ impl Component for ComposerComponent<'_> {
 
     StackComponent::default()
       .gap(1)
-      .push(GutterComponent {
-        component: input,
-        gutter: LineComponent::styled("│ ", Style::Accent),
-      })
+      .push(input.gutter(Span::styled("│ ", Style::Accent)))
       .push(LinesComponent {
         lines: self
           .composer

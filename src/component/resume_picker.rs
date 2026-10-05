@@ -105,11 +105,9 @@ impl ResumePickerComponent {
       stack: StackComponent::default()
         .gap(gap)
         .push(LinesComponent { lines: header })
-        .push(ScrollComponent {
-          component: LinesComponent { lines: rows },
-          height,
-          offset: picker.scroll.offset,
-        }),
+        .push(
+          LinesComponent { lines: rows }.scrolled(picker.scroll.offset, height),
+        ),
     }
   }
 }

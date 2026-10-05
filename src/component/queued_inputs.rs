@@ -14,10 +14,10 @@ impl Component for QueuedInputsComponent<'_> {
         stack.push(
           StackComponent::default()
             .push(LineComponent::from([Span::styled("Queued", Style::Muted)]))
-            .push(GutterComponent {
-              component: LinesComponent::raw(input.split('\n')),
-              gutter: LineComponent::styled("│ ", Style::Accent),
-            }),
+            .push(
+              LinesComponent::raw(input.split('\n'))
+                .gutter(Span::styled("│ ", Style::Accent)),
+            ),
         )
       })
       .render(width)
