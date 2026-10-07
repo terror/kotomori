@@ -241,84 +241,85 @@ mod tests {
     requests: Arc<Mutex<Vec<Vec<Message>>>>,
   }
 
-  #[async_trait]
   impl Provider for TestProvider {
-    async fn stream(
-      &self,
+    fn stream<'a>(
+      &'a self,
       request: Request,
-      sink: &ProviderSink,
-    ) -> Result<AgentMessage> {
-      assert_eq!(request.tools, ToolInvocationKind::definitions());
+      sink: &'a ProviderSink,
+    ) -> BoxFuture<'a, Result<AgentMessage>> {
+      Box::pin(async move {
+        assert_eq!(request.tools, ToolInvocationKind::definitions());
 
-      self.requests.lock().unwrap().push(request.messages);
+        self.requests.lock().unwrap().push(request.messages);
 
-      let mut index = 0;
-      let mut message = MessageBuffer::default();
-      let mut pending = None;
+        let mut index = 0;
+        let mut message = MessageBuffer::default();
+        let mut pending = None;
 
-      for output in self.outputs.lock().unwrap().pop_front().unwrap() {
-        let part = match &output {
-          Output::Delta(_) => Some(OutputPart::Text),
-          Output::Reasoning(_) | Output::ReasoningDelta(_) => {
-            Some(OutputPart::Reasoning)
+        for output in self.outputs.lock().unwrap().pop_front().unwrap() {
+          let part = match &output {
+            Output::Delta(_) => Some(OutputPart::Text),
+            Output::Reasoning(_) | Output::ReasoningDelta(_) => {
+              Some(OutputPart::Reasoning)
+            }
+            _ => None,
+          };
+
+          if pending.is_some() && pending != part {
+            index += 1;
           }
-          _ => None,
-        };
 
-        if pending.is_some() && pending != part {
-          index += 1;
-        }
-
-        let update = match output {
-          Output::Delta(delta) => MessageUpdate::Text {
-            delta: delta.into(),
-            index,
-          },
-          Output::MalformedToolCall => MessageUpdate::Content {
-            index,
-            content: AssistantContent::ToolCall(
-              ::rig::message::ToolCall::from_wire(
-                "malformed",
-                ToolFunction {
-                  arguments: json!({}),
-                  name: ToolName::new("command").unwrap(),
-                },
+          let update = match output {
+            Output::Delta(delta) => MessageUpdate::Text {
+              delta: delta.into(),
+              index,
+            },
+            Output::MalformedToolCall => MessageUpdate::Content {
+              index,
+              content: AssistantContent::ToolCall(
+                ::rig::message::ToolCall::from_wire(
+                  "malformed",
+                  ToolFunction {
+                    arguments: json!({}),
+                    name: ToolName::new("command").unwrap(),
+                  },
+                ),
               ),
-            ),
-          },
-          Output::ReasoningDelta(delta) => MessageUpdate::ReasoningDelta {
-            delta: delta.into(),
-            index,
-          },
-          Output::Reasoning(reasoning) => MessageUpdate::Content {
-            index,
-            content: AssistantContent::Reasoning(reasoning),
-          },
-          Output::Response(message) => return Ok(message),
-          Output::ToolCall => MessageUpdate::Content {
-            index,
-            content: AssistantContent::tool_call(
-              "foo",
-              ToolName::new("command").unwrap(),
-              json!({"command": "echo bar"}),
-            ),
-          },
-        };
+            },
+            Output::ReasoningDelta(delta) => MessageUpdate::ReasoningDelta {
+              delta: delta.into(),
+              index,
+            },
+            Output::Reasoning(reasoning) => MessageUpdate::Content {
+              index,
+              content: AssistantContent::Reasoning(reasoning),
+            },
+            Output::Response(message) => return Ok(message),
+            Output::ToolCall => MessageUpdate::Content {
+              index,
+              content: AssistantContent::tool_call(
+                "foo",
+                ToolName::new("command").unwrap(),
+                json!({"command": "echo bar"}),
+              ),
+            },
+          };
 
-        let complete = matches!(update, MessageUpdate::Content { .. });
+          let complete = matches!(update, MessageUpdate::Content { .. });
 
-        message.apply(update.clone());
+          message.apply(update.clone());
 
-        sink.update(update)?;
+          sink.update(update)?;
 
-        if complete {
-          index += 1;
+          if complete {
+            index += 1;
+          }
+
+          pending = if complete { None } else { part };
         }
 
-        pending = if complete { None } else { part };
-      }
-
-      Ok(message.finish())
+        Ok(message.finish())
+      })
     }
   }
 

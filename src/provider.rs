@@ -1,71 +1,67 @@
-use {super::*, rig::Rig};
+use {
+  super::*,
+  ::rig::{
+    client::env::EnvError,
+    providers::{
+      cohere::Cohere,
+      ollama::Ollama,
+      openai::{OpenAIConfig, wire::Dialect},
+      registry::ProviderRef,
+    },
+  },
+  rig::Rig,
+};
 
-mod anthropic;
-mod azure;
 mod chatgpt;
-mod cohere;
 mod copilot;
-mod deepseek;
-mod galadriel;
-mod gemini;
-mod groq;
-mod huggingface;
-mod llamacpp;
-mod llamafile;
-mod minimax;
-mod mistral;
 mod mock;
-mod moonshot;
-mod ollama;
-mod openai;
-mod openrouter;
-mod perplexity;
 mod rig;
-mod together;
-mod xai;
-mod xiaomimimo;
-mod zai;
 
-#[async_trait]
 pub(crate) trait Provider: fmt::Debug + Send + Sync {
-  #[allow(clippy::double_must_use)]
-  async fn stream(
-    &self,
+  fn stream<'a>(
+    &'a self,
     request: Request,
-    sink: &ProviderSink,
-  ) -> Result<AgentMessage>;
+    sink: &'a ProviderSink,
+  ) -> BoxFuture<'a, Result<AgentMessage>>;
 }
 
 impl TryFrom<Model> for Arc<dyn Provider> {
   type Error = Error;
 
   fn try_from(model: Model) -> Result<Self> {
-    match model.provider.as_str() {
-      "anthropic" => Ok(anthropic::build(&model)),
-      "azure" => azure::build(&model),
-      "chatgpt" => chatgpt::build(&model),
-      "cohere" => Ok(cohere::build(&model)),
-      "copilot" => Ok(copilot::build(&model)),
-      "deepseek" => Ok(deepseek::build(&model)),
-      "galadriel" => Ok(galadriel::build(&model)),
-      "gemini" => Ok(gemini::build(&model)),
-      "groq" => Ok(groq::build(&model)),
-      "huggingface" => Ok(huggingface::build(&model)),
-      "llamacpp" => Ok(llamacpp::build(&model)),
-      "llamafile" => Ok(llamafile::build(&model)),
-      "minimax" => Ok(minimax::build(&model)),
-      "mistral" => Ok(mistral::build(&model)),
+    let provider = match model.provider.as_str() {
+      "azure" => "azure.openai/openai",
+      "gemini" => "gcp.gemini/gemini",
+      "llamafile" => "llamacpp/openai",
+      "minimax" => "minimax/openai",
+      "moonshot" => "moonshot/openai",
+      "xiaomimimo" => "xiaomimimo/openai",
+      "zai" => "zai/openai",
+      provider => provider,
+    };
+
+    match provider {
+      "chatgpt" | "chatgpt/openai" => chatgpt::build(&model),
+      "cohere" => Ok(Rig::build(Cohere::from_env()?.completion(&model.name))),
+      "copilot" | "copilot/openai" => copilot::build(&model),
+      "galadriel" => Ok(Rig::build(
+        OpenAIConfig::from_env_with(&Dialect::gateway(
+          "galadriel",
+          "https://api.galadriel.com/v1/verified",
+          "GALADRIEL_API_KEY",
+        ))?
+        .client()
+        .chat(&model.name),
+      )),
       "mock" => Ok(Arc::new(mock::Mock)),
-      "moonshot" => Ok(moonshot::build(&model)),
-      "ollama" => Ok(ollama::build(&model)),
-      "openai" => Ok(openai::build(&model)),
-      "openrouter" => Ok(openrouter::build(&model)),
-      "perplexity" => Ok(perplexity::build(&model)),
-      "together" => Ok(together::build(&model)),
-      "xai" => Ok(xai::build(&model)),
-      "xiaomimimo" => Ok(xiaomimimo::build(&model)),
-      "zai" => Ok(zai::build(&model)),
-      provider => bail!("unknown provider `{provider}`"),
+      "ollama" => Ok(Rig::build(Ollama::from_env()?.completion(&model.name))),
+      "openai" | "openai/openai" => Ok(Rig::build(
+        OpenAIConfig::from_env()?.client().chat(&model.name),
+      )),
+      provider => Ok(Rig::build(
+        ProviderRef::parse(&format!("{provider}:{}", model.name))?
+          .completion_model()?,
+      )),
     }
   }
 }
@@ -83,7 +79,7 @@ mod tests {
       })
       .unwrap_err()
       .to_string(),
-      "unknown provider `foo`",
+      "no registered provider is named `foo`",
     );
   }
 }

@@ -1,7 +1,7 @@
 use {
   super::*,
   ::rig::providers::copilot::{
-    Copilot, CopilotConfig,
+    Copilot,
     auth::{self, AuthSource, Authenticator, DeviceCodeHandler},
   },
 };
@@ -9,55 +9,44 @@ use {
 #[derive(Debug)]
 struct GithubCopilot {
   authenticator: Authenticator,
-  client: Copilot,
-  model: String,
 }
 
-#[async_trait]
 impl Provider for GithubCopilot {
-  async fn stream(
-    &self,
+  fn stream<'a>(
+    &'a self,
     request: Request,
-    sink: &ProviderSink,
-  ) -> Result<AgentMessage> {
-    let client = self
-      .client
-      .clone()
-      .authenticate(&self.authenticator)
-      .await?;
+    sink: &'a ProviderSink,
+  ) -> BoxFuture<'a, Result<AgentMessage>> {
+    Box::pin(async move {
+      let client = Copilot::new("").authenticate(&self.authenticator).await?;
 
-    Rig::build(client.completion(&self.model))
-      .stream(request, sink)
-      .await
+      Rig::build(client.completion(&request.model.name))
+        .stream(request, sink)
+        .await
+    })
   }
 }
 
-pub(super) fn build(model: &Model) -> Arc<dyn Provider> {
-  let source = if let Some(api_key) =
-    env_value(&["GITHUB_COPILOT_API_KEY", "COPILOT_API_KEY"])
-  {
-    AuthSource::ApiKey(api_key)
-  } else if let Some(access_token) =
-    env_value(&["COPILOT_GITHUB_ACCESS_TOKEN", "GITHUB_TOKEN"])
-  {
-    AuthSource::GitHubAccessToken(access_token)
-  } else {
-    AuthSource::OAuth
-  };
+pub(super) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
+  match Copilot::from_env() {
+    Ok(client) => return Ok(Rig::build(client.completion(&model.name))),
+    Err(EnvError::Variable {
+      name: "GITHUB_COPILOT_API_KEY",
+      source: env::VarError::NotPresent,
+    }) => {}
+    Err(error) => return Err(error.into()),
+  }
 
-  let config = CopilotConfig::new("");
-
-  let config = if let Some(base_url) =
-    env_value(&["GITHUB_COPILOT_API_BASE", "COPILOT_BASE_URL"])
-  {
-    config.with_base_url(base_url)
-  } else {
-    config
-  };
+  let source = ["COPILOT_GITHUB_ACCESS_TOKEN", "GITHUB_TOKEN"]
+    .iter()
+    .find_map(|name| {
+      env::var(name).ok().filter(|value| !value.trim().is_empty())
+    })
+    .map_or(AuthSource::OAuth, AuthSource::GitHubAccessToken);
 
   let token_dir = auth::default_token_dir();
 
-  Arc::new(GithubCopilot {
+  Ok(Arc::new(GithubCopilot {
     authenticator: Authenticator::new(
       source,
       token_dir.as_ref().map(|path| path.join("access-token")),
@@ -65,13 +54,5 @@ pub(super) fn build(model: &Model) -> Arc<dyn Provider> {
       DeviceCodeHandler::default(),
       true,
     ),
-    client: config.client(),
-    model: model.name.clone(),
-  })
-}
-
-fn env_value(names: &[&str]) -> Option<String> {
-  names.iter().find_map(|name| {
-    env::var(name).ok().filter(|value| !value.trim().is_empty())
-  })
+  }))
 }

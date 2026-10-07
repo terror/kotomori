@@ -22,60 +22,61 @@ impl Rig {
   }
 }
 
-#[async_trait]
 impl Provider for Rig {
-  async fn stream(
-    &self,
+  fn stream<'a>(
+    &'a self,
     request: Request,
-    sink: &ProviderSink,
-  ) -> Result<AgentMessage> {
-    let mut stream = self.model.stream(CompletionRequest::from(&request))?;
+    sink: &'a ProviderSink,
+  ) -> BoxFuture<'a, Result<AgentMessage>> {
+    Box::pin(async move {
+      let mut stream = self.model.stream(CompletionRequest::from(&request))?;
 
-    let mut message_id = None;
+      let mut message_id = None;
 
-    while let Some(item) = stream.next().await {
-      let id = stream.message_id();
+      while let Some(item) = stream.next().await {
+        let id = stream.message_id();
 
-      if id != message_id {
-        if let Some(id) = &id {
-          sink.update(MessageUpdate::MessageId(id.clone()))?;
+        if id != message_id {
+          if let Some(id) = &id {
+            sink.update(MessageUpdate::MessageId(id.clone()))?;
+          }
+
+          message_id = id;
         }
 
-        message_id = id;
-      }
+        let Item::Event(event) = item? else {
+          continue;
+        };
 
-      let Item::Event(event) = item? else {
-        continue;
-      };
-
-      sink.update(match event {
-        StreamEvent::Text { part, text } => MessageUpdate::Text {
-          delta: text,
-          index: part.index(),
-        },
-        StreamEvent::Reasoning { part, text } => {
-          MessageUpdate::ReasoningDelta {
+        sink.update(match event {
+          StreamEvent::Text { part, text } => MessageUpdate::Text {
             delta: text,
             index: part.index(),
+          },
+          StreamEvent::Reasoning { part, text } => {
+            MessageUpdate::ReasoningDelta {
+              delta: text,
+              index: part.index(),
+            }
           }
-        }
-        StreamEvent::End { part, content } => MessageUpdate::Content {
-          content,
-          index: part.index(),
-        },
-        StreamEvent::Start { .. } | StreamEvent::Arguments { .. } => continue,
-      })?;
-    }
+          StreamEvent::End { part, content } => MessageUpdate::Content {
+            content,
+            index: part.index(),
+          },
+          StreamEvent::Start { .. } | StreamEvent::Arguments { .. } => continue,
+        })?;
+      }
 
-    let response = stream.finish().await?;
+      let response = stream.finish().await?;
 
-    let message = AgentMessage {
-      content: response.choice,
-      id: response.message_id,
-    };
+      let message = AgentMessage {
+        content: response.choice,
+        id: response.message_id,
+      };
 
-    sink.update(MessageUpdate::Complete(message.clone()))?;
+      sink.update(MessageUpdate::Complete(message.clone()))?;
 
-    Ok(message)
+      Ok(message)
+    })
   }
 }
