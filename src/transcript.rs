@@ -14,6 +14,57 @@ impl Transcript {
     self.entries.push(TranscriptEntry::Error(error));
   }
 
+  pub(crate) fn interrupt_pending_calls(&mut self) {
+    let Some((index, TranscriptEntry::Message(Message::Agent(message)))) =
+      self.entries.iter().enumerate().rfind(|(_, entry)| {
+        matches!(
+          entry,
+          TranscriptEntry::Draft(_)
+            | TranscriptEntry::Message(Message::Agent(_))
+        )
+      })
+    else {
+      return;
+    };
+
+    self.entries.extend(
+      message
+        .content
+        .iter()
+        .filter_map(|content| match content {
+          AssistantContent::ToolCall(call) => Some(call),
+          _ => None,
+        })
+        .filter(|call| {
+          !self.entries[index + 1..].iter().any(|entry| match entry {
+            TranscriptEntry::Message(Message::User(content)) => {
+              content.iter().any(|content| {
+                matches!(
+                  content,
+                  UserMessageContent::ToolResult { call: id, .. }
+                    if *id == call.id
+                )
+              })
+            }
+            _ => false,
+          })
+        })
+        .map(|call| {
+          TranscriptEntry::Message(Message::User(vec![
+            UserMessageContent::ToolResult {
+              call: call.id.clone(),
+              name: call.function.name.clone(),
+              result: ToolResult {
+                stderr: Some("interrupted".into()),
+                ..Default::default()
+              },
+            },
+          ]))
+        })
+        .collect::<Vec<_>>(),
+    );
+  }
+
   pub(crate) fn is_empty(&self) -> bool {
     self.entries.is_empty()
   }
