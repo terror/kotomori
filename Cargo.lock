@@ -3268,7 +3268,6 @@ version = "0.2.0"
 dependencies = [
  "anstyle",
  "anyhow",
- "async-trait",
  "clap",
  "confy",
  "crossterm",
