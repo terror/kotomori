@@ -25,7 +25,7 @@ impl TranscriptToolInvocationComponent<'_> {
 impl Component for TranscriptToolInvocationComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     let (symbol, symbol_style, tense) = match self.result {
-      Some(result) if result.is_error() => {
+      Some(result) if result.outcome == ToolOutcome::Failure => {
         ("●", Style::Danger, ToolActionTense::Failed)
       }
       Some(_) => ("●", Style::Success, ToolActionTense::Completed),
