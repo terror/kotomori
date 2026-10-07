@@ -1,3 +1,65 @@
+## [0.3.0](https://github.com/terror/kotomori/releases/tag/0.3.0) - 2026-10-07
+
+### Added
+
+- Collapse thinking traces by default ([#242](https://github.com/terror/kotomori/pull/242) by [terror](https://github.com/terror))
+- Add support for markdown rendering ([#237](https://github.com/terror/kotomori/pull/237) by [terror](https://github.com/terror))
+- Add support for queued steering ([#201](https://github.com/terror/kotomori/pull/201) by [terror](https://github.com/terror))
+
+### Fixed
+
+- Complete interrupted tool calls during transcript finalization ([#256](https://github.com/terror/kotomori/pull/256) by [terror](https://github.com/terror))
+- Keep resume picker controls and selection visible ([#239](https://github.com/terror/kotomori/pull/239) by [terror](https://github.com/terror))
+- Kill command descendants on cancellation ([#238](https://github.com/terror/kotomori/pull/238) by [terror](https://github.com/terror))
+- Preserve streamed provider metadata ([#226](https://github.com/terror/kotomori/pull/226) by [terror](https://github.com/terror))
+- Escape terminal control characters ([#208](https://github.com/terror/kotomori/pull/208) by [terror](https://github.com/terror))
+- Abort agent task on drop ([#200](https://github.com/terror/kotomori/pull/200) by [terror](https://github.com/terror))
+- Validate tool rounds before emitting events ([#199](https://github.com/terror/kotomori/pull/199) by [terror](https://github.com/terror))
+- Make `/quit` interrupt active runs ([#198](https://github.com/terror/kotomori/pull/198) by [terror](https://github.com/terror))
+- Preserve partial output on errors ([#197](https://github.com/terror/kotomori/pull/197) by [terror](https://github.com/terror))
+
+### Misc
+
+- Simplify provider construction ([#255](https://github.com/terror/kotomori/pull/255) by [terror](https://github.com/terror))
+- Inline `ToolResult::is_error` ([#254](https://github.com/terror/kotomori/pull/254) by [terror](https://github.com/terror))
+- Separate tool definitions from execution ([#253](https://github.com/terror/kotomori/pull/253) by [terror](https://github.com/terror))
+- Move transcript interpretation out of layout ([#252](https://github.com/terror/kotomori/pull/252) by [terror](https://github.com/terror))
+- Extract `SessionComponent` from `ViewComponent` ([#251](https://github.com/terror/kotomori/pull/251) by [terror](https://github.com/terror))
+- Borrow `Markdown` component text ([#250](https://github.com/terror/kotomori/pull/250) by [terror](https://github.com/terror))
+- Add component wrapper methods ([#249](https://github.com/terror/kotomori/pull/249) by [terror](https://github.com/terror))
+- Centralize text layout in `LineComponent` ([#248](https://github.com/terror/kotomori/pull/248) by [terror](https://github.com/terror))
+- Give parents ownership of component spacing ([#247](https://github.com/terror/kotomori/pull/247) by [terror](https://github.com/terror))
+- Separate scrolling from resume picker layout ([#246](https://github.com/terror/kotomori/pull/246) by [terror](https://github.com/terror))
+- Make `State` fields `pub(crate)` and remove getters ([#245](https://github.com/terror/kotomori/pull/245) by [terror](https://github.com/terror))
+- Separate session persistence from state transitions ([#244](https://github.com/terror/kotomori/pull/244) by [terror](https://github.com/terror))
+- Construct components with struct literals ([#243](https://github.com/terror/kotomori/pull/243) by [terror](https://github.com/terror))
+- Remove `home` dependency ([#241](https://github.com/terror/kotomori/pull/241) by [terror](https://github.com/terror))
+- Replace lexiclean with `PathExt` ([#240](https://github.com/terror/kotomori/pull/240) by [terror](https://github.com/terror))
+- Centralize terminal layout in composable components ([#236](https://github.com/terror/kotomori/pull/236) by [terror](https://github.com/terror))
+- Introduce session summaries ([#235](https://github.com/terror/kotomori/pull/235) by [terror](https://github.com/terror))
+- Remove redundant provider message accumulator ([#234](https://github.com/terror/kotomori/pull/234) by [terror](https://github.com/terror))
+- Unify command execution lifetime and deadline ([#229](https://github.com/terror/kotomori/pull/229) by [terror](https://github.com/terror))
+- Consolidate session settings and construction ([#228](https://github.com/terror/kotomori/pull/228) by [terror](https://github.com/terror))
+- Make `State` fields private ([#227](https://github.com/terror/kotomori/pull/227) by [terror](https://github.com/terror))
+- Use rusqlite checked integer conversions ([#225](https://github.com/terror/kotomori/pull/225) by [terror](https://github.com/terror))
+- Let `App` own its event channel directly ([#222](https://github.com/terror/kotomori/pull/222) by [terror](https://github.com/terror))
+- Read mock provider user text directly ([#221](https://github.com/terror/kotomori/pull/221) by [terror](https://github.com/terror))
+- Expose tool invocation titles by tense ([#223](https://github.com/terror/kotomori/pull/223) by [terror](https://github.com/terror))
+- Centralize command execution error conversion ([#216](https://github.com/terror/kotomori/pull/216) by [terror](https://github.com/terror))
+- Remove redundant intermediate representations ([#215](https://github.com/terror/kotomori/pull/215) by [terror](https://github.com/terror))
+- Share provider construction ([#214](https://github.com/terror/kotomori/pull/214) by [terror](https://github.com/terror))
+- Make approval requests single-use values ([#213](https://github.com/terror/kotomori/pull/213) by [terror](https://github.com/terror))
+- Consolidate run lifecycle bookkeeping ([#212](https://github.com/terror/kotomori/pull/212) by [terror](https://github.com/terror))
+- Make conversation history canonical ([#211](https://github.com/terror/kotomori/pull/211) by [terror](https://github.com/terror))
+- Unify submission handling ([#210](https://github.com/terror/kotomori/pull/210) by [terror](https://github.com/terror))
+- Inline `State` event handlers ([#209](https://github.com/terror/kotomori/pull/209) by [terror](https://github.com/terror))
+- Scaffold `kotomori-wasm` crate ([#207](https://github.com/terror/kotomori/pull/207) by [terror](https://github.com/terror))
+- Rename `prompts` directory to `etc` ([#206](https://github.com/terror/kotomori/pull/206) by [terror](https://github.com/terror))
+- Remove broken WSL bash workaround ([#205](https://github.com/terror/kotomori/pull/205) by [terror](https://github.com/terror))
+- Move system prompt to prompts directory ([#203](https://github.com/terror/kotomori/pull/203) by [terror](https://github.com/terror))
+- Add queued steering integration test ([#202](https://github.com/terror/kotomori/pull/202) by [terror](https://github.com/terror))
+- Sort derive attributes alphabetically ([#196](https://github.com/terror/kotomori/pull/196) by [terror](https://github.com/terror))
+
 ## [0.2.0](https://github.com/terror/kotomori/releases/tag/0.2.0) - 2026-08-09
 
 ### Added
