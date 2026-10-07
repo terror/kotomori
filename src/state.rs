@@ -13,11 +13,15 @@ pub(crate) struct State {
 
 impl State {
   fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
-    if let Some(entry) = self.run.take().and_then(Run::finish) {
-      self.session.transcript.entries.push(entry);
-    }
+    let transcript = &mut self.session.transcript;
 
-    self.session.transcript.entries.extend(entry);
+    transcript
+      .entries
+      .extend(self.run.take().and_then(Run::finish));
+
+    transcript.interrupt_pending_calls();
+
+    transcript.entries.extend(entry);
   }
 
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
