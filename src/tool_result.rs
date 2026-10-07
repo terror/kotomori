@@ -10,10 +10,6 @@ pub(crate) struct ToolResult {
 }
 
 impl ToolResult {
-  pub(crate) fn is_error(&self) -> bool {
-    self.outcome == ToolOutcome::Failure
-  }
-
   pub(crate) fn message_content(&self) -> String {
     serde_json::to_string(self).expect("failed to serialize tool result")
   }
