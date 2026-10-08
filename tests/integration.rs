@@ -24,7 +24,39 @@ const SCREEN_COLS: u16 = 80;
 const SCREEN_ROWS: u16 = 24;
 const SETTLE_INTERVAL: Duration = Duration::from_millis(200);
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(3);
+
 static PTY_OPEN_LOCK: Mutex<()> = Mutex::new(());
+
+#[derive(Clone, Copy, Debug)]
+enum Key {
+  CtrlC,
+  CtrlJ,
+  Down,
+  Enter,
+  Escape,
+  Tab,
+  Up,
+}
+
+impl Key {
+  fn bytes(self) -> &'static [u8] {
+    match self {
+      Self::CtrlC => b"\x03",
+      Self::CtrlJ => b"\n",
+      Self::Down => b"\x1b[B",
+      Self::Enter => b"\r",
+      Self::Escape => b"\x1b",
+      Self::Tab => b"\t",
+      Self::Up => b"\x1b[A",
+    }
+  }
+}
+
+#[derive(Clone, Copy)]
+enum Mode {
+  Interactive,
+  Noninteractive,
+}
 
 #[derive(Debug)]
 enum Step {
@@ -302,15 +334,27 @@ struct Test {
   arguments: Vec<String>,
   cwd: Option<PathBuf>,
   env: Vec<(String, String)>,
-  expected_stderr: String,
-  expected_stdout: String,
+  expected_stderr: Option<String>,
+  expected_stdout: Option<String>,
   steps: Vec<Step>,
   tempdir: TempDir,
 }
 
 impl Test {
-  fn argument(mut self, argument: &str) -> Self {
-    self.arguments.push(argument.into());
+  fn argument(self, argument: &str) -> Self {
+    self.arguments([argument])
+  }
+
+  fn arguments(
+    mut self,
+    arguments: impl IntoIterator<Item = impl Into<String>>,
+  ) -> Self {
+    self.arguments.extend(arguments.into_iter().map(Into::into));
+    self
+  }
+
+  fn bytes(mut self, bytes: &[u8]) -> Self {
+    self.steps.push(Step::Write(bytes.into()));
     self
   }
 
@@ -323,11 +367,11 @@ impl Test {
   }
 
   fn ctrl_c(self) -> Self {
-    self.write("\x03")
+    self.key(Key::CtrlC)
   }
 
   fn ctrl_j(self) -> Self {
-    self.write("\n")
+    self.key(Key::CtrlJ)
   }
 
   fn cwd(mut self, cwd: &Path) -> Self {
@@ -336,11 +380,11 @@ impl Test {
   }
 
   fn down(self) -> Self {
-    self.write("\x1b[B")
+    self.key(Key::Down)
   }
 
   fn enter(self) -> Self {
-    self.write("\r")
+    self.key(Key::Enter)
   }
 
   fn env(mut self, key: &str, value: &str) -> Self {
@@ -349,7 +393,7 @@ impl Test {
   }
 
   fn escape(self) -> Self {
-    self.write("\x1b")
+    self.key(Key::Escape)
   }
 
   fn expect_exit(mut self, code: u32) -> Self {
@@ -367,13 +411,25 @@ impl Test {
     self
   }
 
+  fn key(self, key: Key) -> Self {
+    self.bytes(key.bytes())
+  }
+
+  fn keys(self, keys: impl IntoIterator<Item = Key>) -> Self {
+    keys.into_iter().fold(self, Self::key)
+  }
+
+  fn model(self, model: &str) -> Self {
+    self.arguments(["--model", model])
+  }
+
   fn new() -> Self {
     Self {
       arguments: Vec::new(),
       cwd: None,
       env: Vec::new(),
-      expected_stderr: String::new(),
-      expected_stdout: String::new(),
+      expected_stderr: None,
+      expected_stdout: None,
       steps: Vec::new(),
       tempdir: tempfile::Builder::new()
         .prefix("kotomori-test")
@@ -388,6 +444,8 @@ impl Test {
   }
 
   fn run(self) -> Result {
+    self.validate(Mode::Interactive)?;
+
     let mut running = Running::spawn(&self)?;
 
     running.expect_screen_contains("kotomori", STARTUP_TIMEOUT)?;
@@ -418,6 +476,8 @@ impl Test {
   }
 
   fn status(self, expected: i32) -> Result {
+    self.validate(Mode::Noninteractive)?;
+
     let mut command = Command::new(env!("CARGO_BIN_EXE_kotomori"));
 
     command
@@ -434,22 +494,31 @@ impl Test {
 
     let output = command.output()?;
 
+    let stderr = String::from_utf8(output.stderr)?;
+
     ensure!(
       output.status.code() == Some(expected),
-      "expected exit code {expected}, got {:?}\n{}",
+      "expected exit code {expected}, got {:?}\n{stderr}",
       output.status.code(),
-      String::from_utf8_lossy(&output.stderr),
     );
 
-    assert_eq!(String::from_utf8(output.stderr)?, self.expected_stderr);
-    assert_eq!(String::from_utf8(output.stdout)?, self.expected_stdout);
+    assert_eq!(stderr, self.expected_stderr.unwrap_or_default());
+
+    assert_eq!(
+      String::from_utf8(output.stdout)?,
+      self.expected_stdout.unwrap_or_default()
+    );
 
     Ok(())
   }
 
   fn stdout(mut self, expected: &str) -> Self {
-    self.expected_stdout = expected.into();
+    self.expected_stdout = Some(expected.into());
     self
+  }
+
+  fn submit(self, text: &str) -> Self {
+    self.type_text(text).key(Key::Enter)
   }
 
   fn success(self) -> Result {
@@ -457,21 +526,59 @@ impl Test {
   }
 
   fn tab(self) -> Self {
-    self.write("\t")
+    self.key(Key::Tab)
   }
 
-  fn type_text(mut self, text: &str) -> Self {
-    self.steps.push(Step::Write(text.as_bytes().into()));
-    self
+  fn type_text(self, text: &str) -> Self {
+    self.bytes(text.as_bytes())
+  }
+
+  fn validate(&self, mode: Mode) -> Result {
+    match mode {
+      Mode::Interactive => {
+        ensure!(
+          self.expected_stderr.is_none(),
+          "stderr expectations are not supported in an interactive run"
+        );
+        ensure!(
+          self.expected_stdout.is_none(),
+          "stdout expectations are not supported in an interactive run"
+        );
+      }
+      Mode::Noninteractive => {
+        if let Some(step) = self.steps.first() {
+          bail!("step 1: {step:?} is not supported in a noninteractive run");
+        }
+      }
+    }
+
+    if let Some(index) = self
+      .steps
+      .iter()
+      .position(|step| matches!(step, Step::ExpectExit(_) | Step::Quit))
+    {
+      for (index, step) in self.steps.iter().enumerate().skip(index + 1) {
+        match step {
+          Step::ExpectExit(_) | Step::Quit => bail!(
+            "step {}: termination is not allowed after an exit expectation",
+            index + 1
+          ),
+          Step::Write(_) => bail!(
+            "step {}: input is not allowed after an exit expectation",
+            index + 1
+          ),
+          Step::ExpectScreenContains(_)
+          | Step::ExpectScreenExcludes(_)
+          | Step::Wait(_) => {}
+        }
+      }
+    }
+
+    Ok(())
   }
 
   fn wait(mut self, duration: Duration) -> Self {
     self.steps.push(Step::Wait(duration));
-    self
-  }
-
-  fn write(mut self, bytes: &str) -> Self {
-    self.steps.push(Step::Write(bytes.as_bytes().into()));
     self
   }
 }
@@ -479,10 +586,8 @@ impl Test {
 #[test]
 fn approval_prompt_approves_command() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:approval-required-command")
-    .type_text("foo")
-    .enter()
+    .model("mock:approval-required-command")
+    .submit("foo")
     .expect_screen_contains(concat!(
       "  ? Approve echo bar?\n",
       "  y approve · n/Esc deny\n",
@@ -499,10 +604,8 @@ fn approval_prompt_approves_command() -> Result {
 #[test]
 fn approval_prompt_denies_command() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:approval-required-command")
-    .type_text("foo")
-    .enter()
+    .model("mock:approval-required-command")
+    .submit("foo")
     .expect_screen_contains("Approve echo bar?")
     .type_text("n")
     .expect_screen_contains("Failed running echo bar")
@@ -514,10 +617,8 @@ fn approval_prompt_denies_command() -> Result {
 #[test]
 fn approval_prompt_denies_command_with_escape() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:approval-required-command")
-    .type_text("foo")
-    .enter()
+    .model("mock:approval-required-command")
+    .submit("foo")
     .expect_screen_contains("Approve echo bar?")
     .escape()
     .expect_screen_contains("Failed running echo bar")
@@ -529,14 +630,13 @@ fn approval_prompt_denies_command_with_escape() -> Result {
 #[test]
 fn command_completion_clears() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:local")
-    .type_text("foo")
-    .enter()
+    .model("mock:local")
+    .submit("foo")
     .expect_screen_contains("queued for mock:local: foo")
     .type_text("/")
     .expect_screen_contains("/clear")
-    .tab()
+    .down()
+    .keys([Key::Up, Key::Tab])
     .enter()
     .expect_screen_excludes("queued for mock:local: foo")
     .run()
@@ -545,8 +645,7 @@ fn command_completion_clears() -> Result {
 #[test]
 fn command_completion_quits() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:local")
+    .model("mock:local")
     .type_text("/")
     .expect_screen_contains(concat!(
       "  │ /\n",
@@ -573,8 +672,7 @@ fn config_sets_default_model() -> Result {
       default_model = "bar"
       "#,
     )
-    .type_text("foo")
-    .enter()
+    .submit("foo")
     .expect_screen_contains("queued for mock:bar: foo")
     .run()
 }
@@ -587,16 +685,14 @@ fn ctrl_c_quits_gracefully() -> Result {
 #[test]
 fn dev_mode_controls_time_to_first_draw() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:local")
+    .model("mock:local")
     .wait(SETTLE_INTERVAL)
     .expect_screen_excludes("first draw ")
     .run()?;
 
   Test::new()
     .env("KOTOMORI_DEV", "1")
-    .argument("--model")
-    .argument("mock:local")
+    .model("mock:local")
     .wait(SETTLE_INTERVAL)
     .expect_screen_contains("first draw ")
     .run()
@@ -605,10 +701,8 @@ fn dev_mode_controls_time_to_first_draw() -> Result {
 #[test]
 fn initial_prompt_submits() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:local")
-    .argument("--prompt")
-    .argument("foo")
+    .model("mock:local")
+    .arguments(["--prompt", "foo"])
     .enter()
     .expect_screen_contains("queued for mock:local: foo")
     .run()
@@ -617,10 +711,8 @@ fn initial_prompt_submits() -> Result {
 #[test]
 fn interrupt_active_agent() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:slow-streaming")
-    .type_text("foo")
-    .enter()
+    .model("mock:slow-streaming")
+    .submit("foo")
     .ctrl_c()
     .expect_screen_contains("Conversation interrupted")
     .ctrl_c()
@@ -631,10 +723,8 @@ fn interrupt_active_agent() -> Result {
 #[test]
 fn markdown_response() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:slow-streaming")
-    .type_text("**foo**")
-    .enter()
+    .model("mock:slow-streaming")
+    .submit("**foo**")
     .expect_screen_contains("│ **foo**")
     .expect_screen_contains("queued for mock:slow-streaming: foo")
     .run()
@@ -643,12 +733,10 @@ fn markdown_response() -> Result {
 #[test]
 fn multiline_input() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:local")
+    .model("mock:local")
     .type_text("foo")
     .ctrl_j()
-    .type_text("bar")
-    .enter()
+    .submit("bar")
     .expect_screen_contains("queued for mock:local: foo bar")
     .run()
 }
@@ -656,10 +744,8 @@ fn multiline_input() -> Result {
 #[test]
 fn prompt_round_trip() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:local")
-    .type_text("foo")
-    .enter()
+    .model("mock:local")
+    .submit("foo")
     .expect_screen_contains("foo")
     .expect_screen_contains("queued for mock:local: foo")
     .run()
@@ -668,13 +754,10 @@ fn prompt_round_trip() -> Result {
 #[test]
 fn provider_error_recovers() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:error")
-    .type_text("foo")
-    .enter()
+    .model("mock:error")
+    .submit("foo")
     .expect_screen_contains("mock provider error")
-    .type_text("bar")
-    .enter()
+    .submit("bar")
     .expect_screen_contains("queued for mock:error: bar")
     .run()
 }
@@ -682,13 +765,10 @@ fn provider_error_recovers() -> Result {
 #[test]
 fn provider_malformed_tool_arguments_recovers() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:malformed-tool-arguments")
-    .type_text("foo")
-    .enter()
+    .model("mock:malformed-tool-arguments")
+    .submit("foo")
     .expect_screen_contains("failed to decode `command` arguments")
-    .type_text("bar")
-    .enter()
+    .submit("bar")
     .expect_screen_contains("queued for mock:malformed-tool-arguments: bar")
     .run()
 }
@@ -696,13 +776,10 @@ fn provider_malformed_tool_arguments_recovers() -> Result {
 #[test]
 fn provider_unknown_tool_recovers() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:unknown-tool")
-    .type_text("foo")
-    .enter()
+    .model("mock:unknown-tool")
+    .submit("foo")
     .expect_screen_contains("unknown tool `unknown`")
-    .type_text("bar")
-    .enter()
+    .submit("bar")
     .expect_screen_contains("queued for mock:unknown-tool: bar")
     .run()
 }
@@ -710,10 +787,8 @@ fn provider_unknown_tool_recovers() -> Result {
 #[test]
 fn queued_steering_runs_after_active_response() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:slow-streaming")
-    .type_text("foo")
-    .enter()
+    .model("mock:slow-streaming")
+    .submit("foo")
     .expect_screen_contains("queued")
     .type_text("bar")
     .expect_screen_contains("  │ bar\n\n  mock · slow-streaming · ")
@@ -742,46 +817,35 @@ fn resume_filters_and_loads_session() -> Result {
   Test::new()
     .cwd(other_workspace.path())
     .env("KOTOMORI_HOME", state)
-    .argument("--model")
-    .argument("mock:local")
-    .type_text("qux")
-    .enter()
+    .model("mock:local")
+    .submit("qux")
     .expect_screen_contains("queued for mock:local: qux")
     .wait(SETTLE_INTERVAL)
     .run()?;
 
   Test::new()
     .env("KOTOMORI_HOME", state)
-    .argument("--directory")
-    .argument(workspace.path().to_str().unwrap())
-    .argument("--model")
-    .argument("mock:local")
-    .type_text("bar")
-    .enter()
+    .arguments(["--directory", workspace.path().to_str().unwrap()])
+    .model("mock:local")
+    .submit("bar")
     .expect_screen_contains("queued for mock:local: bar")
     .wait(SETTLE_INTERVAL)
     .run()?;
 
   Test::new()
     .cwd(workspace.path())
-    .argument("--directory")
-    .argument(".")
+    .arguments(["--directory", "."])
     .env("KOTOMORI_HOME", state)
-    .argument("--model")
-    .argument("mock:local")
-    .type_text("foo")
-    .enter()
+    .model("mock:local")
+    .submit("foo")
     .expect_screen_contains("queued for mock:local: foo")
     .wait(SETTLE_INTERVAL)
     .run()?;
 
   Test::new()
     .env("KOTOMORI_HOME", state)
-    .argument("--model")
-    .argument("mock:other")
-    .argument("resume")
-    .argument("--directory")
-    .argument(workspace.path().to_str().unwrap())
+    .model("mock:other")
+    .arguments(["resume", "--directory", workspace.path().to_str().unwrap()])
     .expect_screen_contains("foo")
     .expect_screen_contains("bar")
     .expect_screen_excludes("qux")
@@ -789,8 +853,7 @@ fn resume_filters_and_loads_session() -> Result {
     .expect_screen_excludes("foo")
     .enter()
     .expect_screen_contains("queued for mock:local: bar")
-    .type_text("baz")
-    .enter()
+    .submit("baz")
     .expect_screen_contains("queued for mock:local: baz")
     .wait(SETTLE_INTERVAL)
     .run()?;
@@ -798,10 +861,8 @@ fn resume_filters_and_loads_session() -> Result {
   Test::new()
     .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
-    .argument("resume")
-    .argument("--last")
-    .type_text("latest")
-    .enter()
+    .arguments(["resume", "--last"])
+    .submit("latest")
     .expect_screen_contains("queued for mock:local: latest")
     .run()
 }
@@ -821,10 +882,8 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
   Test::new()
     .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
-    .argument("--model")
-    .argument("mock:approval-required-command")
-    .type_text("approved tool result")
-    .enter()
+    .model("mock:approval-required-command")
+    .submit("approved tool result")
     .expect_screen_contains("Approve echo bar?")
     .type_text("y")
     .expect_screen_contains("Ran echo bar")
@@ -835,10 +894,8 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
   Test::new()
     .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
-    .argument("--model")
-    .argument("mock:approval-required-command")
-    .type_text("denied tool result")
-    .enter()
+    .model("mock:approval-required-command")
+    .submit("denied tool result")
     .expect_screen_contains("Approve echo bar?")
     .type_text("n")
     .expect_screen_contains("Failed running echo bar")
@@ -850,10 +907,8 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
   Test::new()
     .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
-    .argument("--model")
-    .argument("mock:slow-streaming")
-    .type_text("interrupted response")
-    .enter()
+    .model("mock:slow-streaming")
+    .submit("interrupted response")
     .expect_screen_contains("queued")
     .ctrl_c()
     .expect_screen_contains("Conversation interrupted")
@@ -863,8 +918,7 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
     .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
     .argument("resume")
-    .type_text("approved tool result")
-    .enter()
+    .submit("approved tool result")
     .expect_screen_contains("Ran echo bar")
     .expect_screen_contains("done")
     .run()?;
@@ -873,8 +927,7 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
     .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
     .argument("resume")
-    .type_text("denied tool result")
-    .enter()
+    .submit("denied tool result")
     .expect_screen_contains("Failed running echo bar")
     .expect_screen_contains("permission denied")
     .expect_screen_contains("done")
@@ -884,8 +937,7 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
     .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
     .argument("resume")
-    .type_text("interrupted response")
-    .enter()
+    .submit("interrupted response")
     .expect_screen_contains("queued")
     .expect_screen_contains("Conversation interrupted")
     .run()
@@ -906,10 +958,8 @@ fn resume_picker_cancels_with_escape_and_ctrl_c() -> Result {
   Test::new()
     .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
-    .argument("--model")
-    .argument("mock:local")
-    .type_text("foo")
-    .enter()
+    .model("mock:local")
+    .submit("foo")
     .expect_screen_contains("queued for mock:local: foo")
     .wait(SETTLE_INTERVAL)
     .run()?;
@@ -942,14 +992,11 @@ fn resume_with_no_sessions_exits_successfully() -> Result {
 #[test]
 fn second_turn_conversation() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:local")
-    .type_text("foo")
-    .enter()
+    .model("mock:local")
+    .submit("foo")
     .expect_screen_contains("queued for mock:local: foo")
     .wait(SETTLE_INTERVAL)
-    .type_text("bar")
-    .enter()
+    .submit("bar")
     .expect_screen_contains("queued for mock:local: bar")
     .run()
 }
@@ -957,10 +1004,8 @@ fn second_turn_conversation() -> Result {
 #[test]
 fn unknown_command() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:local")
-    .type_text("/foobar")
-    .enter()
+    .model("mock:local")
+    .submit("/foobar")
     .expect_screen_contains("Unrecognized command '/foobar'")
     .run()
 }
@@ -968,11 +1013,9 @@ fn unknown_command() -> Result {
 #[test]
 fn yolo_skips_approval() -> Result {
   Test::new()
-    .argument("--model")
-    .argument("mock:approval-required-command")
+    .model("mock:approval-required-command")
     .argument("--yolo")
-    .type_text("foo")
-    .enter()
+    .submit("foo")
     .expect_screen_contains("Ran echo bar")
     .expect_screen_contains("bar")
     .expect_screen_contains("done")
