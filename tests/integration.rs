@@ -881,6 +881,88 @@ fn multiline_input() -> Result {
 }
 
 #[test]
+fn prompt_history_edit_detaches_navigation() -> Result {
+  Test::new()
+    .model("mock:local")
+    .submit("foo")
+    .expect_screen_contains("queued for mock:local: foo")
+    .key(Key::Up)
+    .type_text("!")
+    .down()
+    .type_text("?")
+    .expect_screen_contains(indoc! {
+      "
+      \n  │ foo!?
+
+        mock · local · \
+      "
+    })
+    .key(Key::Up)
+    .expect_screen_contains(indoc! {
+      "
+      \n  │ foo
+
+        mock · local · \
+      "
+    })
+    .down()
+    .expect_screen_contains(indoc! {
+      "
+      \n  │ foo!?
+
+        mock · local · \
+      "
+    })
+    .quit()
+    .run()
+}
+
+#[test]
+fn prompt_history_navigates_and_restores_draft() -> Result {
+  Test::new()
+    .model("mock:local")
+    .submit("foo")
+    .expect_screen_contains("queued for mock:local: foo")
+    .submit("bar")
+    .expect_screen_contains("queued for mock:local: bar")
+    .type_text("baz")
+    .key(Key::Up)
+    .expect_screen_contains(indoc! {
+      "
+      \n  │ bar
+
+        mock · local · \
+      "
+    })
+    .key(Key::Up)
+    .expect_screen_contains(indoc! {
+      "
+      \n  │ foo
+
+        mock · local · \
+      "
+    })
+    .down()
+    .expect_screen_contains(indoc! {
+      "
+      \n  │ bar
+
+        mock · local · \
+      "
+    })
+    .down()
+    .expect_screen_contains(indoc! {
+      "
+      \n  │ baz
+
+        mock · local · \
+      "
+    })
+    .quit()
+    .run()
+}
+
+#[test]
 fn prompt_round_trip() -> Result {
   Test::new()
     .model("mock:local")

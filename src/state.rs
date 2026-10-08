@@ -1376,42 +1376,6 @@ mod tests {
   }
 
   #[test]
-  fn prompt_history_edit_detaches_navigation() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("history".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
-      run_id: 0,
-    });
-
-    state.handle_event(Event::Action(Action::SelectPrevious));
-
-    state.handle_event(Event::Action(Action::Edit(Input {
-      key: Key::Char('!'),
-      ..Default::default()
-    })));
-
-    state.handle_event(Event::Action(Action::SelectNext));
-    assert_eq!(state.composer.input_text(), "history!");
-
-    state.handle_event(Event::Action(Action::SelectPrevious));
-    assert_eq!(state.composer.input_text(), "history");
-
-    state.handle_event(Event::Action(Action::SelectNext));
-    assert_eq!(state.composer.input_text(), "history!");
-  }
-
-  #[test]
   fn prompt_history_is_cleared_by_clear_command() {
     let mut state = State::new(Session::new(
       &Settings {
@@ -1476,58 +1440,6 @@ mod tests {
 
     state.handle_event(Event::Action(Action::SelectPrevious));
     assert_eq!(state.composer.input_text(), "foo");
-  }
-
-  #[test]
-  fn prompt_history_navigates_and_restores_draft() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("foo".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
-      run_id: 0,
-    });
-
-    for c in "bar".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    state.handle_event(Event::Action(Action::Submit));
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
-      run_id: 1,
-    });
-
-    for c in "draft".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    state.handle_event(Event::Action(Action::SelectPrevious));
-    assert_eq!(state.composer.input_text(), "bar");
-
-    state.handle_event(Event::Action(Action::SelectPrevious));
-    assert_eq!(state.composer.input_text(), "foo");
-
-    state.handle_event(Event::Action(Action::SelectNext));
-    assert_eq!(state.composer.input_text(), "bar");
-
-    state.handle_event(Event::Action(Action::SelectNext));
-    assert_eq!(state.composer.input_text(), "draft");
   }
 
   #[test]
