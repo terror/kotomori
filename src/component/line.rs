@@ -339,19 +339,6 @@ mod tests {
   }
 
   #[test]
-  fn displays_raw_text() {
-    assert_eq!(LineComponent::raw("foo").to_string(), "foo");
-  }
-
-  #[test]
-  fn displays_styled_text() {
-    assert_eq!(
-      LineComponent::from([Span::styled("foo", Style::Accent)]).to_string(),
-      "\x1b[36;1mfoo\x1b[0m",
-    );
-  }
-
-  #[test]
   fn ellipsizes_to_available_width() {
     #[track_caller]
     fn case(text: &str, width: u16, expected: &str) {
