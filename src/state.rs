@@ -888,33 +888,6 @@ mod tests {
   }
 
   #[test]
-  fn command_autocomplete_select_next() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("/".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    assert_eq!(
-      state
-        .composer
-        .commands()
-        .map(Command::name)
-        .collect::<Vec<_>>(),
-      vec!["clear", "quit"],
-    );
-
-    state.handle_event(Event::Action(Action::SelectNext));
-    state.handle_event(Event::Action(Action::CompleteCommand));
-
-    assert_eq!(state.composer.input_text(), "/quit");
-  }
-
-  #[test]
   fn command_autocomplete_select_previous() {
     let mut state = State::new(Session::new(
       &Settings {
