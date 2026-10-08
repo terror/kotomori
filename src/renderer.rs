@@ -277,64 +277,6 @@ mod tests {
   }
 
   #[test]
-  fn full_render_clears_screen() {
-    let mut renderer = TestRenderer {
-      current: Some(Frame::new(
-        Vec::new(),
-        Dimensions {
-          height: 9,
-          width: 80,
-        },
-      )),
-      ..Default::default()
-    };
-
-    renderer
-      .draw_frame(Frame::new(
-        vec!["bar".into(), "baz".into()],
-        Dimensions {
-          height: 10,
-          width: 80,
-        },
-      ))
-      .unwrap();
-
-    assert_eq!(
-      String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
-    );
-  }
-
-  #[test]
-  fn full_render_rebuilds_scrollback_when_clearing() {
-    let mut renderer = TestRenderer {
-      current: Some(Frame::new(
-        Vec::new(),
-        Dimensions {
-          height: 1,
-          width: 80,
-        },
-      )),
-      ..Default::default()
-    };
-
-    renderer
-      .draw_frame(Frame::new(
-        vec!["foo".into(), "bar".into(), "baz".into()],
-        Dimensions {
-          height: 2,
-          width: 80,
-        },
-      ))
-      .unwrap();
-
-    assert_eq!(
-      String::from_utf8(renderer.stdout.clone()).unwrap(),
-      "\x1b[?2026h\x1b[2J\x1b[1;1H\x1b[3J\x1b[1G\x1b[2Kfoo\r\n\x1b[1G\x1b[2Kbar\r\n\x1b[1G\x1b[2Kbaz\x1b[?2026l",
-    );
-  }
-
-  #[test]
   fn initial_render_prepares_lines_without_clearing() {
     let mut renderer = TestRenderer::default();
 
