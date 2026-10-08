@@ -664,6 +664,22 @@ fn command_completion_quits() -> Result {
 }
 
 #[test]
+fn command_quits() -> Result {
+  #[track_caller]
+  fn case(command: &str) -> Result {
+    Test::new()
+      .config("")
+      .model("mock:local")
+      .submit(command)
+      .expect_exit(0)
+      .run()
+  }
+
+  case("/q")?;
+  case("/quit")
+}
+
+#[test]
 fn config_sets_default_model() -> Result {
   Test::new()
     .config(

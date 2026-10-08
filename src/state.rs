@@ -1139,50 +1139,6 @@ mod tests {
   }
 
   #[test]
-  fn command_quit_from_name() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("/quit".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      Vec::new()
-    );
-
-    assert!(state.should_quit);
-
-    assert_eq!(state.composer.input_text(), "");
-  }
-
-  #[test]
-  fn command_quit_from_prefix() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("/q".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      Vec::new()
-    );
-
-    assert!(state.should_quit);
-
-    assert_eq!(state.composer.input_text(), "");
-  }
-
-  #[test]
   fn command_quit_interrupts_active_agent_and_saves_partial_output() {
     let mut state = State::new(Session::new(
       &Settings {
