@@ -1,5 +1,6 @@
 use {
   anyhow::{Context, Error, bail, ensure},
+  indoc::indoc,
   portable_pty::{CommandBuilder, PtySize, native_pty_system},
   std::{
     collections::BTreeMap,
@@ -617,46 +618,78 @@ impl Test {
 
 #[test]
 fn approval_prompt_approves_command() -> Result {
-  Test::new()
-    .model("mock:approval-required-command")
-    .submit("foo")
-    .expect_screen_contains(concat!(
-      "  ? Approve echo bar?\n",
-      "  y approve · n/Esc deny\n",
-      "\n",
-      "  mock · approval-required-command · ",
-    ))
-    .type_text("y")
-    .expect_screen_contains("Ran echo bar")
-    .expect_screen_contains("bar")
-    .expect_screen_contains("done")
-    .run()
+  #[track_caller]
+  fn case(key: &str) -> Result {
+    Test::new()
+      .model("mock:approval-required-command")
+      .submit("foo")
+      .expect_screen_contains(indoc! {
+        "
+        \n  ? Approve echo bar?
+          y approve · n/Esc deny
+
+          mock · approval-required-command · \
+        "
+      })
+      .type_text("x")
+      .keys([Key::Tab, Key::Up, Key::Down, Key::Enter])
+      .type_text(key)
+      .expect_screen_contains(indoc! {
+        "
+        \n  │ foo
+
+          ● Ran echo bar
+            │ bar
+
+          done
+
+          │
+
+          mock · approval-required-command · \
+        "
+      })
+      .quit()
+      .run()
+      .with_context(|| format!("approval key: {key:?}"))
+  }
+
+  case("y")?;
+  case("Y")
 }
 
 #[test]
 fn approval_prompt_denies_command() -> Result {
-  Test::new()
-    .model("mock:approval-required-command")
-    .submit("foo")
-    .expect_screen_contains("Approve echo bar?")
-    .type_text("n")
-    .expect_screen_contains("Failed running echo bar")
-    .expect_screen_contains("permission denied")
-    .expect_screen_contains("done")
-    .run()
-}
+  #[track_caller]
+  fn case(key: &[u8]) -> Result {
+    Test::new()
+      .model("mock:approval-required-command")
+      .submit("foo")
+      .expect_screen_contains("Approve echo bar?")
+      .type_text("x")
+      .keys([Key::Tab, Key::Up, Key::Down, Key::Enter])
+      .bytes(key)
+      .expect_screen_contains(indoc! {
+        "
+        \n  │ foo
 
-#[test]
-fn approval_prompt_denies_command_with_escape() -> Result {
-  Test::new()
-    .model("mock:approval-required-command")
-    .submit("foo")
-    .expect_screen_contains("Approve echo bar?")
-    .escape()
-    .expect_screen_contains("Failed running echo bar")
-    .expect_screen_contains("permission denied")
-    .expect_screen_contains("done")
-    .run()
+          ● Failed running echo bar
+            │ permission denied
+
+          done
+
+          │
+
+          mock · approval-required-command · \
+        "
+      })
+      .quit()
+      .run()
+      .with_context(|| format!("denial key: {}", key.escape_ascii()))
+  }
+
+  case(b"n")?;
+  case(b"N")?;
+  case(Key::Escape.bytes())
 }
 
 #[test]
@@ -679,14 +712,16 @@ fn command_completion_quits() -> Result {
   Test::new()
     .model("mock:local")
     .type_text("/")
-    .expect_screen_contains(concat!(
-      "  │ /\n",
-      "\n",
-      "  /clear  Clear the transcript\n",
-      "  /quit  Quit kotomori\n",
-      "\n",
-      "  mock · local · ",
-    ))
+    .expect_screen_contains(indoc! {
+      "
+      \n  │ /
+
+        /clear  Clear the transcript
+        /quit  Quit kotomori
+
+        mock · local · \
+      "
+    })
     .down()
     .tab()
     .expect_screen_contains("/quit")
