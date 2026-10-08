@@ -5,7 +5,8 @@ use {
     fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
-    process::Command,
+    process::Stdio,
+    str,
     sync::{
       Mutex,
       mpsc::{self, Receiver, RecvTimeoutError},
@@ -14,6 +15,7 @@ use {
     time::{Duration, Instant},
   },
   tempfile::TempDir,
+  tokio::{process::Command, runtime, time::timeout},
 };
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
@@ -225,6 +227,7 @@ impl Running {
 
     command.cwd(test.cwd.as_deref().unwrap_or(test.tempdir.path()));
 
+    command.env("KOTOMORI_CONFIG", test.tempdir.path().join("config.toml"));
     command.env("KOTOMORI_HOME", test.tempdir.path().join("kotomori-home"));
     command.env("RUST_BACKTRACE", "0");
     command.env("TERM", "xterm-256color");
@@ -424,6 +427,17 @@ impl Test {
   }
 
   fn new() -> Self {
+    let tempdir = tempfile::Builder::new()
+      .prefix("kotomori-test")
+      .tempdir()
+      .unwrap();
+
+    fs::write(
+      tempdir.path().join("config.toml"),
+      "default_provider = \"mock\"\ndefault_model = \"local\"\n",
+    )
+    .unwrap();
+
     Self {
       arguments: Vec::new(),
       cwd: None,
@@ -431,10 +445,7 @@ impl Test {
       expected_stderr: None,
       expected_stdout: None,
       steps: Vec::new(),
-      tempdir: tempfile::Builder::new()
-        .prefix("kotomori-test")
-        .tempdir()
-        .unwrap(),
+      tempdir,
     }
   }
 
@@ -483,18 +494,36 @@ impl Test {
     command
       .args(&self.arguments)
       .current_dir(self.cwd.as_deref().unwrap_or(self.tempdir.path()))
+      .env("KOTOMORI_CONFIG", self.tempdir.path().join("config.toml"))
       .env("KOTOMORI_HOME", self.tempdir.path().join("kotomori-home"))
       .env("RUST_BACKTRACE", "0")
       .env("XDG_CONFIG_HOME", self.tempdir.path().join("xdg-config"))
-      .env_remove("KOTOMORI_DEV");
+      .env_remove("KOTOMORI_DEV")
+      .kill_on_drop(true)
+      .stdin(Stdio::null());
 
     for (key, value) in &self.env {
       command.env(key, value);
     }
 
-    let output = command.output()?;
+    let output = runtime::Builder::new_current_thread()
+      .enable_all()
+      .build()?
+      .block_on(async { timeout(EXPECT_TIMEOUT, command.output()).await })
+      .with_context(|| {
+        format!(
+          "timed out waiting for command with arguments {:?}",
+          self.arguments,
+        )
+      })??;
 
-    let stderr = String::from_utf8(output.stderr)?;
+    let stderr = str::from_utf8(&output.stderr).with_context(|| {
+      format!("invalid UTF-8 in stderr: {}", output.stderr.escape_ascii())
+    })?;
+
+    let stdout = str::from_utf8(&output.stdout).with_context(|| {
+      format!("invalid UTF-8 in stdout: {}", output.stdout.escape_ascii())
+    })?;
 
     ensure!(
       output.status.code() == Some(expected),
@@ -504,12 +533,14 @@ impl Test {
 
     assert_eq!(stderr, self.expected_stderr.unwrap_or_default());
 
-    assert_eq!(
-      String::from_utf8(output.stdout)?,
-      self.expected_stdout.unwrap_or_default()
-    );
+    assert_eq!(stdout, self.expected_stdout.unwrap_or_default());
 
     Ok(())
+  }
+
+  fn stderr(mut self, expected: &str) -> Self {
+    self.expected_stderr = Some(expected.into());
+    self
   }
 
   fn stdout(mut self, expected: &str) -> Self {
@@ -712,6 +743,39 @@ fn dev_mode_controls_time_to_first_draw() -> Result {
     .wait(SETTLE_INTERVAL)
     .expect_screen_contains("first draw ")
     .run()
+}
+
+#[test]
+fn directory_is_file() -> Result {
+  let directory = tempfile::tempdir()?;
+
+  let path = directory.path().join("foo");
+
+  fs::write(&path, "bar")?;
+
+  Test::new()
+    .arguments(["--directory", path.to_str().unwrap()])
+    .stderr(&format!(
+      "error: `{}` is not a directory\n",
+      path.canonicalize()?.display()
+    ))
+    .status(1)
+}
+
+#[test]
+fn directory_is_missing() -> Result {
+  let directory = tempfile::tempdir()?;
+
+  let path = directory.path().join("foo");
+
+  Test::new()
+    .arguments(["--directory", path.to_str().unwrap()])
+    .stderr(&format!(
+      "error: failed to resolve directory `{}`\n\nbecause:\n- {}\n",
+      path.display(),
+      io::Error::from_raw_os_error(2),
+    ))
+    .status(1)
 }
 
 #[test]
@@ -1024,6 +1088,14 @@ fn unknown_command() -> Result {
     .submit("/foobar")
     .expect_screen_contains("Unrecognized command '/foobar'")
     .run()
+}
+
+#[test]
+fn unknown_provider() -> Result {
+  Test::new()
+    .model("foo:bar")
+    .stderr("error: no registered provider is named `foo`\n")
+    .status(1)
 }
 
 #[test]

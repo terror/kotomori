@@ -65,21 +65,3 @@ impl TryFrom<Model> for Arc<dyn Provider> {
     }
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn rejects_unknown_provider() {
-    assert_eq!(
-      Arc::<dyn Provider>::try_from(Model {
-        name: "bar".into(),
-        provider: "foo".into(),
-      })
-      .unwrap_err()
-      .to_string(),
-      "no registered provider is named `foo`",
-    );
-  }
-}
