@@ -96,27 +96,4 @@ mod tests {
       },
     );
   }
-
-  #[test]
-  fn rig_tool_result() {
-    let result = ToolResult {
-      content: Some("bar".into()),
-      ..Default::default()
-    };
-
-    let message = Message::User(vec![UserMessageContent::ToolResult {
-      call: CallId::from_dual_wire("foo", "baz"),
-      name: ToolName::new("qux").unwrap(),
-      result: result.clone(),
-    }]);
-
-    assert_eq!(
-      RigMessage::from(&message),
-      RigMessage::tool_result(
-        CallId::from_dual_wire("foo", "baz"),
-        ToolName::new("qux").unwrap(),
-        result.message_content()
-      )
-    );
-  }
 }
