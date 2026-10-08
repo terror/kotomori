@@ -21,6 +21,7 @@ impl CommandExecutor {
     mut command: AsyncCommand,
   ) -> Result<ToolResult> {
     command.stderr(Stdio::piped());
+    command.stdin(Stdio::null());
     command.stdout(Stdio::piped());
 
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
