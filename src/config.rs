@@ -12,13 +12,11 @@ impl Config {
   const CONFIG_NAME: &'static str = "config";
 
   pub(crate) fn load() -> Result<Self> {
-    if let Some(path) = env::var_os("KOTOMORI_CONFIG") {
-      confy::load_path(PathBuf::from(path))
-        .context("failed to load configuration")
-    } else {
-      confy::load(Self::APP_NAME, Some(Self::CONFIG_NAME))
-        .context("failed to load configuration")
+    match env::var_os("KOTOMORI_CONFIG") {
+      Some(path) => confy::load_path(PathBuf::from(path)),
+      None => confy::load(Self::APP_NAME, Some(Self::CONFIG_NAME)),
     }
+    .context("failed to load configuration")
   }
 }
 
@@ -27,7 +25,7 @@ mod tests {
   use super::*;
 
   #[test]
-  fn parses_default_model() {
+  fn parsing() {
     let directory = tempfile::tempdir().unwrap();
 
     let path = directory.path().join("config.toml");
