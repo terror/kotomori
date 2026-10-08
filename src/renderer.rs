@@ -205,6 +205,8 @@ mod tests {
       String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\r\n\x1b[1G\x1b[2Kbar\x1b[?2026l",
     );
+
+    assert_eq!(renderer.current.as_ref().unwrap().viewport_top, 0);
   }
 
   #[test]
@@ -422,6 +424,8 @@ mod tests {
       String::from_utf8(renderer.stdout.clone()).unwrap(),
       "\x1b[?2026h\x1b[1A\x1b[1G\x1b[2Kqux\x1b[1B\x1b[?2026l",
     );
+
+    assert_eq!(renderer.current.as_ref().unwrap().viewport_top, 0);
   }
 
   #[test]
