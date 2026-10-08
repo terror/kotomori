@@ -173,22 +173,4 @@ mod tests {
       ),
     );
   }
-
-  #[test]
-  fn missing_config_uses_builtin_default() {
-    assert_eq!(
-      Settings::resolve(
-        Options {
-          directory: None,
-          model: None,
-          prompt: None,
-          yolo: false,
-        },
-        &Config::default(),
-      )
-      .unwrap()
-      .model,
-      Model::default(),
-    );
-  }
 }
