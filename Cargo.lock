@@ -3264,7 +3264,7 @@ dependencies = [
 
 [[package]]
 name = "kotomori"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anstyle",
  "anyhow",
