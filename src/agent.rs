@@ -11,9 +11,6 @@ pub(crate) struct Agent {
 }
 
 impl Agent {
-  const MAX_TOOL_CALLS: usize = 128;
-  const MAX_TOOL_ROUNDS: usize = 32;
-
   async fn approval(
     &self,
     run_id: u64,
@@ -83,8 +80,6 @@ impl Agent {
   async fn stream(&self, run_id: u64, mut messages: Vec<Message>) -> Result {
     let system = self.system_prompt()?;
 
-    let (mut tool_call_count, mut tool_round_count) = (0, 0);
-
     loop {
       let sink = ProviderSink {
         event_sender: self.event_sender.clone(),
@@ -115,20 +110,6 @@ impl Agent {
         })
         .collect::<Result<Vec<_>>>()?;
 
-      if !tool_calls.is_empty() && tool_round_count >= Self::MAX_TOOL_ROUNDS {
-        bail!(
-          "maximum tool round limit of {} exceeded",
-          Self::MAX_TOOL_ROUNDS
-        );
-      }
-
-      if tool_calls.len() > Self::MAX_TOOL_CALLS - tool_call_count {
-        bail!(
-          "maximum tool call limit of {} exceeded",
-          Self::MAX_TOOL_CALLS
-        );
-      }
-
       let message = Message::Agent(message);
 
       self.event_sender.send(Event::Agent {
@@ -141,9 +122,6 @@ impl Agent {
       if tool_calls.is_empty() {
         break;
       }
-
-      (tool_round_count, tool_call_count) =
-        (tool_round_count + 1, tool_call_count + tool_calls.len());
 
       for tool_call in tool_calls {
         let result = match self.approval(run_id, &tool_call).await? {
@@ -476,71 +454,6 @@ mod tests {
     assert!(test_agent.events.is_empty());
 
     assert_eq!(error.to_string(), "failed to decode `command` arguments");
-  }
-
-  #[tokio::test]
-  async fn errors_when_tool_call_limit_is_exceeded() {
-    let tool_calls = vec![
-      (0..=Agent::MAX_TOOL_CALLS)
-        .map(|_| Output::ToolCall)
-        .collect(),
-    ];
-
-    let test_agent = TestAgent::new(tool_calls, true);
-
-    let error = test_agent
-      .agent
-      .stream(
-        0,
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-      )
-      .await
-      .unwrap_err();
-
-    assert!(test_agent.events.is_empty());
-
-    assert_eq!(error.to_string(), "maximum tool call limit of 128 exceeded");
-  }
-
-  #[tokio::test]
-  async fn errors_when_tool_round_limit_is_exceeded() {
-    let tool_calls = (0..=Agent::MAX_TOOL_ROUNDS)
-      .map(|_| vec![Output::ToolCall])
-      .collect::<Vec<Vec<Output>>>();
-
-    let mut test_agent = TestAgent::new(tool_calls, true);
-
-    let error = test_agent
-      .agent
-      .stream(
-        0,
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-      )
-      .await
-      .unwrap_err();
-
-    assert_eq!(error.to_string(), "maximum tool round limit of 32 exceeded");
-
-    assert_eq!(
-      test_agent.requests.lock().unwrap().len(),
-      Agent::MAX_TOOL_ROUNDS + 1
-    );
-
-    let mut tool_call_event_count = 0;
-
-    while let Ok(event) = test_agent.events.try_recv() {
-      if matches!(
-        event,
-        Event::Agent {
-          event: AgentEvent::Message(Message::Agent(_)),
-          ..
-        }
-      ) {
-        tool_call_event_count += 1;
-      }
-    }
-
-    assert_eq!(tool_call_event_count, Agent::MAX_TOOL_ROUNDS);
   }
 
   #[tokio::test]
