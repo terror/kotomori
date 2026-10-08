@@ -51,45 +51,30 @@ mod tests {
   use super::*;
 
   #[test]
-  fn cli_model_overrides_config() {
-    assert_eq!(
-      Settings::resolve(
-        Options {
-          directory: None,
-          model: Some("mock:bar".parse().unwrap()),
-          prompt: None,
-          yolo: false,
-        },
-        &Config {
-          default_model: Some("foo".into()),
-          default_provider: Some("mock".into()),
-        },
-      )
-      .unwrap()
-      .model,
-      "mock:bar".parse().unwrap(),
-    );
-  }
+  fn config_overrides() {
+    #[track_caller]
+    fn case(model: Option<&str>, expected: &str) {
+      assert_eq!(
+        Settings::resolve(
+          Options {
+            directory: None,
+            model: model.map(|model| model.parse().unwrap()),
+            prompt: None,
+            yolo: false,
+          },
+          &Config {
+            default_model: Some("foo".into()),
+            default_provider: Some("mock".into()),
+          },
+        )
+        .unwrap()
+        .model,
+        expected.parse().unwrap(),
+      );
+    }
 
-  #[test]
-  fn config_model_overrides_builtin_default() {
-    assert_eq!(
-      Settings::resolve(
-        Options {
-          directory: None,
-          model: None,
-          prompt: None,
-          yolo: false,
-        },
-        &Config {
-          default_model: Some("foo".into()),
-          default_provider: Some("mock".into()),
-        },
-      )
-      .unwrap()
-      .model,
-      "mock:foo".parse().unwrap(),
-    );
+    case(None, "mock:foo");
+    case(Some("mock:bar"), "mock:bar");
   }
 
   #[test]
@@ -117,10 +102,12 @@ mod tests {
     }
 
     let current = env::current_dir().unwrap().canonicalize().unwrap();
-    let directory = tempfile::tempdir().unwrap();
 
     case(None, current.clone());
     case(Some(".".into()), current);
+
+    let directory = tempfile::tempdir().unwrap();
+
     case(
       Some(directory.path().into()),
       directory.path().canonicalize().unwrap(),
