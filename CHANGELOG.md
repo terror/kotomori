@@ -1,3 +1,27 @@
+## [0.3.1](https://github.com/terror/kotomori/releases/tag/0.3.1) - 2026-10-08
+
+### Fixed
+
+- Remove tool call and round caps ([#259](https://github.com/terror/kotomori/pull/259) by [terror](https://github.com/terror))
+- Fix static ARM release builds ([#258](https://github.com/terror/kotomori/pull/258) by [terror](https://github.com/terror))
+
+### Misc
+
+- Port missing config test to integration ([#273](https://github.com/terror/kotomori/pull/273) by [terror](https://github.com/terror))
+- Port startup error tests to integration ([#272](https://github.com/terror/kotomori/pull/272) by [terror](https://github.com/terror))
+- Port idle quit tests to integration ([#271](https://github.com/terror/kotomori/pull/271) by [terror](https://github.com/terror))
+- Add declarative test input helpers and validation ([#270](https://github.com/terror/kotomori/pull/270) by [terror](https://github.com/terror))
+- Remove redundant `ResumePicker` test ([#269](https://github.com/terror/kotomori/pull/269) by [terror](https://github.com/terror))
+- Remove redundant `State` test ([#268](https://github.com/terror/kotomori/pull/268) by [terror](https://github.com/terror))
+- Remove redundant `LineComponent` tests ([#267](https://github.com/terror/kotomori/pull/267) by [terror](https://github.com/terror))
+- Remove redundant `TranscriptComponent` tests ([#266](https://github.com/terror/kotomori/pull/266) by [terror](https://github.com/terror))
+- Remove redundant `Run` test ([#265](https://github.com/terror/kotomori/pull/265) by [terror](https://github.com/terror))
+- Remove redundant `Message` test ([#264](https://github.com/terror/kotomori/pull/264) by [terror](https://github.com/terror))
+- Remove redundant `Settings` test ([#263](https://github.com/terror/kotomori/pull/263) by [terror](https://github.com/terror))
+- Remove redundant `Renderer` tests ([#262](https://github.com/terror/kotomori/pull/262) by [terror](https://github.com/terror))
+- Remove redundant `RenderPlan` tests ([#261](https://github.com/terror/kotomori/pull/261) by [terror](https://github.com/terror))
+- Remove redundant `WriteExt` tests ([#260](https://github.com/terror/kotomori/pull/260) by [terror](https://github.com/terror))
+
 ## [0.3.0](https://github.com/terror/kotomori/releases/tag/0.3.0) - 2026-10-07
 
 ### Added
