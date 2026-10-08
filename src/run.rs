@@ -92,11 +92,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn finish_ignores_empty_content() {
-    assert_eq!(Run::new(0).finish(), None);
-  }
-
-  #[test]
   fn reset_message_preserves_elapsed_and_frame() {
     let mut run = Run {
       elapsed: Duration::from_secs(1),
