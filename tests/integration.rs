@@ -25,6 +25,7 @@ type Result<T = (), E = Error> = std::result::Result<T, E>;
 const EXPECT_TIMEOUT: Duration = Duration::from_secs(5);
 const READ_INTERVAL: Duration = Duration::from_millis(20);
 const SCREEN_COLS: u16 = 80;
+const SCREEN_PADDING: u16 = 2;
 const SCREEN_ROWS: u16 = 24;
 const SETTLE_INTERVAL: Duration = Duration::from_millis(200);
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(3);
@@ -198,7 +199,7 @@ impl Running {
     let mut rows = self
       .parser
       .screen()
-      .rows(0, SCREEN_COLS)
+      .rows(SCREEN_PADDING, SCREEN_COLS - SCREEN_PADDING)
       .map(|row| row.trim_end().to_string())
       .collect::<Vec<_>>();
 
@@ -625,10 +626,11 @@ fn approval_prompt_approves_command() -> Result {
       .submit("foo")
       .expect_screen_contains(indoc! {
         "
-        \n  ? Approve echo bar?
-          y approve · n/Esc deny
 
-          mock · approval-required-command · \
+        ? Approve echo bar?
+        y approve · n/Esc deny
+
+        mock · approval-required-command · \
         "
       })
       .type_text("x")
@@ -636,16 +638,17 @@ fn approval_prompt_approves_command() -> Result {
       .type_text(key)
       .expect_screen_contains(indoc! {
         "
-        \n  │ foo
 
-          ● Ran echo bar
-            │ bar
+        │ foo
 
-          done
+        ● Ran echo bar
+          │ bar
 
-          │
+        done
 
-          mock · approval-required-command · \
+        │
+
+        mock · approval-required-command · \
         "
       })
       .quit()
@@ -670,16 +673,17 @@ fn approval_prompt_denies_command() -> Result {
       .bytes(key)
       .expect_screen_contains(indoc! {
         "
-        \n  │ foo
 
-          ● Failed running echo bar
-            │ permission denied
+        │ foo
 
-          done
+        ● Failed running echo bar
+          │ permission denied
 
-          │
+        done
 
-          mock · approval-required-command · \
+        │
+
+        mock · approval-required-command · \
         "
       })
       .quit()
@@ -714,12 +718,13 @@ fn command_completion_quits() -> Result {
     .type_text("/")
     .expect_screen_contains(indoc! {
       "
-      \n  │ /
 
-        /clear  Clear the transcript
-        /quit  Quit kotomori
+      │ /
 
-        mock · local · \
+      /clear  Clear the transcript
+      /quit  Quit kotomori
+
+      mock · local · \
       "
     })
     .down()
@@ -892,25 +897,28 @@ fn prompt_history_edit_detaches_navigation() -> Result {
     .type_text("?")
     .expect_screen_contains(indoc! {
       "
-      \n  │ foo!?
 
-        mock · local · \
+      │ foo!?
+
+      mock · local · \
       "
     })
     .key(Key::Up)
     .expect_screen_contains(indoc! {
       "
-      \n  │ foo
 
-        mock · local · \
+      │ foo
+
+      mock · local · \
       "
     })
     .down()
     .expect_screen_contains(indoc! {
       "
-      \n  │ foo!?
 
-        mock · local · \
+      │ foo!?
+
+      mock · local · \
       "
     })
     .quit()
@@ -929,33 +937,37 @@ fn prompt_history_navigates_and_restores_draft() -> Result {
     .key(Key::Up)
     .expect_screen_contains(indoc! {
       "
-      \n  │ bar
 
-        mock · local · \
+      │ bar
+
+      mock · local · \
       "
     })
     .key(Key::Up)
     .expect_screen_contains(indoc! {
       "
-      \n  │ foo
 
-        mock · local · \
+      │ foo
+
+      mock · local · \
       "
     })
     .down()
     .expect_screen_contains(indoc! {
       "
-      \n  │ bar
 
-        mock · local · \
+      │ bar
+
+      mock · local · \
       "
     })
     .down()
     .expect_screen_contains(indoc! {
       "
-      \n  │ baz
 
-        mock · local · \
+      │ baz
+
+      mock · local · \
       "
     })
     .quit()
@@ -1012,9 +1024,9 @@ fn queued_steering_runs_after_active_response() -> Result {
     .submit("foo")
     .expect_screen_contains("queued")
     .type_text("bar")
-    .expect_screen_contains("  │ bar\n\n  mock · slow-streaming · ")
+    .expect_screen_contains("│ bar\n\nmock · slow-streaming · ")
     .enter()
-    .expect_screen_contains("Queued\n  │ bar")
+    .expect_screen_contains("Queued\n│ bar")
     .expect_screen_contains("queued for mock:slow-streaming: bar")
     .run()
 }
