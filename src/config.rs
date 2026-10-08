@@ -27,20 +27,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn missing_config_defaults() {
-    let directory = tempfile::tempdir().unwrap();
-
-    let path = directory.path().join("config.toml");
-
-    assert_eq!(
-      confy::load_path::<Config>(&path).unwrap(),
-      Config::default(),
-    );
-
-    assert!(path.is_file());
-  }
-
-  #[test]
   fn parses_default_model() {
     let directory = tempfile::tempdir().unwrap();
 

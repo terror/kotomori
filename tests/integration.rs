@@ -2,6 +2,7 @@ use {
   anyhow::{Context, Error, bail, ensure},
   portable_pty::{CommandBuilder, PtySize, native_pty_system},
   std::{
+    collections::BTreeMap,
     fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
@@ -808,6 +809,29 @@ fn markdown_response() -> Result {
     .expect_screen_contains("│ **foo**")
     .expect_screen_contains("queued for mock:slow-streaming: foo")
     .run()
+}
+
+#[test]
+fn missing_config_defaults() -> Result {
+  let directory = tempfile::tempdir()?;
+
+  let path = directory.path().join("foo");
+
+  Test::new()
+    .env("KOTOMORI_CONFIG", path.to_str().unwrap())
+    .submit("foo")
+    .expect_screen_contains("queued for mock:local: foo")
+    .quit()
+    .run()?;
+
+  assert!(path.is_file());
+
+  assert_eq!(
+    confy::load_path::<BTreeMap<String, String>>(&path)?,
+    BTreeMap::new(),
+  );
+
+  Ok(())
 }
 
 #[test]
