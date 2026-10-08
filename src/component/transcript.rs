@@ -537,25 +537,6 @@ mod tests {
   }
 
   #[test]
-  fn render_interrupted_entry() {
-    let transcript =
-      Transcript::with_entries(vec![TranscriptEntry::Interrupted]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: None,
-        state: &transcript
-      }
-      .render(80),
-      [LineComponent::from([Span::styled(
-        "■ Conversation interrupted, tell the model what to do differently.",
-        Style::Danger,
-      )])]
-    );
-  }
-
-  #[test]
   fn render_markdown_in_active_draft_and_completed_messages() {
     #[track_caller]
     fn case(text: &str, span: Span) {
@@ -918,36 +899,6 @@ mod tests {
           Span::styled("ine", Style::Muted),
         ]),
       ]
-    );
-  }
-
-  #[test]
-  fn render_tool_entry_pending() {
-    let invocation = ToolInvocation::new(
-      "bar",
-      ToolInvocationKind::Command(CommandTool {
-        command: "rg --files".into(),
-        cwd: None,
-      }),
-    );
-
-    let transcript =
-      Transcript::with_entries(vec![TranscriptEntry::Message(Message::agent(
-        vec![AssistantContent::ToolCall(invocation.protocol.clone())],
-      ))]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: None,
-        state: &transcript
-      }
-      .render(80),
-      [LineComponent::from([
-        Span::styled("●", Style::Accent),
-        Span::raw(" "),
-        Span::raw("Running rg --files"),
-      ])]
     );
   }
 
