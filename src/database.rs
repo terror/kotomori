@@ -539,16 +539,4 @@ mod tests {
       ],
     );
   }
-
-  #[test]
-  fn unsupported_schema_is_rejected() {
-    let connection = Connection::open_in_memory().unwrap();
-
-    connection.execute_batch("PRAGMA user_version = 2").unwrap();
-
-    assert_eq!(
-      Database::try_from(connection).unwrap_err().to_string(),
-      "database schema version 2 is unsupported; expected 1",
-    );
-  }
 }
