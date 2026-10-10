@@ -379,34 +379,14 @@ impl Test {
     self.env("KOTOMORI_CONFIG", path.to_str().unwrap())
   }
 
-  fn ctrl_c(self) -> Self {
-    self.key(Key::CtrlC)
-  }
-
-  fn ctrl_j(self) -> Self {
-    self.key(Key::CtrlJ)
-  }
-
   fn cwd(mut self, cwd: &Path) -> Self {
     self.cwd = Some(cwd.into());
     self
   }
 
-  fn down(self) -> Self {
-    self.key(Key::Down)
-  }
-
-  fn enter(self) -> Self {
-    self.key(Key::Enter)
-  }
-
   fn env(mut self, key: &str, value: &str) -> Self {
     self.env.push((key.into(), value.into()));
     self
-  }
-
-  fn escape(self) -> Self {
-    self.key(Key::Escape)
   }
 
   fn expect_exit(mut self, code: u32) -> Self {
@@ -582,10 +562,6 @@ impl Test {
     self.status(0)
   }
 
-  fn tab(self) -> Self {
-    self.key(Key::Tab)
-  }
-
   fn type_text(self, text: &str) -> Self {
     self.bytes(text.as_bytes())
   }
@@ -736,7 +712,7 @@ fn blank_submit_does_nothing() -> Result {
         mock · local · \
         "
       })
-      .ctrl_c()
+      .key(Key::CtrlC)
       .expect_exit(0)
       .expect_screen_excludes("queued for mock:local:")
       .run()
@@ -779,7 +755,7 @@ fn bracketed_paste_inserts_one_edit() -> Result {
     })
     .key(Key::CtrlR)
     .expect_screen_contains(input)
-    .enter()
+    .key(Key::Enter)
     .expect_screen_contains(indoc! {
       "
 
@@ -836,9 +812,9 @@ fn command_completion_clears() -> Result {
     .expect_screen_contains("queued for mock:local: foo")
     .type_text("/")
     .expect_screen_contains("/clear")
-    .down()
+    .key(Key::Down)
     .keys([Key::Up, Key::Tab])
-    .enter()
+    .key(Key::Enter)
     .expect_screen_excludes("queued for mock:local: foo")
     .run()
 }
@@ -862,7 +838,7 @@ fn command_completion_quits() -> Result {
         "
       })
       .key(key)
-      .tab()
+      .key(Key::Tab)
       .expect_screen_contains(indoc! {
         "
 
@@ -873,7 +849,7 @@ fn command_completion_quits() -> Result {
         mock · local · \
         "
       })
-      .enter()
+      .key(Key::Enter)
       .expect_exit(0)
       .run()
       .with_context(|| format!("completion key: {key:?}"))
@@ -1077,7 +1053,7 @@ fn initial_prompt_submits() -> Result {
   Test::new()
     .model("mock:local")
     .arguments(["--prompt", "foo"])
-    .enter()
+    .key(Key::Enter)
     .expect_screen_contains("queued for mock:local: foo")
     .run()
 }
@@ -1095,7 +1071,7 @@ fn interrupt_active_agent() -> Result {
 
     let test = if matches!(key, Key::Escape) {
       test
-        .escape()
+        .key(Key::Escape)
         .wait(SETTLE_INTERVAL)
         .key(Key::Up)
         .expect_screen_contains(indoc! {
@@ -1111,7 +1087,7 @@ fn interrupt_active_agent() -> Result {
     };
 
     test
-      .ctrl_c()
+      .key(Key::CtrlC)
       .expect_exit(0)
       .run()
       .with_context(|| format!("interruption key: {key:?}"))
@@ -1139,7 +1115,7 @@ fn interrupt_advances_to_next_queued_submission() -> Result {
       mock · slow-streaming · \
       "
     })
-    .escape()
+    .key(Key::Escape)
     .expect_screen_contains(indoc! {
       "
 
@@ -1206,10 +1182,10 @@ fn multiline_input() -> Result {
   Test::new()
     .model("mock:local")
     .type_text("foo")
-    .ctrl_j()
+    .key(Key::CtrlJ)
     .type_text("bar")
     .expect_screen_contains(input)
-    .enter()
+    .key(Key::Enter)
     .expect_screen_contains(indoc! {
       "
 
@@ -1236,7 +1212,7 @@ fn prompt_history_edit_detaches_navigation() -> Result {
     .expect_screen_contains("queued for mock:local: foo")
     .key(Key::Up)
     .type_text("!")
-    .down()
+    .key(Key::Down)
     .type_text("?")
     .expect_screen_contains(indoc! {
       "
@@ -1255,7 +1231,7 @@ fn prompt_history_edit_detaches_navigation() -> Result {
       mock · local · \
       "
     })
-    .down()
+    .key(Key::Down)
     .expect_screen_contains(indoc! {
       "
 
@@ -1308,7 +1284,7 @@ fn prompt_history_loads_session() -> Result {
     .submit("foo")
     .expect_screen_contains("queued for mock:local: foo")
     .type_text("baz")
-    .ctrl_j()
+    .key(Key::CtrlJ)
     .submit("qux")
     .expect_screen_contains("queued for mock:local: baz qux")
     .quit()
@@ -1368,7 +1344,7 @@ fn prompt_history_navigates_and_restores_draft() -> Result {
       mock · local · \
       "
     })
-    .down()
+    .key(Key::Down)
     .expect_screen_contains(indoc! {
       "
 
@@ -1377,7 +1353,7 @@ fn prompt_history_navigates_and_restores_draft() -> Result {
       mock · local · \
       "
     })
-    .down()
+    .key(Key::Down)
     .expect_screen_contains(indoc! {
       "
 
@@ -1397,7 +1373,7 @@ fn prompt_history_preserves_multiline_navigation() -> Result {
     .submit("foo")
     .expect_screen_contains("queued for mock:local: foo")
     .type_text("bar")
-    .ctrl_j()
+    .key(Key::CtrlJ)
     .type_text("baz")
     .key(Key::Up)
     .type_text("!")
@@ -1419,7 +1395,7 @@ fn prompt_history_preserves_multiline_navigation() -> Result {
       mock · local · \
       "
     })
-    .down()
+    .key(Key::Down)
     .type_text("?")
     .expect_screen_contains(indoc! {
       "
@@ -1492,7 +1468,7 @@ fn queued_submissions_run_in_order() -> Result {
       mock · slow-streaming · \
       "
     })
-    .enter()
+    .key(Key::Enter)
     .submit("baz")
     .expect_screen_contains(indoc! {
       "
@@ -1584,7 +1560,7 @@ fn resume_filters_and_loads_session() -> Result {
     .expect_screen_excludes("qux")
     .type_text("bar")
     .expect_screen_excludes("foo")
-    .enter()
+    .key(Key::Enter)
     .expect_screen_contains("queued for mock:local: bar")
     .submit("baz")
     .expect_screen_contains("queued for mock:local: baz")
@@ -1643,7 +1619,7 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
     .model("mock:slow-streaming")
     .submit("interrupted response")
     .expect_screen_contains("queued")
-    .ctrl_c()
+    .key(Key::CtrlC)
     .expect_screen_contains("Conversation interrupted")
     .run()?;
 
@@ -1701,7 +1677,7 @@ fn resume_picker_cancels_with_escape_and_ctrl_c() -> Result {
     .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
     .argument("resume")
-    .escape()
+    .key(Key::Escape)
     .expect_exit(0)
     .run()?;
 
@@ -1709,7 +1685,7 @@ fn resume_picker_cancels_with_escape_and_ctrl_c() -> Result {
     .cwd(workspace.path())
     .env("KOTOMORI_HOME", state)
     .argument("resume")
-    .ctrl_c()
+    .key(Key::CtrlC)
     .expect_exit(0)
     .run()
 }
@@ -1741,7 +1717,7 @@ fn submit_preserves_input_whitespace() -> Result {
     Test::new()
       .model("mock:local")
       .type_text("  foo")
-      .ctrl_j()
+      .key(Key::CtrlJ)
       .type_text("  ")
       .key(key)
       .expect_screen_contains(indoc! {
