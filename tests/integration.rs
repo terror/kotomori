@@ -1187,7 +1187,20 @@ fn ctrl_c_interrupts_active_approval() -> Result {
 
 #[test]
 fn ctrl_c_quits_gracefully() -> Result {
-  Test::new().quit().run()
+  Test::new()
+    .expect_screen_contains(indoc! {
+      "
+
+      Type a prompt. Press Ctrl-C to quit.
+
+      │
+
+      mock · local · \
+      "
+    })
+    .key(Key::CtrlC)
+    .expect_exit(0)
+    .run()
 }
 
 #[test]

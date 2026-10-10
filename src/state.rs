@@ -931,21 +931,6 @@ mod tests {
   }
 
   #[test]
-  fn new_uses_empty_prompt_by_default() {
-    let state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: None,
-        yolo: false,
-      },
-      0,
-    ));
-
-    assert_eq!(state.composer.input_text(), "");
-  }
-
-  #[test]
   fn session_excludes_streaming_content() {
     let mut state = State::new(Session::new(
       &Settings {

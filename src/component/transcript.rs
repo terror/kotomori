@@ -388,21 +388,6 @@ mod tests {
   }
 
   #[test]
-  fn render_empty_transcript() {
-    let transcript = Transcript::default();
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: None,
-        state: &transcript
-      }
-      .render(80),
-      []
-    );
-  }
-
-  #[test]
   fn render_entry_spacing() {
     let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
       Message::agent(vec![
