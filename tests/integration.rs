@@ -699,6 +699,34 @@ fn approval_prompt_denies_command() -> Result {
 }
 
 #[test]
+fn blank_submit_does_nothing() -> Result {
+  #[track_caller]
+  fn case(key: Key) -> Result {
+    Test::new()
+      .model("mock:local")
+      .type_text("  ")
+      .key(key)
+      .type_text("foo")
+      .expect_screen_contains(indoc! {
+        "
+
+        │   foo
+
+        mock · local · \
+        "
+      })
+      .ctrl_c()
+      .expect_exit(0)
+      .expect_screen_excludes("queued for mock:local:")
+      .run()
+      .with_context(|| format!("submission key: {key:?}"))
+  }
+
+  case(Key::Enter)?;
+  case(Key::AltEnter)
+}
+
+#[test]
 fn command_clears() -> Result {
   #[track_caller]
   fn case(command: &str) -> Result {
@@ -895,9 +923,9 @@ fn immediate_submit_interrupts_active_agent_and_starts_new_run() -> Result {
 
       ■ Conversation interrupted, tell the model what to do differently.
 
-      │ bar
+      │   bar
 
-      queued for mock:slow-streaming: bar
+      queued for mock:slow-streaming:   bar
 
       │ baz
 
@@ -915,7 +943,7 @@ fn immediate_submit_interrupts_active_agent_and_starts_new_run() -> Result {
     .expect_screen_contains(indoc! {
       "
 
-      │ bar!
+      │   bar  !
 
       mock · slow-streaming · \
       "
@@ -1583,6 +1611,48 @@ fn second_turn_conversation() -> Result {
     .submit("bar")
     .expect_screen_contains("queued for mock:local: bar")
     .run()
+}
+
+#[test]
+fn submit_preserves_input_whitespace() -> Result {
+  #[track_caller]
+  fn case(key: Key) -> Result {
+    Test::new()
+      .model("mock:local")
+      .type_text("  foo")
+      .ctrl_j()
+      .type_text("  ")
+      .key(key)
+      .expect_screen_contains(indoc! {
+        "
+
+        │   foo
+        │
+
+        queued for mock:local:   foo
+
+        │
+
+        mock · local · \
+        "
+      })
+      .key(Key::Up)
+      .type_text("!")
+      .expect_screen_contains(indoc! {
+        "
+
+        │   foo
+        │   !
+
+        mock · local · \
+        "
+      })
+      .run()
+      .with_context(|| format!("submission key: {key:?}"))
+  }
+
+  case(Key::Enter)?;
+  case(Key::AltEnter)
 }
 
 #[test]

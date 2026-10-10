@@ -260,18 +260,18 @@ impl State {
 
   fn submit(&mut self, action: &Action) -> Vec<Effect> {
     let input = self.composer.input_text();
-    let input = input.trim();
+    let trimmed = input.trim();
 
     if let Some(command) =
-      Command::from_input(input).or_else(|| self.composer.selected_command())
+      Command::from_input(trimmed).or_else(|| self.composer.selected_command())
     {
       return self.handle_command(command);
     }
 
-    if input.starts_with('/') {
-      if input.len() > 1 {
+    if trimmed.starts_with('/') {
+      if trimmed.len() > 1 {
         self.session.transcript.notice(format!(
-          "Unrecognized command '{input}'. Type \"/\" for a list of supported commands."
+          "Unrecognized command '{trimmed}'. Type \"/\" for a list of supported commands."
         ));
 
         self.reset_input();
@@ -280,11 +280,9 @@ impl State {
       return Vec::new();
     }
 
-    if input.is_empty() {
+    if trimmed.is_empty() {
       return Vec::new();
     }
-
-    let input = input.to_string();
 
     self.composer.remember(&input);
     self.reset_input();
@@ -488,28 +486,6 @@ mod tests {
 
     assert_eq!(state.run, None);
     assert!(response_receiver.await.is_err());
-  }
-
-  #[test]
-  fn blank_submit_does_nothing() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("  ".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      Vec::new()
-    );
-
-    assert_eq!(state.session.transcript.messages(), Vec::new());
-
-    assert_eq!(state.composer.input_text(), "  ");
   }
 
   #[test]
@@ -1174,44 +1150,6 @@ mod tests {
         Message::agent(vec![AssistantContent::text("current")]),
       ]
     );
-  }
-
-  #[test]
-  fn submit_trims_input() {
-    #[track_caller]
-    fn case(action: Action) {
-      let mut state = State::new(Session::new(
-        &Settings {
-          directory: "foo".into(),
-          model: "mock:local".parse().unwrap(),
-          prompt: Some("  foo  ".into()),
-          yolo: false,
-        },
-        0,
-      ));
-
-      assert_eq!(
-        state.handle_event(Event::Action(action)),
-        vec![
-          Effect::SaveSession,
-          Effect::RunAgent {
-            messages: vec![Message::User(vec![UserMessageContent::Text(
-              "foo".into()
-            )])],
-            run_id: 0,
-          }
-        ]
-      );
-
-      assert_eq!(state.composer.input_text(), "");
-
-      state.handle_event(Event::Action(Action::SelectPrevious));
-
-      assert_eq!(state.composer.input_text(), "foo");
-    }
-
-    case(Action::Submit);
-    case(Action::SubmitImmediately);
   }
 
   #[test]
