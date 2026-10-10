@@ -1511,7 +1511,15 @@ fn model_argument_errors() -> Result {
     Test::new()
       .model(model)
       .stderr(&format!(
-        "error: invalid value '{model}' for '--model <MODEL>': {error}\n\nFor more information, try '--help'.\n"
+        indoc! {
+          "
+          error: invalid value '{model}' for '--model <MODEL>': {error}
+
+          For more information, try '--help'.
+          "
+        },
+        model = model,
+        error = error,
       ))
       .status(2)
       .with_context(|| format!("model: {model:?}"))
