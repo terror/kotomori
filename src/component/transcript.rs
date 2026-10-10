@@ -265,28 +265,6 @@ mod tests {
   }
 
   #[test]
-  fn render_agent_entry_handles_multiline_content() {
-    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
-      Message::agent(vec![AssistantContent::text("foo\nbar")]),
-    )]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: None,
-        state: &transcript
-      }
-      .render(2),
-      [
-        LineComponent::raw("fo"),
-        LineComponent::raw("o "),
-        LineComponent::raw("ba"),
-        LineComponent::raw("r"),
-      ]
-    );
-  }
-
-  #[test]
   fn render_markdown_in_active_draft_and_completed_messages() {
     #[track_caller]
     fn case(text: &str, span: Span) {
@@ -569,36 +547,6 @@ mod tests {
       }
       .render(80),
       [LineComponent::raw("foo {\"bar\":\"baz\"}")]
-    );
-  }
-
-  #[test]
-  fn render_user_entry_uses_width() {
-    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
-      Message::User(vec![UserMessageContent::Text("foobar\nbaz".into())]),
-    )]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: None,
-        state: &transcript
-      }
-      .render(5),
-      [
-        LineComponent::from([
-          Span::styled("│ ", Style::Accent),
-          Span::raw("foo"),
-        ]),
-        LineComponent::from([
-          Span::styled("│ ", Style::Accent),
-          Span::raw("bar"),
-        ]),
-        LineComponent::from([
-          Span::styled("│ ", Style::Accent),
-          Span::raw("baz"),
-        ]),
-      ]
     );
   }
 }

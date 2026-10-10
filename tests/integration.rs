@@ -1679,7 +1679,8 @@ fn multiline_input() -> Result {
   let input = indoc! {
     "
 
-    │ foo
+    │ foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofo
+    │ o
     │ bar
 
     mock · local · \
@@ -1688,7 +1689,7 @@ fn multiline_input() -> Result {
 
   Test::new()
     .model("mock:local")
-    .type_text("foo")
+    .type_text(&"foo".repeat(25))
     .key(Key::CtrlJ)
     .type_text("bar")
     .expect_screen_contains(input)
@@ -1696,10 +1697,12 @@ fn multiline_input() -> Result {
     .expect_screen_contains(indoc! {
       "
 
-      │ foo
+      │ foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofo
+      │ o
       │ bar
 
-      queued for mock:local: foo bar
+      queued for mock:local: foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofo
+      ofoofoofoofoofoofoofoo bar
 
       │
 
