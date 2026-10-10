@@ -2193,6 +2193,64 @@ fn resume_filters_and_loads_session() -> Result {
 }
 
 #[test]
+fn resume_interrupts_pending_tool_calls() -> Result {
+  let state = tempfile::Builder::new()
+    .prefix("kotomori-state")
+    .tempdir()?;
+
+  let workspace = tempfile::Builder::new()
+    .prefix("kotomori-workspace")
+    .tempdir()?;
+
+  let state = state.path().to_str().unwrap();
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .model("mock:approval-required-command")
+    .submit("foo")
+    .expect_screen_contains("Approve echo bar?")
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .arguments(["resume", "--last"])
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      baz
+
+      ● Failed running echo bar
+        │ interrupted
+
+      qux
+
+      │
+
+      mock · approval-required-command · \
+      "
+    })
+    .submit("bar")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ bar
+
+      done
+
+      │
+
+      mock · approval-required-command · \
+      "
+    })
+    .quit()
+    .run()
+}
+
+#[test]
 fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
   let state = tempfile::Builder::new()
     .prefix("kotomori-state")

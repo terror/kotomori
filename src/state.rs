@@ -266,7 +266,9 @@ impl State {
     vec![Effect::InterruptAgent, Effect::SaveSession]
   }
 
-  pub(crate) fn new(session: Session) -> Self {
+  pub(crate) fn new(mut session: Session) -> Self {
+    session.transcript.interrupt_pending_calls();
+
     let history = session
       .transcript
       .entries
