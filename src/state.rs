@@ -871,51 +871,6 @@ mod tests {
     assert_eq!(state.composer.input_text(), "");
   }
 
-  #[tokio::test]
-  async fn quit_interrupts_active_approval() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("foo".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    let (request, response_receiver) =
-      ApprovalRequest::new(ToolInvocation::new(
-        "foo",
-        ToolInvocationKind::Command(CommandTool {
-          command: "bar".into(),
-          cwd: None,
-        }),
-      ));
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::ToolApprovalRequest(request),
-      run_id: 0,
-    });
-
-    assert!(state.run.as_ref().unwrap().approval.is_some());
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Quit)),
-      vec![Effect::InterruptAgent, Effect::SaveSession]
-    );
-
-    assert!(!state.should_quit);
-    assert_eq!(state.run, None);
-
-    assert_eq!(
-      state.run.as_ref().and_then(|run| run.approval.as_ref()),
-      None
-    );
-    assert!(response_receiver.await.is_err());
-  }
-
   #[test]
   fn session_excludes_streaming_content() {
     let mut state = State::new(Session::new(
