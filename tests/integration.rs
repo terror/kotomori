@@ -914,6 +914,43 @@ fn interrupt_active_agent() -> Result {
 }
 
 #[test]
+fn interrupt_advances_to_next_queued_submission() -> Result {
+  Test::new()
+    .model("mock:slow-streaming")
+    .submit("foo")
+    .expect_screen_contains("queued")
+    .submit("bar")
+    .expect_screen_contains(indoc! {
+      "
+
+      Queued
+      │ bar
+
+      │
+
+      mock · slow-streaming · \
+      "
+    })
+    .escape()
+    .expect_screen_contains(indoc! {
+      "
+
+      ■ Conversation interrupted, tell the model what to do differently.
+
+      │ bar
+
+      queued for mock:slow-streaming: bar
+
+      │
+
+      mock · slow-streaming · \
+      "
+    })
+    .expect_screen_excludes("queued for mock:slow-streaming: foo")
+    .run()
+}
+
+#[test]
 fn markdown_response() -> Result {
   Test::new()
     .model("mock:slow-streaming")

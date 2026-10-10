@@ -980,44 +980,6 @@ mod tests {
   }
 
   #[test]
-  fn interrupt_advances_to_next_queued_submission() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("first".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    for c in "second".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    assert_matches!(
-      state
-        .handle_event(Event::Action(Action::Interrupt))
-        .as_slice(),
-      [
-        Effect::InterruptAgent,
-        Effect::SaveSession,
-        Effect::RunAgent { run_id: 1, .. }
-      ]
-    );
-
-    assert!(state.queued_inputs.is_empty());
-    assert_eq!(state.run, Some(Run::new(1)));
-  }
-
-  #[test]
   fn interruption_preserves_streamed_protocol() {
     let mut state = State::new(Session::new(
       &Settings {
