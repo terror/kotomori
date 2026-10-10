@@ -1834,11 +1834,47 @@ fn submit_preserves_input_whitespace() -> Result {
 
 #[test]
 fn unknown_command() -> Result {
-  Test::new()
-    .model("mock:local")
-    .submit("/foobar")
-    .expect_screen_contains("Unrecognized command '/foobar'")
-    .run()
+  #[track_caller]
+  fn case(key: Key) -> Result {
+    Test::new()
+      .model("mock:local")
+      .type_text("/foobar")
+      .key(key)
+      .expect_screen_contains(indoc! {
+        "
+
+        Type a prompt. Press Ctrl-C to quit.
+
+        Unrecognized command '/foobar'. Type \"/\" for a list of supported commands.
+
+        │
+
+        mock · local · \
+        "
+      })
+      .submit("foo")
+      .expect_screen_contains(indoc! {
+        "
+
+        Type a prompt. Press Ctrl-C to quit.
+
+        Unrecognized command '/foobar'. Type \"/\" for a list of supported commands.
+
+        │ foo
+
+        queued for mock:local: foo
+
+        │
+
+        mock · local · \
+        "
+      })
+      .run()
+      .with_context(|| format!("submission key: {key:?}"))
+  }
+
+  case(Key::Enter)?;
+  case(Key::AltEnter)
 }
 
 #[test]
