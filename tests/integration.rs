@@ -697,6 +697,35 @@ fn approval_prompt_denies_command() -> Result {
 }
 
 #[test]
+fn command_clears() -> Result {
+  #[track_caller]
+  fn case(command: &str) -> Result {
+    Test::new()
+      .model("mock:local")
+      .submit("foo")
+      .expect_screen_contains("queued for mock:local: foo")
+      .submit(command)
+      .expect_screen_excludes("│ foo")
+      .expect_screen_excludes("queued for mock:local: foo")
+      .expect_screen_contains(indoc! {
+        "
+
+        │
+
+        mock · local · \
+        "
+      })
+      .quit()
+      .run()
+      .with_context(|| format!("command: {command:?}"))
+  }
+
+  case("/")?;
+  case("/c")?;
+  case("/clear")
+}
+
+#[test]
 fn command_completion_clears() -> Result {
   Test::new()
     .model("mock:local")
