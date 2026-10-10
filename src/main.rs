@@ -20,8 +20,8 @@ use {
   crossterm::{
     cursor::{Hide, MoveDown, MoveTo, MoveToColumn, MoveUp},
     event::{
-      self as crossterm_event, Event as CrosstermEvent, KeyCode, KeyEvent,
-      KeyEventKind, KeyModifiers,
+      self as crossterm_event, EnableBracketedPaste, Event as CrosstermEvent,
+      KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
     },
     queue,
     terminal::{

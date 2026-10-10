@@ -10,14 +10,24 @@ impl Renderer {
   pub(crate) fn new() -> Result<Self> {
     enable_raw_mode().context("failed to enable raw mode")?;
 
-    let mut stdout = BufWriter::new(io::stdout());
-
-    queue!(stdout, Hide).context("failed to hide cursor")?;
-
-    Ok(Self {
+    let mut renderer = Self {
       current: None,
-      stdout,
-    })
+      stdout: BufWriter::new(io::stdout()),
+    };
+
+    queue!(renderer.stdout, Hide).context("failed to hide cursor")?;
+
+    crossterm::execute!(renderer.stdout, EnableBracketedPaste)
+      .or_else(|error| {
+        if error.kind() == io::ErrorKind::Unsupported {
+          Ok(())
+        } else {
+          Err(error)
+        }
+      })
+      .context("failed to enable bracketed paste")?;
+
+    Ok(renderer)
   }
 }
 
@@ -124,6 +134,7 @@ impl<W: Write> Drop for Renderer<W> {
 
     let _ = crossterm::execute!(
       self.stdout,
+      crossterm_event::DisableBracketedPaste,
       crossterm::cursor::MoveToColumn(0),
       crossterm::cursor::MoveToNextLine(1),
       crossterm::cursor::Show,

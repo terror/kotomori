@@ -37,6 +37,8 @@ enum Key {
   AltEnter,
   CtrlC,
   CtrlJ,
+  CtrlR,
+  CtrlU,
   Down,
   Enter,
   Escape,
@@ -50,6 +52,8 @@ impl Key {
       Self::AltEnter => b"\x1b\r",
       Self::CtrlC => b"\x03",
       Self::CtrlJ => b"\n",
+      Self::CtrlR => b"\x12",
+      Self::CtrlU => b"\x15",
       Self::Down => b"\x1b[B",
       Self::Enter => b"\r",
       Self::Escape => b"\x1b",
@@ -70,6 +74,7 @@ enum Step {
   ExpectExit(u32),
   ExpectScreenContains(String),
   ExpectScreenExcludes(String),
+  Paste(String),
   Quit,
   Wait(Duration),
   Write(Vec<u8>),
@@ -454,6 +459,11 @@ impl Test {
     }
   }
 
+  fn paste(mut self, text: &str) -> Self {
+    self.steps.push(Step::Paste(text.into()));
+    self
+  }
+
   fn quit(mut self) -> Self {
     self.steps.push(Step::Quit);
     self
@@ -476,6 +486,17 @@ impl Test {
         }
         Step::ExpectScreenExcludes(text) => {
           running.expect_screen_excludes(&text, EXPECT_TIMEOUT)
+        }
+        Step::Paste(text) => {
+          running.drain_available();
+
+          let text = if running.parser.screen().bracketed_paste() {
+            format!("\x1b[200~{text}\x1b[201~")
+          } else {
+            text
+          };
+
+          running.write(text.as_bytes())
         }
         Step::Quit => running.quit(),
         Step::Wait(duration) => {
@@ -599,7 +620,7 @@ impl Test {
             "step {}: termination is not allowed after an exit expectation",
             index + 1
           ),
-          Step::Write(_) => bail!(
+          Step::Paste(_) | Step::Write(_) => bail!(
             "step {}: input is not allowed after an exit expectation",
             index + 1
           ),
@@ -724,6 +745,58 @@ fn blank_submit_does_nothing() -> Result {
 
   case(Key::Enter)?;
   case(Key::AltEnter)
+}
+
+#[cfg_attr(not(unix), ignore = "crossterm only emits paste events on Unix")]
+#[test]
+fn bracketed_paste_inserts_one_edit() -> Result {
+  let input = indoc! {
+    "
+
+    │ foobar
+    │ baz
+    │ qux
+    │ quux
+
+    mock · local · \
+    "
+  };
+
+  Test::new()
+    .model("mock:local")
+    .type_text("foo")
+    .paste("bar\rbaz\r\nqux\nquux")
+    .expect_screen_contains(input)
+    .expect_screen_excludes("queued for mock:local:")
+    .key(Key::CtrlU)
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      mock · local · \
+      "
+    })
+    .key(Key::CtrlR)
+    .expect_screen_contains(input)
+    .enter()
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foobar
+      │ baz
+      │ qux
+      │ quux
+
+      queued for mock:local: foobar baz qux quux
+
+      │
+
+      mock · local · \
+      "
+    })
+    .quit()
+    .run()
 }
 
 #[test]

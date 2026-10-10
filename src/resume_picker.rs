@@ -57,6 +57,10 @@ impl ResumePicker {
         self.query.push(c);
         self.clamp_selection();
       }
+      Action::Paste(input) => {
+        self.query.push_str(&input);
+        self.clamp_selection();
+      }
       Action::SelectNext => {
         let len = self.filtered_len();
 
