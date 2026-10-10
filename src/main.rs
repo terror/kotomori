@@ -11,6 +11,7 @@ use {
   arguments::Arguments,
   changed_range::ChangedRange,
   clap::{Args, Parser},
+  clipboard::Clipboard,
   command::Command,
   command_child::CommandChild,
   command_executor::CommandExecutor,
@@ -167,6 +168,7 @@ mod approval_policy;
 mod approval_request;
 mod arguments;
 mod changed_range;
+mod clipboard;
 mod command;
 mod command_child;
 mod command_executor;

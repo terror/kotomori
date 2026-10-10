@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct App {
   agent: Option<Agent>,
+  clipboard: Clipboard,
   database: Database,
   event_receiver: UnboundedReceiver<Event>,
   event_sender: UnboundedSender<Event>,
@@ -27,6 +28,12 @@ impl App {
 
   fn handle_effect(&mut self, effect: Effect) -> Result {
     match effect {
+      Effect::CopyToClipboard(text) => {
+        let result =
+          self.clipboard.copy(text).map_err(|error| error.to_string());
+
+        self.handle_event(Event::ClipboardCopied(result))?;
+      }
       Effect::InterruptAgent => {
         if let Some(agent) = &mut self.agent {
           agent.interrupt();
@@ -76,7 +83,10 @@ impl App {
           }
         }
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
-        Event::Agent { .. } | Event::SessionSaved(_) | Event::Tick(_) => {}
+        Event::Agent { .. }
+        | Event::ClipboardCopied(_)
+        | Event::SessionSaved(_)
+        | Event::Tick(_) => {}
       },
       Screen::Session(state) => {
         let effects = state.handle_event(event);
@@ -126,6 +136,7 @@ impl App {
 
     Ok(Self {
       agent: screen.agent(event_sender.clone())?,
+      clipboard: Clipboard::default(),
       database,
       event_receiver,
       event_sender,

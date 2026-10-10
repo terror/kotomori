@@ -88,6 +88,14 @@ mod tests {
           Span::styled("Clear the transcript", Style::Muted),
         ]),
         LineComponent::from([
+          Span::styled("/copy", Style::Secondary),
+          Span::styled("  ", Style::Muted),
+          Span::styled(
+            "Copy the last assistant response to the clipboard",
+            Style::Muted,
+          ),
+        ]),
+        LineComponent::from([
           Span::styled("/quit", Style::Secondary),
           Span::styled("  ", Style::Muted),
           Span::styled("Quit kotomori", Style::Muted),

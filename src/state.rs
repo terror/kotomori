@@ -112,6 +112,24 @@ impl State {
           vec![Effect::SaveSession]
         }
       }
+      Command::Copy => {
+        let response = self
+          .run
+          .as_ref()
+          .and_then(|run| run.message.message().text())
+          .or_else(|| self.session.transcript.last_response());
+
+        if let Some(response) = response {
+          vec![Effect::CopyToClipboard(response)]
+        } else {
+          self
+            .session
+            .transcript
+            .notice("No assistant response to copy.");
+
+          Vec::new()
+        }
+      }
       Command::Quit => self.handle_action(Action::Quit),
       Command::Rename => {
         if arguments.is_empty() {
@@ -174,6 +192,16 @@ impl State {
           }
         }
       }
+      Event::ClipboardCopied(result) => match result {
+        Ok(()) => self
+          .session
+          .transcript
+          .notice("Copied last assistant response to clipboard."),
+        Err(error) => self
+          .session
+          .transcript
+          .error(format!("failed to copy response to clipboard: {error}")),
+      },
       Event::Error(error) => {
         let effects = if self.run.is_some() {
           vec![Effect::InterruptAgent]

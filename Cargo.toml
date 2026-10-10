@@ -42,6 +42,7 @@ codegen-units = 1
 [dependencies]
 anstyle = "1.0.14"
 anyhow = "1.0.102"
+arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
 clap = { version = "4.6.1", features = ["derive"] }
 confy = "2.0.0"
 crossterm = "0.29.0"
