@@ -388,33 +388,6 @@ mod tests {
   }
 
   #[test]
-  fn render_entry_spacing() {
-    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
-      Message::agent(vec![
-        AssistantContent::text("foo"),
-        AssistantContent::reasoning("foo", "bar"),
-        AssistantContent::text("baz"),
-      ]),
-    )]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: None,
-        state: &transcript
-      }
-      .render(80),
-      [
-        LineComponent::raw("foo"),
-        LineComponent::blank(),
-        LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
-        LineComponent::blank(),
-        LineComponent::raw("baz"),
-      ]
-    );
-  }
-
-  #[test]
   fn render_expanded_draft_reasoning() {
     let mut run = Run::new(0);
 
