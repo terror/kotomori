@@ -46,7 +46,20 @@ impl Provider for Mock {
             },
           ))
         }
-        "reasoning" => AssistantContent::reasoning("mock", "bar\nbaz"),
+        "reasoning" => {
+          let mut reasoning =
+            Reasoning::new_with_signature("bar\nbaz", Some("foo".into()));
+
+          reasoning.content.extend([
+            ReasoningContent::Summary("qux".into()),
+            ReasoningContent::Encrypted("quux".into()),
+            ReasoningContent::Redacted {
+              data: "quuz".into(),
+            },
+          ]);
+
+          AssistantContent::Reasoning(reasoning.sealed("mock"))
+        }
         "unknown-tool" if request.messages.len() == 1 => {
           AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
             "foo",
