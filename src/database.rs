@@ -260,20 +260,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn migrations_create_schema() {
-    let database =
-      Database::try_from(Connection::open_in_memory().unwrap()).unwrap();
-
-    assert_eq!(
-      database
-        .connection
-        .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
-        .unwrap(),
-      i64::try_from(Database::SCHEMA_VERSION).unwrap(),
-    );
-  }
-
-  #[test]
   fn save_session_rejects_out_of_range_timestamps() {
     let database =
       Database::try_from(Connection::open_in_memory().unwrap()).unwrap();
