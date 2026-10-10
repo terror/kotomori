@@ -56,3 +56,21 @@ impl SessionSummary {
     })
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn matches_whitespace_separated_terms() {
+    let summary = SessionSummary {
+      directory: "foo".into(),
+      id: 42,
+      model: "mock:bar".parse().unwrap(),
+      title: Some("baz".into()),
+      updated_at: 0,
+    };
+
+    assert!(summary.matches("  BAZ\tMOCK:BAR\nFOO 42  "));
+  }
+}

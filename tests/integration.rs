@@ -2457,7 +2457,7 @@ fn resume_matches_queries() -> Result {
       Some("bazbazbaz"),
       [
         ("", true),
-        ("  BAZBAZBAZ\tMOCK:BAR\nFOO 1234567890123456789  ", true),
+        ("  BAZBAZBAZ  MOCK:BAR FOO 1234567890123456789  ", true),
         ("bazbazbaz 1234567890123456788", false),
         ("quxquxqux", false),
         ("Untitled", false),
@@ -2484,7 +2484,7 @@ fn resume_matches_queries() -> Result {
       .argument("resume");
 
     let test = queries.iter().fold(test, |test, (query, matches)| {
-      let search = format!("Search: {}", query.escape_debug());
+      let search = format!("Search: {query}");
 
       let expected = if *matches {
         format!("> {}  mock:bar", title.unwrap_or("Untitled session"))
