@@ -29,11 +29,16 @@ impl Command {
     let (name, arguments) =
       input.split_once(char::is_whitespace).unwrap_or((input, ""));
 
-    let command = Self::iter().find(|command| command.name() == name)?;
-    let arguments = arguments.trim();
+    let (command, arguments) = (
+      Self::iter().find(|command| command.name() == name)?,
+      arguments.trim(),
+    );
 
-    (command.accepts_arguments() || arguments.is_empty())
-      .then_some((command, arguments))
+    if command.accepts_arguments() || arguments.is_empty() {
+      Some((command, arguments))
+    } else {
+      None
+    }
   }
 
   pub(crate) fn input(self) -> String {
