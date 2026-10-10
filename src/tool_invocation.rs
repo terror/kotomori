@@ -61,19 +61,4 @@ mod tests {
       },
     );
   }
-
-  #[test]
-  fn unknown_tool_errors() {
-    let error =
-      ToolInvocationKind::decode(::rig::message::ToolCall::from_wire(
-        "foo",
-        ToolFunction {
-          arguments: json!({}),
-          name: ToolName::new("bar").unwrap(),
-        },
-      ))
-      .unwrap_err();
-
-    assert_eq!(error.to_string(), "unknown tool `bar`");
-  }
 }

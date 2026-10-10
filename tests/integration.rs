@@ -1950,9 +1950,37 @@ fn provider_unknown_tool_recovers() -> Result {
   Test::new()
     .model("mock:unknown-tool")
     .submit("foo")
-    .expect_screen_contains("unknown tool `unknown`")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      ● Error
+        │ unknown tool `unknown`
+
+      │
+
+      mock · unknown-tool · \
+      "
+    })
     .submit("bar")
-    .expect_screen_contains("queued for mock:unknown-tool: bar")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      ● Error
+        │ unknown tool `unknown`
+
+      │ bar
+
+      queued for mock:unknown-tool: bar
+
+      │
+
+      mock · unknown-tool · \
+      "
+    })
     .run()
 }
 
