@@ -1750,9 +1750,39 @@ fn provider_error_recovers() -> Result {
   Test::new()
     .model("mock:error")
     .submit("foo")
-    .expect_screen_contains("mock provider error")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      ● Error
+        │ foo
+        │ bar
+
+      │
+
+      mock · error · \
+      "
+    })
     .submit("bar")
-    .expect_screen_contains("queued for mock:error: bar")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      ● Error
+        │ foo
+        │ bar
+
+      │ bar
+
+      queued for mock:error: bar
+
+      │
+
+      mock · error · \
+      "
+    })
     .run()
 }
 
