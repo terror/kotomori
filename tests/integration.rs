@@ -38,6 +38,7 @@ enum Key {
   CtrlC,
   CtrlJ,
   CtrlR,
+  CtrlT,
   CtrlU,
   Down,
   Enter,
@@ -53,6 +54,7 @@ impl Key {
       Self::CtrlC => b"\x03",
       Self::CtrlJ => b"\n",
       Self::CtrlR => b"\x12",
+      Self::CtrlT => b"\x14",
       Self::CtrlU => b"\x15",
       Self::Down => b"\x1b[B",
       Self::Enter => b"\r",
@@ -1098,6 +1100,45 @@ fn ctrl_c_interrupts_active_approval() -> Result {
 #[test]
 fn ctrl_c_quits_gracefully() -> Result {
   Test::new().quit().run()
+}
+
+#[test]
+fn ctrl_t_toggles_reasoning() -> Result {
+  let collapsed = indoc! {
+    "
+
+    │ foo
+
+    Thinking...
+
+    │
+
+    mock · reasoning · \
+    "
+  };
+
+  Test::new()
+    .model("mock:reasoning")
+    .submit("foo")
+    .expect_screen_contains(collapsed)
+    .key(Key::CtrlT)
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      Thinking...
+        │ bar
+        │ baz
+
+      │
+
+      mock · reasoning · \
+      "
+    })
+    .key(Key::CtrlT)
+    .expect_screen_contains(collapsed)
+    .run()
 }
 
 #[test]

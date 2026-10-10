@@ -41,19 +41,3 @@ impl Action {
     }
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn ctrl_t_toggles_reasoning() {
-    assert_eq!(
-      Action::from_key(&KeyEvent::new(
-        KeyCode::Char('t'),
-        KeyModifiers::CONTROL
-      )),
-      Action::ToggleReasoning
-    );
-  }
-}
