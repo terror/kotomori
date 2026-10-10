@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq)]
 pub(crate) enum Command {
   Clear,
+  Copy,
   Quit,
   Rename,
 }
@@ -10,7 +11,7 @@ pub(crate) enum Command {
 impl Command {
   fn accepts_arguments(self) -> bool {
     match self {
-      Self::Clear | Self::Quit => false,
+      Self::Clear | Self::Copy | Self::Quit => false,
       Self::Rename => true,
     }
   }
@@ -18,6 +19,7 @@ impl Command {
   pub(crate) fn description(self) -> &'static str {
     match self {
       Self::Clear => "Clear the transcript",
+      Self::Copy => "Copy the last assistant response to the clipboard",
       Self::Quit => "Quit kotomori",
       Self::Rename => "Rename the session",
     }
@@ -56,6 +58,7 @@ impl Command {
   pub(crate) fn name(self) -> &'static str {
     match self {
       Self::Clear => "clear",
+      Self::Copy => "copy",
       Self::Quit => "quit",
       Self::Rename => "rename",
     }

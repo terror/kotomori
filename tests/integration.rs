@@ -900,6 +900,7 @@ fn command_completion_quits() -> Result {
         │ /
 
         /clear  Clear the transcript
+        /copy  Copy the last assistant response to the clipboard
         /quit  Quit kotomori
         /rename  Rename the session
 
@@ -924,7 +925,7 @@ fn command_completion_quits() -> Result {
       .with_context(|| format!("completion keys: {keys:?}"))
   }
 
-  case(&[Key::Down])?;
+  case(&[Key::Down, Key::Down])?;
   case(&[Key::Up, Key::Up])
 }
 

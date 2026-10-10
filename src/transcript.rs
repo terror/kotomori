@@ -69,6 +69,14 @@ impl Transcript {
     self.entries.is_empty()
   }
 
+  pub(crate) fn last_response(&self) -> Option<String> {
+    self.entries.iter().rev().find_map(|entry| match entry {
+      TranscriptEntry::Draft(buffer) => buffer.message().text(),
+      TranscriptEntry::Message(Message::Agent(message)) => message.text(),
+      _ => None,
+    })
+  }
+
   pub(crate) fn messages(&self) -> Vec<Message> {
     self
       .entries
