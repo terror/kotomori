@@ -3,9 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Composer {
   command_index: usize,
-  history: Vec<String>,
-  history_draft: Option<String>,
-  history_index: Option<usize>,
+  history: History,
   textarea: TextArea<'static>,
 }
 
@@ -17,8 +15,6 @@ impl Composer {
 
   pub(crate) fn clear_history(&mut self) {
     self.history.clear();
-    self.history_draft = None;
-    self.history_index = None;
   }
 
   fn command_input(&self) -> Option<&str> {
@@ -70,9 +66,7 @@ impl Composer {
   pub(crate) fn new(input: &str, history: Vec<String>) -> Self {
     Self {
       command_index: 0,
-      history,
-      history_draft: None,
-      history_index: None,
+      history: History::new(history),
       textarea: Self::textarea(input),
     }
   }
@@ -90,15 +84,12 @@ impl Composer {
   }
 
   pub(crate) fn remember(&mut self, input: &str) {
-    self.history.push(input.into());
-    self.history_draft = None;
-    self.history_index = None;
+    self.history.remember(input);
   }
 
   fn reset_navigation(&mut self) {
     self.command_index = 0;
-    self.history_draft = None;
-    self.history_index = None;
+    self.history.reset_navigation();
   }
 
   pub(crate) fn select_next(&mut self) {
@@ -123,19 +114,8 @@ impl Composer {
   }
 
   fn select_next_history(&mut self) {
-    let Some(index) = self.history_index else {
-      return;
-    };
-
-    if let Some(input) = self.history.get(index.saturating_add(1)).cloned() {
-      self.history_index = Some(index.saturating_add(1));
+    if let Some(input) = self.history.select_next() {
       self.set_input(&input);
-    } else {
-      self.history_index = None;
-
-      let draft = self.history_draft.take().unwrap_or_default();
-
-      self.set_input(&draft);
     }
   }
 
@@ -165,25 +145,9 @@ impl Composer {
   }
 
   fn select_previous_history(&mut self) {
-    let index = if let Some(index) = self.history_index {
-      index.checked_sub(1)
-    } else {
-      self.history.len().checked_sub(1)
-    };
-
-    let Some(index) = index else {
-      return;
-    };
-
-    if self.history_index.is_none() {
-      self.history_draft = Some(self.input_text());
+    if let Some(input) = self.history.select_previous(self.input_text()) {
+      self.set_input(&input);
     }
-
-    self.history_index = Some(index);
-
-    let input = self.history[index].clone();
-
-    self.set_input(&input);
   }
 
   pub(crate) fn selected_command(&self) -> Option<Command> {
@@ -206,12 +170,7 @@ impl Composer {
   }
 
   fn textarea(input: &str) -> TextArea<'static> {
-    let mut textarea = TextArea::from(
-      input
-        .split('\n')
-        .map(ToString::to_string)
-        .collect::<Vec<_>>(),
-    );
+    let mut textarea = TextArea::from(input.split('\n'));
 
     textarea.move_cursor(CursorMove::Bottom);
     textarea.move_cursor(CursorMove::End);

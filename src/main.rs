@@ -38,6 +38,8 @@ use {
   execution_limit::ExecutionLimit,
   frame::Frame,
   futures_util::{StreamExt, future::BoxFuture},
+  history::History,
+  history_navigation::HistoryNavigation,
   indoc::formatdoc,
   loader::Loader,
   message::Message,
@@ -179,6 +181,8 @@ mod effect;
 mod event;
 mod execution_limit;
 mod frame;
+mod history;
+mod history_navigation;
 mod loader;
 mod message;
 mod message_buffer;
