@@ -2428,10 +2428,24 @@ fn resume_picker_cancels_with_escape_and_ctrl_c() -> Result {
 
 #[test]
 fn resume_with_no_sessions_exits_successfully() -> Result {
+  let directory = tempfile::tempdir()?;
+
   Test::new()
+    .env("KOTOMORI_HOME", directory.path().to_str().unwrap())
     .argument("resume")
     .stdout("No saved sessions.\n")
-    .success()
+    .success()?;
+
+  assert_eq!(
+    Connection::open(directory.path().join("kotomori.db"))?.query_row(
+      "PRAGMA user_version",
+      [],
+      |row| row.get::<_, i64>(0)
+    )?,
+    1,
+  );
+
+  Ok(())
 }
 
 #[test]
