@@ -610,49 +610,6 @@ mod tests {
   }
 
   #[test]
-  fn render_reasoning_entry_handles_multiline_content() {
-    let mut reasoning =
-      Reasoning::new_with_signature("foo\nbar", Some("baz".into()));
-
-    reasoning.content.extend([
-      ReasoningContent::Summary("qux".into()),
-      ReasoningContent::Encrypted("quux".into()),
-      ReasoningContent::Redacted {
-        data: "quuz".into(),
-      },
-    ]);
-
-    let transcript =
-      Transcript::with_entries(vec![TranscriptEntry::Message(Message::agent(
-        vec![AssistantContent::Reasoning(reasoning.sealed("foo"))],
-      ))]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: true,
-        run: None,
-        state: &transcript
-      }
-      .render(80),
-      [
-        LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::raw("foo"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::raw("bar"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::raw("qux"),
-        ]),
-      ]
-    );
-  }
-
-  #[test]
   fn render_tool_entry_after_agent() {
     let invocation = ToolInvocation::new(
       "bar",

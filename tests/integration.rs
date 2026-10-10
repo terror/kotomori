@@ -1131,6 +1131,7 @@ fn ctrl_t_toggles_reasoning() -> Result {
       Thinking...
         │ bar
         │ baz
+        │ qux
 
       │
 
