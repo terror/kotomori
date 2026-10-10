@@ -1587,12 +1587,67 @@ fn interrupt_advances_to_next_queued_submission() -> Result {
 }
 
 #[test]
+fn markdown_blocks() -> Result {
+  #[track_caller]
+  fn case(text: &str, expected: &str) -> Result {
+    Test::new()
+      .model("mock:local")
+      .arguments(["--prompt", &format!("\n\n{text}")])
+      .key(Key::Enter)
+      .expect_screen_contains(&format!(
+        indoc! {
+          "
+
+          queued for mock:local:
+
+          {expected}
+
+          │
+
+          mock · local · \
+          "
+        },
+        expected = expected,
+      ))
+      .quit()
+      .run()
+  }
+
+  case("# foo", "foo")?;
+  case("```\nfoo\n```", "foo")?;
+  case("```\nfoo", "foo")?;
+  case(
+    "| foo | bar | baz |\n| :--- | :---: | ---: |\n| x | y | z |",
+    indoc! {
+      "
+      ┌─────┬─────┬─────┐
+      │ foo │ bar │ baz │
+      ├─────┼─────┼─────┤
+      │ x   │  y  │   z │
+      └─────┴─────┴─────┘\
+      "
+    },
+  )
+}
+
+#[test]
 fn markdown_response() -> Result {
   Test::new()
     .model("mock:slow-streaming")
-    .submit("**foo**")
-    .expect_screen_contains("│ **foo**")
-    .expect_screen_contains("queued for mock:slow-streaming: foo")
+    .arguments(["--prompt", "**foo\x1b[2J**"])
+    .key(Key::Enter)
+    .expect_screen_contains(indoc! {
+      "
+
+      │ **foo\\u{1b}[2J**
+
+      queued for mock:slow-streaming: foo\\u{1b}[2J
+
+      │
+
+      mock · slow-streaming · \
+      "
+    })
     .run()
 }
 
