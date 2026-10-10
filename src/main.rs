@@ -157,7 +157,9 @@ macro_rules! assert_matches {
 }
 
 #[cfg(test)]
-use {serde_json::Value, std::sync::Mutex, tool::CommandTool};
+use {
+  serde_json::Value, std::sync::Mutex, temptree::temptree, tool::CommandTool,
+};
 
 mod action;
 mod agent;

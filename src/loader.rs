@@ -8,10 +8,13 @@ pub(crate) struct Loader {
 impl Loader {
   const AGENTS: &'static str = "AGENTS.md";
 
-  fn agent_paths<'a>(
-    &'a self,
-    root: &'a Path,
-  ) -> impl Iterator<Item = PathBuf> + 'a {
+  pub(crate) fn load(&self) -> Result<String> {
+    let root = self
+      .cwd
+      .ancestors()
+      .find(|ancestor| ancestor.join(".git").exists())
+      .unwrap_or(&self.cwd);
+
     let mut ancestors = self
       .cwd
       .ancestors()
@@ -24,13 +27,6 @@ impl Loader {
       .into_iter()
       .map(|directory| directory.join(Self::AGENTS))
       .filter(|path| path.is_file())
-  }
-
-  pub(crate) fn load(&self) -> Result<String> {
-    let root = self.repository_root();
-
-    self
-      .agent_paths(&root)
       .map(|path| {
         let contents = fs::read_to_string(&path)
           .with_context(|| format!("failed to read {}", path.display()))?;
@@ -44,15 +40,6 @@ impl Loader {
   pub(crate) fn new(cwd: impl Into<PathBuf>) -> Self {
     Self { cwd: cwd.into() }
   }
-
-  fn repository_root(&self) -> PathBuf {
-    self
-      .cwd
-      .ancestors()
-      .find(|ancestor| ancestor.join(".git").exists())
-      .unwrap_or(&self.cwd)
-      .to_path_buf()
-  }
 }
 
 #[cfg(test)]
@@ -61,19 +48,21 @@ mod tests {
 
   #[test]
   fn loads_agents_from_root_to_cwd() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = temptree! {
+      ".git": {},
+      "AGENTS.md": "foo\n",
+      foo: {
+        bar: {
+          "AGENTS.md": "bar\n",
+        },
+      },
+    };
 
     let root = directory.path();
     let child = root.join("foo").join("bar");
 
     let root_agents = root.join(Loader::AGENTS);
     let child_agents = child.join(Loader::AGENTS);
-
-    fs::create_dir(root.join(".git")).unwrap();
-    fs::create_dir_all(&child).unwrap();
-
-    fs::write(&root_agents, "foo\n").unwrap();
-    fs::write(&child_agents, "bar\n").unwrap();
 
     assert_eq!(
       Loader::new(child).load().unwrap(),
