@@ -36,6 +36,15 @@ impl Provider for Mock {
             );
           }
         }
+        "command-output" if request.messages.len() == 1 => {
+          AssistantContent::tool_call(
+            "foo",
+            ToolName::new("command")?,
+            serde_json::json!({
+              "command": if cfg!(windows) { "type foo" } else { "cat foo" },
+            }),
+          )
+        }
         "empty-reasoning" => AssistantContent::reasoning("mock", ""),
         "encrypted-reasoning" => AssistantContent::Reasoning(
           Reasoning::encrypted("bar").sealed("mock"),

@@ -1088,6 +1088,48 @@ fn command_fork_persists_independent_sessions() -> Result {
 }
 
 #[test]
+fn command_output_is_limited() -> Result {
+  let directory = tempfile::tempdir()?;
+
+  fs::write(
+    directory.path().join("foo"),
+    format!("{}\n\nbar\nbaz\nqux\n", "foo".repeat(30)),
+  )?;
+
+  let command = if cfg!(windows) { "type foo" } else { "cat foo" };
+
+  Test::new()
+    .cwd(directory.path())
+    .model("mock:command-output")
+    .submit("foo")
+    .expect_screen_contains(&format!("Approve {command}?"))
+    .type_text("y")
+    .expect_screen_contains(&format!(
+      indoc! {
+        "
+
+        │ foo
+
+        ● Ran {command}
+          │ foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo...
+          │ bar
+          │ baz
+          │ ... 1 more line
+
+        queued for mock:command-output: foo
+
+        │
+
+        mock · command-output · \
+        "
+      },
+      command = command,
+    ))
+    .quit()
+    .run()
+}
+
+#[test]
 fn command_quit_interrupts_active_agent_and_saves_partial_output() -> Result {
   #[track_caller]
   fn case(command: &str, key: Key) -> Result {
