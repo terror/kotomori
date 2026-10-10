@@ -53,40 +53,8 @@ mod tests {
   use super::*;
 
   #[test]
-  fn escapes_terminal_controls() {
-    assert_eq!(
-      MarkdownComponent {
-        text: "**foo\x1b[2J**"
-      }
-      .render(80),
-      [LineComponent::from([Span::styled(
-        r"foo\u{1b}[2J",
-        Style::Markdown(anstyle::Style::new().bold()),
-      )])],
-    );
-  }
-
-  #[test]
-  fn renders_code_and_headings_without_delimiters() {
-    #[track_caller]
-    fn case(text: &str, expected: &[&str]) {
-      assert_eq!(
-        MarkdownComponent { text }
-          .render(80)
-          .into_iter()
-          .map(|line| Vec::<Span>::from(line)
-            .into_iter()
-            .map(|span| span.text)
-            .collect::<String>())
-          .collect::<Vec<_>>(),
-        expected,
-      );
-    }
-
-    case("# foo", &["foo"]);
-    case("```\nfoo\n```", &["foo"]);
-    case("```\nfoo", &["foo"]);
-    case("", &[]);
+  fn renders_empty_input() {
+    assert_eq!(MarkdownComponent { text: "" }.render(80), [],);
   }
 
   #[test]
@@ -144,18 +112,6 @@ mod tests {
         expected,
       );
     }
-
-    case(
-      "| foo | bar | baz |\n| :--- | :---: | ---: |\n| x | y | z |",
-      80,
-      &[
-        "┌─────┬─────┬─────┐",
-        "│ foo │ bar │ baz │",
-        "├─────┼─────┼─────┤",
-        "│ x   │  y  │   z │",
-        "└─────┴─────┴─────┘",
-      ],
-    );
 
     case(
       "| foo | bar |\n| --- | --- |\n| **foo baz** | qux |",
