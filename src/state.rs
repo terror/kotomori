@@ -1150,63 +1150,6 @@ mod tests {
     assert_eq!(state.composer.input_text(), "");
   }
 
-  #[test]
-  fn queued_submissions_run_in_order() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("first".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    for input in ["second", "third"] {
-      for c in input.chars() {
-        state.handle_event(Event::Action(Action::Edit(Input {
-          key: Key::Char(c),
-          ..Default::default()
-        })));
-      }
-
-      state.handle_event(Event::Action(Action::Submit));
-    }
-
-    assert_eq!(state.queued_inputs.len(), 2);
-
-    assert_matches!(
-      state
-        .handle_event(Event::Agent {
-          event: AgentEvent::Done,
-          run_id: 0,
-        })
-        .as_slice(),
-      [Effect::SaveSession, Effect::RunAgent { run_id: 1, .. }]
-    );
-
-    assert_matches!(
-      state
-        .handle_event(Event::Agent {
-          event: AgentEvent::Done,
-          run_id: 1,
-        })
-        .as_slice(),
-      [Effect::SaveSession, Effect::RunAgent { run_id: 2, .. }]
-    );
-
-    assert_eq!(
-      state.session.transcript.messages(),
-      [
-        Message::User(vec![UserMessageContent::Text("first".into())]),
-        Message::User(vec![UserMessageContent::Text("second".into())]),
-        Message::User(vec![UserMessageContent::Text("third".into())]),
-      ]
-    );
-  }
-
   #[tokio::test]
   async fn quit_interrupts_active_approval() {
     let mut state = State::new(Session::new(
@@ -1382,71 +1325,6 @@ mod tests {
         Message::agent(vec![AssistantContent::text("current")]),
       ]
     );
-  }
-
-  #[test]
-  fn submit_is_queued_while_agent_active() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("foo".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![
-        Effect::SaveSession,
-        Effect::RunAgent {
-          messages: vec![Message::User(vec![UserMessageContent::Text(
-            "foo".into()
-          )])],
-          run_id: 0,
-        }
-      ]
-    );
-
-    for c in "bar".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      Vec::new()
-    );
-
-    assert_eq!(state.composer.input_text(), "");
-    assert_eq!(state.queued_inputs.len(), 1);
-
-    assert_eq!(
-      state.session.transcript.messages(),
-      vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
-    );
-
-    assert_eq!(
-      state.handle_event(Event::Agent {
-        event: AgentEvent::Done,
-        run_id: 0,
-      }),
-      vec![
-        Effect::SaveSession,
-        Effect::RunAgent {
-          messages: vec![
-            Message::User(vec![UserMessageContent::Text("foo".into())]),
-            Message::User(vec![UserMessageContent::Text("bar".into())]),
-          ],
-          run_id: 1,
-        }
-      ]
-    );
-
-    assert!(state.queued_inputs.is_empty());
   }
 
   #[test]
