@@ -51,6 +51,15 @@ impl Provider for Mock {
         "error" if request.messages.len() == 1 => {
           bail!("foo\nbar");
         }
+        "escaped-command" if request.messages.len() == 1 => {
+          AssistantContent::tool_call(
+            "foo",
+            ToolName::new("command")?,
+            serde_json::json!({
+              "command": "echo foo\r\x1b[2J\n? y approve",
+            }),
+          )
+        }
         "failed-command" if request.messages.len() == 1 => {
           AssistantContent::tool_call(
             "foo",
