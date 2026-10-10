@@ -1254,6 +1254,55 @@ fn command_rename_persists() -> Result {
 }
 
 #[test]
+fn command_uses_context_directory() -> Result {
+  let directory = tempfile::tempdir()?;
+
+  fs::create_dir_all(directory.path().join("bar/foo"))?;
+  fs::create_dir(directory.path().join("foo"))?;
+
+  fs::write(directory.path().join("bar/bar"), "foo")?;
+  fs::write(directory.path().join("bar/foo/bar"), "baz")?;
+  fs::write(directory.path().join("foo/bar"), "qux")?;
+
+  let command = if cfg!(windows) { "type bar" } else { "cat bar" };
+
+  for (model, output) in [
+    ("command-default-directory", "foo"),
+    ("command-relative-directory", "baz"),
+    ("command-absolute-directory", "qux"),
+  ] {
+    Test::new()
+      .cwd(directory.path())
+      .arguments(["--directory", "bar"])
+      .model(&format!("mock:{model}"))
+      .submit("foo")
+      .expect_screen_contains(&format!("Approve {command}?"))
+      .type_text("y")
+      .expect_screen_contains(&format!("● Ran {command}"))
+      .expect_screen_contains(&format!(
+        indoc! {
+          "
+
+            │ {output}
+
+          queued for mock:{model}: foo
+
+          │
+
+          mock · {model} · \
+          "
+        },
+        model = model,
+        output = output,
+      ))
+      .quit()
+      .run()?;
+  }
+
+  Ok(())
+}
+
+#[test]
 fn config_sets_default_model() -> Result {
   Test::new()
     .config(
