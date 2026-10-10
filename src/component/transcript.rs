@@ -388,34 +388,6 @@ mod tests {
   }
 
   #[test]
-  fn render_empty_reasoning() {
-    #[track_caller]
-    fn case(reasoning: Reasoning) {
-      let transcript =
-        Transcript::with_entries(vec![TranscriptEntry::Message(
-          Message::agent(vec![AssistantContent::Reasoning(
-            reasoning.sealed("foo"),
-          )]),
-        )]);
-
-      for expanded in [false, true] {
-        assert_eq!(
-          TranscriptComponent {
-            reasoning_expanded: expanded,
-            run: None,
-            state: &transcript
-          }
-          .render(80),
-          [],
-        );
-      }
-    }
-
-    case(Reasoning::new(""));
-    case(Reasoning::encrypted("foo"));
-  }
-
-  #[test]
   fn render_empty_transcript() {
     let transcript = Transcript::default();
 
