@@ -707,6 +707,40 @@ fn approval_prompt_denies_command() -> Result {
 }
 
 #[test]
+fn approval_prompt_escapes_control_characters() -> Result {
+  Test::new()
+    .model("mock:escaped-command")
+    .submit("foo")
+    .expect_screen_contains(indoc! {
+      "
+
+      ? Approve echo foo\\r\\u{1b}[2J\\n? y approve?
+      y approve · n/Esc deny
+
+      mock · escaped-command · \
+      "
+    })
+    .type_text("n")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      ● Failed running echo foo\\r\\u{1b}[2J\\n? y approve
+        │ permission denied
+
+      queued for mock:escaped-command: foo
+
+      │
+
+      mock · escaped-command · \
+      "
+    })
+    .quit()
+    .run()
+}
+
+#[test]
 fn blank_submit_does_nothing() -> Result {
   #[track_caller]
   fn case(key: Key) -> Result {
