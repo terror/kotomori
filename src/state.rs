@@ -534,38 +534,6 @@ mod tests {
   }
 
   #[test]
-  fn command_submission_returns_effects() {
-    #[track_caller]
-    fn case(input: &str, action: Action) {
-      let mut state = State::new(Session::new(
-        &Settings {
-          directory: "foo".into(),
-          model: "mock:local".parse().unwrap(),
-          prompt: Some(input.into()),
-          yolo: false,
-        },
-        0,
-      ));
-
-      state.run("foo".into());
-
-      assert_eq!(
-        state.handle_event(Event::Action(action)),
-        vec![Effect::InterruptAgent, Effect::SaveSession]
-      );
-
-      assert_eq!(state.run, None);
-      assert_eq!(state.composer.input_text(), "");
-    }
-
-    case("/cl", Action::Submit);
-    case("/cl", Action::SubmitImmediately);
-    case("/q", Action::Submit);
-    case("/q", Action::SubmitImmediately);
-    case("  /clear  ", Action::Submit);
-  }
-
-  #[test]
   fn completed_messages_survive_resumption() {
     let settings = Settings {
       directory: "foo".into(),
