@@ -776,6 +776,64 @@ fn bracketed_paste_inserts_one_edit() -> Result {
 }
 
 #[test]
+fn command_clear_interrupts_active_agent() -> Result {
+  Test::new()
+    .model("mock:slow-streaming")
+    .submit("foo")
+    .expect_screen_contains("queued")
+    .submit("bar")
+    .expect_screen_contains(indoc! {
+      "
+
+      Queued
+      │ bar
+
+      │
+
+      mock · slow-streaming · \
+      "
+    })
+    .submit("/clear")
+    .expect_screen_contains(indoc! {
+      "
+
+      Type a prompt. Press Ctrl-C to quit.
+
+      │
+
+      mock · slow-streaming · \
+      "
+    })
+    .key(Key::Up)
+    .type_text("baz")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ baz
+
+      mock · slow-streaming · \
+      "
+    })
+    .key(Key::Enter)
+    .expect_screen_contains(indoc! {
+      "
+
+      Type a prompt. Press Ctrl-C to quit.
+
+      │ baz
+
+      queued for mock:slow-streaming: baz
+
+      │
+
+      mock · slow-streaming · \
+      "
+    })
+    .quit()
+    .run()
+}
+
+#[test]
 fn command_clears() -> Result {
   #[track_caller]
   fn case(command: &str) -> Result {

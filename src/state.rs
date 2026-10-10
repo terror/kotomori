@@ -411,6 +411,49 @@ mod tests {
     );
   }
 
+  #[test]
+  fn agent_events_without_run_are_ignored() {
+    let mut state = State::new(Session::new(
+      &Settings {
+        directory: "foo".into(),
+        model: "mock:local".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      },
+      0,
+    ));
+
+    let invocation = ToolInvocation::new(
+      "foo",
+      ToolInvocationKind::Command(CommandTool {
+        command: "bar".into(),
+        cwd: None,
+      }),
+    );
+
+    for event in [
+      AgentEvent::Message(Message::agent(vec![AssistantContent::ToolCall(
+        invocation.protocol,
+      )])),
+      AgentEvent::Message(Message::User(vec![
+        UserMessageContent::ToolResult {
+          call: CallId::from_wire("foo"),
+          name: ToolName::new("command").unwrap(),
+          result: ToolResult::default(),
+        },
+      ])),
+      AgentEvent::Done,
+    ] {
+      assert_eq!(
+        state.handle_event(Event::Agent { event, run_id: 0 }),
+        Vec::new(),
+      );
+    }
+
+    assert_eq!(state.run, None);
+    assert_eq!(state.session.transcript.entries, []);
+  }
+
   #[tokio::test]
   async fn approval_terminal_agent_tool_result_drops_pending_request() {
     let mut state = State::new(Session::new(
@@ -488,70 +531,6 @@ mod tests {
 
     assert_eq!(state.run, None);
     assert!(response_receiver.await.is_err());
-  }
-
-  #[test]
-  fn command_clear_interrupts_active_agent_and_ignores_late_events() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("foo".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    for c in "/clear".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::InterruptAgent, Effect::SaveSession]
-    );
-
-    assert_eq!(state.run, None);
-
-    assert_eq!(state.session.transcript.messages(), Vec::new());
-
-    let invocation = ToolInvocation::new(
-      "late",
-      ToolInvocationKind::Command(CommandTool {
-        command: "echo late".into(),
-        cwd: None,
-      }),
-    );
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Message(Message::agent(vec![
-        AssistantContent::ToolCall(invocation.protocol),
-      ])),
-      run_id: 0,
-    });
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Message(Message::User(vec![
-        UserMessageContent::ToolResult {
-          call: CallId::from_wire("late"),
-          name: ToolName::new("command").unwrap(),
-          result: ToolResult::default(),
-        },
-      ])),
-      run_id: 0,
-    });
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
-      run_id: 0,
-    });
-
-    assert_eq!(state.session.transcript.messages(), Vec::new());
   }
 
   #[test]
