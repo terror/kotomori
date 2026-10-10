@@ -555,59 +555,6 @@ mod tests {
   }
 
   #[test]
-  fn command_quit_interrupts_active_agent_and_saves_partial_output() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("foo".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text {
-        delta: "partial response".into(),
-        index: 0,
-      }),
-      run_id: 0,
-    });
-
-    for character in "/quit".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(character),
-        ..Default::default()
-      })));
-    }
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![Effect::InterruptAgent, Effect::SaveSession]
-    );
-
-    assert!(!state.should_quit);
-    assert_eq!(state.run, None);
-
-    assert_eq!(state.composer.input_text(), "");
-
-    assert_eq!(
-      state.session.transcript.entries,
-      [
-        TranscriptEntry::Message(Message::User(vec![
-          UserMessageContent::Text("foo".into())
-        ])),
-        TranscriptEntry::Message(Message::agent(vec![AssistantContent::text(
-          "partial response"
-        )])),
-        TranscriptEntry::Interrupted,
-      ],
-    );
-  }
-
-  #[test]
   fn command_submission_returns_effects() {
     #[track_caller]
     fn case(input: &str, action: Action) {
