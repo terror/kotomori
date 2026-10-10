@@ -46,14 +46,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn alt_enter_submits_immediately() {
-    assert_eq!(
-      Action::from_key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT)),
-      Action::SubmitImmediately
-    );
-  }
-
-  #[test]
   fn ctrl_j_inserts_newline() {
     assert_eq!(
       Action::from_key(&KeyEvent::new(

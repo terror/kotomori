@@ -34,6 +34,7 @@ static PTY_OPEN_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Clone, Copy, Debug)]
 enum Key {
+  AltEnter,
   CtrlC,
   CtrlJ,
   Down,
@@ -46,6 +47,7 @@ enum Key {
 impl Key {
   fn bytes(self) -> &'static [u8] {
     match self {
+      Self::AltEnter => b"\x1b\r",
       Self::CtrlC => b"\x03",
       Self::CtrlJ => b"\n",
       Self::Down => b"\x1b[B",
@@ -862,6 +864,63 @@ fn directory_is_missing() -> Result {
       io::Error::from_raw_os_error(2),
     ))
     .status(1)
+}
+
+#[test]
+fn immediate_submit_interrupts_active_agent_and_starts_new_run() -> Result {
+  let queued = indoc! {
+    "
+
+    Queued
+    │ baz
+
+    │
+
+    mock · slow-streaming · \
+    "
+  };
+
+  Test::new()
+    .model("mock:slow-streaming")
+    .submit("foo")
+    .expect_screen_contains("queued")
+    .submit("baz")
+    .expect_screen_contains(queued)
+    .type_text("  bar  ")
+    .key(Key::AltEnter)
+    .expect_screen_contains("Conversation interrupted")
+    .expect_screen_contains(queued)
+    .expect_screen_contains(indoc! {
+      "
+
+      ■ Conversation interrupted, tell the model what to do differently.
+
+      │ bar
+
+      queued for mock:slow-streaming: bar
+
+      │ baz
+
+      queued for mock:slow-streaming: baz
+
+      │
+
+      mock · slow-streaming · \
+      "
+    })
+    .expect_screen_contains("│ foo\n\nqueued")
+    .expect_screen_excludes("queued for mock:slow-streaming: foo")
+    .key(Key::Up)
+    .type_text("!")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ bar!
+
+      mock · slow-streaming · \
+      "
+    })
+    .run()
 }
 
 #[test]
