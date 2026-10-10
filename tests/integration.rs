@@ -2193,19 +2193,20 @@ fn unknown_command() -> Result {
 
 #[test]
 fn unknown_provider() -> Result {
-  fn case(test: Test) -> Result {
-    test
-      .stderr("error: no registered provider is named `foo`\n")
-      .status(1)
-  }
+  Test::new()
+    .model("foo:bar")
+    .stderr("error: no registered provider is named `foo`\n")
+    .status(1)?;
 
-  case(Test::new().model("foo:bar"))?;
-  case(Test::new().config(
-    r#"
-    default_provider = "foo"
-    default_model = "bar"
-    "#,
-  ))
+  Test::new()
+    .config(
+      r#"
+      default_provider = "foo"
+      default_model = "bar"
+      "#,
+    )
+    .stderr("error: no registered provider is named `foo`\n")
+    .status(1)
 }
 
 #[test]
