@@ -742,26 +742,42 @@ fn command_completion_clears() -> Result {
 
 #[test]
 fn command_completion_quits() -> Result {
-  Test::new()
-    .model("mock:local")
-    .type_text("/")
-    .expect_screen_contains(indoc! {
-      "
+  #[track_caller]
+  fn case(key: Key) -> Result {
+    Test::new()
+      .model("mock:local")
+      .type_text("/")
+      .expect_screen_contains(indoc! {
+        "
 
-      │ /
+        │ /
 
-      /clear  Clear the transcript
-      /quit  Quit kotomori
+        /clear  Clear the transcript
+        /quit  Quit kotomori
 
-      mock · local · \
-      "
-    })
-    .down()
-    .tab()
-    .expect_screen_contains("/quit")
-    .enter()
-    .expect_exit(0)
-    .run()
+        mock · local · \
+        "
+      })
+      .key(key)
+      .tab()
+      .expect_screen_contains(indoc! {
+        "
+
+        │ /quit
+
+        /quit  Quit kotomori
+
+        mock · local · \
+        "
+      })
+      .enter()
+      .expect_exit(0)
+      .run()
+      .with_context(|| format!("completion key: {key:?}"))
+  }
+
+  case(Key::Down)?;
+  case(Key::Up)
 }
 
 #[test]
