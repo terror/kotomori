@@ -1207,16 +1207,56 @@ fn provider_unknown_tool_recovers() -> Result {
 }
 
 #[test]
-fn queued_steering_runs_after_active_response() -> Result {
+fn queued_submissions_run_in_order() -> Result {
   Test::new()
     .model("mock:slow-streaming")
     .submit("foo")
     .expect_screen_contains("queued")
     .type_text("bar")
-    .expect_screen_contains("│ bar\n\nmock · slow-streaming · ")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ bar
+
+      mock · slow-streaming · \
+      "
+    })
     .enter()
-    .expect_screen_contains("Queued\n│ bar")
-    .expect_screen_contains("queued for mock:slow-streaming: bar")
+    .submit("baz")
+    .expect_screen_contains(indoc! {
+      "
+
+      Queued
+      │ bar
+
+      Queued
+      │ baz
+
+      │
+
+      mock · slow-streaming · \
+      "
+    })
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      queued for mock:slow-streaming: foo
+
+      │ bar
+
+      queued for mock:slow-streaming: bar
+
+      │ baz
+
+      queued for mock:slow-streaming: baz
+
+      │
+
+      mock · slow-streaming · \
+      "
+    })
     .run()
 }
 
