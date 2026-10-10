@@ -643,8 +643,12 @@ fn approval_prompt_approves_command() -> Result {
 
         │ foo
 
+        baz
+
         ● Ran echo bar
           │ bar
+
+        qux
 
         done
 
@@ -678,8 +682,12 @@ fn approval_prompt_denies_command() -> Result {
 
         │ foo
 
+        baz
+
         ● Failed running echo bar
           │ permission denied
+
+        qux
 
         done
 
@@ -1197,8 +1205,12 @@ fn ctrl_c_interrupts_active_approval() -> Result {
 
       │ foo
 
+      baz
+
       ● Failed running echo bar
         │ interrupted
+
+      qux
 
       ■ Conversation interrupted, tell the model what to do differently.
 

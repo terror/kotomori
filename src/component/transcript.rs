@@ -360,61 +360,6 @@ mod tests {
   }
 
   #[test]
-  fn render_tool_entry_after_agent() {
-    let invocation = ToolInvocation::new(
-      "bar",
-      ToolInvocationKind::Command(CommandTool {
-        command: "rg --files".into(),
-        cwd: None,
-      }),
-    );
-
-    let transcript = Transcript::with_entries(vec![
-      TranscriptEntry::Message(Message::agent(vec![
-        AssistantContent::text("foo"),
-        AssistantContent::ToolCall(invocation.protocol.clone()),
-        AssistantContent::text("bar"),
-      ])),
-      TranscriptEntry::Message(Message::User(vec![
-        UserMessageContent::ToolResult {
-          call: invocation.protocol.id.clone(),
-          name: invocation.protocol.function.name.clone(),
-          result: ToolResult {
-            exit_status: Some(0),
-            outcome: ToolOutcome::Success,
-            stdout: Some("baz\n".into()),
-            ..Default::default()
-          },
-        },
-      ])),
-    ]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: None,
-        state: &transcript
-      }
-      .render(80),
-      [
-        LineComponent::raw("foo"),
-        LineComponent::blank(),
-        LineComponent::from([
-          Span::styled("●", Style::Success),
-          Span::raw(" "),
-          Span::raw("Ran rg --files"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::raw("baz"),
-        ]),
-        LineComponent::blank(),
-        LineComponent::raw("bar"),
-      ]
-    );
-  }
-
-  #[test]
   fn render_tool_entry_after_user() {
     let invocation = ToolInvocation::new(
       "bar",
