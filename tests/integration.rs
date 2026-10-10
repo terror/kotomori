@@ -1018,6 +1018,35 @@ fn config_sets_default_model() -> Result {
 }
 
 #[test]
+fn ctrl_c_interrupts_active_approval() -> Result {
+  Test::new()
+    .model("mock:approval-required-command")
+    .submit("foo")
+    .expect_screen_contains("Approve echo bar?")
+    .key(Key::CtrlC)
+    .expect_screen_contains("Conversation interrupted")
+    .type_text("bar")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      ● Failed running echo bar
+        │ interrupted
+
+      ■ Conversation interrupted, tell the model what to do differently.
+
+      │ bar
+
+      mock · approval-required-command · \
+      "
+    })
+    .key(Key::CtrlC)
+    .expect_exit(0)
+    .run()
+}
+
+#[test]
 fn ctrl_c_quits_gracefully() -> Result {
   Test::new().quit().run()
 }
