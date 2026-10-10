@@ -39,7 +39,7 @@ impl Provider for Mock {
           Reasoning::encrypted("bar").sealed("mock"),
         ),
         "error" if request.messages.len() == 1 => {
-          bail!("mock provider error");
+          bail!("foo\nbar");
         }
         "malformed-tool-arguments" if request.messages.len() == 1 => {
           AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(

@@ -415,32 +415,6 @@ mod tests {
   }
 
   #[test]
-  fn render_error_entry() {
-    let transcript =
-      Transcript::with_entries(vec![TranscriptEntry::Error("foo".into())]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: None,
-        state: &transcript
-      }
-      .render(80),
-      [
-        LineComponent::from([
-          Span::styled("●", Style::Danger),
-          Span::raw(" "),
-          Span::raw("Error"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::raw("foo"),
-        ]),
-      ]
-    );
-  }
-
-  #[test]
   fn render_expanded_draft_reasoning() {
     let mut run = Run::new(0);
 

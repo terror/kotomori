@@ -26,28 +26,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn renders_error() {
-    assert_eq!(
-      TranscriptErrorComponent { error: "foo\nbar" }.render(80),
-      [
-        LineComponent::from([
-          Span::styled("●", Style::Danger),
-          Span::raw(" "),
-          Span::raw("Error"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::raw("foo"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::raw("bar"),
-        ]),
-      ]
-    );
-  }
-
-  #[test]
   fn wraps_details_inside_gutter() {
     assert_eq!(
       TranscriptErrorComponent { error: "foobar" }.render(8),
