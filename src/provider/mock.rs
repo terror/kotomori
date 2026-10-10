@@ -82,6 +82,32 @@ impl Provider for Mock {
             .into(),
           );
         }
+        "unfinished-reasoning" => {
+          sink.update_many([
+            MessageUpdate::Text {
+              delta: "bar".into(),
+              index: 0,
+            },
+            MessageUpdate::ReasoningDelta {
+              delta: "baz\nqux".into(),
+              index: 1,
+            },
+            MessageUpdate::Text {
+              delta: "quux".into(),
+              index: 2,
+            },
+            MessageUpdate::ReasoningDelta {
+              delta: "quuz".into(),
+              index: 3,
+            },
+            MessageUpdate::Text {
+              delta: "corge\ngrault".into(),
+              index: 4,
+            },
+          ])?;
+
+          return pending().await;
+        }
         "unknown-tool" if request.messages.len() == 1 => {
           AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
             "foo",

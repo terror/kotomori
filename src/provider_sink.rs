@@ -28,6 +28,15 @@ impl ProviderSink {
 
     Ok(())
   }
+
+  pub(crate) fn update_many(
+    &self,
+    updates: impl IntoIterator<Item = MessageUpdate>,
+  ) -> Result {
+    updates
+      .into_iter()
+      .try_for_each(|update| self.update(update))
+  }
 }
 
 #[cfg(test)]
