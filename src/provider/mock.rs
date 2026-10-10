@@ -3,35 +3,8 @@ use super::*;
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Mock;
 
-impl Mock {
-  fn command(request: &Request) -> Result<AgentMessage> {
-    let has_tool_result =
-      request.messages.iter().any(|message| match message {
-        Message::Agent(_) => false,
-        Message::User(content) => content.iter().any(|content| {
-          matches!(content, UserMessageContent::ToolResult { .. })
-        }),
-      });
-
-    let content = if has_tool_result {
-      AssistantContent::text("done")
-    } else {
-      AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
-        "foo",
-        ToolFunction {
-          arguments: serde_json::json!({
-            "command": "echo bar",
-          }),
-          name: ToolName::new("command")?,
-        },
-      ))
-    };
-
-    Ok(vec![content].into())
-  }
-}
-
 impl Provider for Mock {
+  #[allow(clippy::too_many_lines)]
   fn stream<'a>(
     &'a self,
     request: Request,
@@ -39,7 +12,29 @@ impl Provider for Mock {
   ) -> BoxFuture<'a, Result<AgentMessage>> {
     Box::pin(async move {
       let content = match request.model.name.as_str() {
-        "approval-required-command" => return Self::command(&request),
+        "approval-required-command" => {
+          let has_tool_result =
+            request.messages.iter().any(|message| match message {
+              Message::Agent(_) => false,
+              Message::User(content) => content.iter().any(|content| {
+                matches!(content, UserMessageContent::ToolResult { .. })
+              }),
+            });
+
+          if has_tool_result {
+            AssistantContent::text("done")
+          } else {
+            AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
+              "foo",
+              ToolFunction {
+                arguments: serde_json::json!({
+                  "command": "echo bar",
+                }),
+                name: ToolName::new("command")?,
+              },
+            ))
+          }
+        }
         "empty-reasoning" => AssistantContent::reasoning("mock", ""),
         "encrypted-reasoning" => AssistantContent::Reasoning(
           Reasoning::encrypted("bar").sealed("mock"),
