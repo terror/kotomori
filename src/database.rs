@@ -9,6 +9,32 @@ impl Database {
   const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
   const SCHEMA_VERSION: usize = Self::MIGRATIONS.len();
 
+  pub(crate) fn fork_session(
+    &self,
+    session: &Session,
+    now: u64,
+  ) -> Result<Session> {
+    let transaction = self.connection.unchecked_transaction()?;
+
+    self.save_session(session, now)?;
+
+    let session = Session {
+      title: session.title.clone(),
+      transcript: Transcript::with_entries(session.transcript.entries.clone()),
+      ..Session::new(&session.settings, now)
+    };
+
+    let saved = self.save_session(&session, now)?;
+
+    transaction.commit()?;
+
+    Ok(Session {
+      id: Some(saved.id),
+      title: saved.title,
+      ..session
+    })
+  }
+
   pub(crate) fn get_sessions(
     &self,
     directory: &Path,

@@ -6,6 +6,7 @@ pub(crate) enum Event {
   Agent { event: AgentEvent, run_id: u64 },
   ClipboardCopied(Result<(), String>),
   Error(String),
+  SessionForked(Result<Session, String>),
   SessionSaved(Result<SavedSession, String>),
   Tick(Duration),
 }
