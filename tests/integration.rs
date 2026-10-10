@@ -1364,6 +1364,39 @@ fn empty_reasoning_is_hidden() -> Result {
 }
 
 #[test]
+fn failed_command_reports_output() -> Result {
+  let directory = tempfile::tempdir()?;
+
+  fs::create_dir(directory.path().join("foo"))?;
+
+  Test::new()
+    .cwd(directory.path())
+    .model("mock:failed-command")
+    .submit("foo")
+    .expect_screen_contains("Approve echo bar&&echo baz>&2&&exit 1?")
+    .type_text("y")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      ● Failed running echo bar&&echo baz>&2&&exit 1
+        │ cwd foo
+        │ exit 1
+        │ bar
+        │ baz
+
+      queued for mock:failed-command: foo
+
+      │
+
+      mock · failed-command · \
+      "
+    })
+    .run()
+}
+
+#[test]
 fn immediate_submit_interrupts_active_agent_and_starts_new_run() -> Result {
   let queued = indoc! {
     "

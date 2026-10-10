@@ -23,32 +23,34 @@ impl Provider for Mock {
           if has_tool_result {
             AssistantContent::text("done")
           } else {
-            AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
+            AssistantContent::tool_call(
               "foo",
-              ToolFunction {
-                arguments: serde_json::json!({
-                  "command": "echo bar",
-                }),
-                name: ToolName::new("command")?,
-              },
-            ))
+              ToolName::new("command")?,
+              serde_json::json!({"command": "echo bar"}),
+            )
           }
         }
         "empty-reasoning" => AssistantContent::reasoning("mock", ""),
         "encrypted-reasoning" => AssistantContent::Reasoning(
           Reasoning::encrypted("bar").sealed("mock"),
         ),
-        "error" if request.messages.len() == 1 => {
-          bail!("foo\nbar");
+        "error" if request.messages.len() == 1 => bail!("foo\nbar"),
+        "failed-command" if request.messages.len() == 1 => {
+          AssistantContent::tool_call(
+            "foo",
+            ToolName::new("command")?,
+            serde_json::json!({
+              "command": "echo bar&&echo baz>&2&&exit 1",
+              "cwd": "foo",
+            }),
+          )
         }
         "malformed-tool-arguments" if request.messages.len() == 1 => {
-          AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
+          AssistantContent::tool_call(
             "foo",
-            ToolFunction {
-              arguments: serde_json::json!({}),
-              name: ToolName::new("command")?,
-            },
-          ))
+            ToolName::new("command")?,
+            serde_json::json!({}),
+          )
         }
         "reasoning" => {
           let mut reasoning =

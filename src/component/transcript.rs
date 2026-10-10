@@ -632,69 +632,6 @@ mod tests {
   }
 
   #[test]
-  fn render_tool_entry_failed() {
-    let invocation = ToolInvocation::new(
-      "bar",
-      ToolInvocationKind::Command(CommandTool {
-        command: "foo bar".into(),
-        cwd: Some("baz".into()),
-      }),
-    );
-
-    let transcript = Transcript::with_entries(vec![
-      TranscriptEntry::Message(Message::agent(vec![
-        AssistantContent::ToolCall(invocation.protocol.clone()),
-      ])),
-      TranscriptEntry::Message(Message::User(vec![
-        UserMessageContent::ToolResult {
-          call: invocation.protocol.id.clone(),
-          name: invocation.protocol.function.name.clone(),
-          result: ToolResult {
-            exit_status: Some(1),
-            stderr: Some("quux".into()),
-            stdout: Some("qux\n".into()),
-            ..Default::default()
-          },
-        },
-      ])),
-    ]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: None,
-        state: &transcript
-      }
-      .render(80),
-      [
-        LineComponent::from([
-          Span::styled("●", Style::Danger),
-          Span::raw(" "),
-          Span::raw("Failed running foo bar"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::styled("cwd ", Style::Muted),
-          Span::raw("baz"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::styled("exit ", Style::Muted),
-          Span::raw("1"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::raw("qux"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::raw("quux"),
-        ]),
-      ]
-    );
-  }
-
-  #[test]
   fn render_tool_entry_limits_output() {
     let invocation = ToolInvocation::new(
       "bar",
