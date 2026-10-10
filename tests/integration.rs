@@ -2358,6 +2358,48 @@ fn resume_interrupts_pending_tool_calls() -> Result {
 }
 
 #[test]
+fn resume_lists_sessions_with_invalid_transcripts() -> Result {
+  let directory = tempfile::tempdir()?;
+
+  let state = tempfile::tempdir()?;
+
+  Test::new()
+    .cwd(directory.path())
+    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+    .submit("foo")
+    .expect_screen_contains("queued for mock:local: foo")
+    .quit()
+    .run()?;
+
+  Connection::open(state.path().join("kotomori.db"))?
+    .execute("UPDATE sessions SET entries = '{}', title = NULL", [])?;
+
+  Test::new()
+    .cwd(directory.path())
+    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+    .argument("resume")
+    .expect_screen_contains("> Untitled session  mock:local")
+    .key(Key::Escape)
+    .expect_exit(0)
+    .run()?;
+
+  Test::new()
+    .cwd(directory.path())
+    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+    .arguments(["resume", "--last"])
+    .stderr(indoc! {
+      "
+      error: failed to load session `1`
+
+      because:
+      - Conversion error from type Text at index: 6, invalid type: map, expected a sequence at line 1 column 0
+      - invalid type: map, expected a sequence at line 1 column 0
+      "
+    })
+    .status(1)
+}
+
+#[test]
 fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
   let state = tempfile::Builder::new()
     .prefix("kotomori-state")
