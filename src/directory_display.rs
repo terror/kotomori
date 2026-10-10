@@ -1,6 +1,7 @@
 use super::*;
 
 pub(crate) struct DirectoryDisplay<'a> {
+  home: Option<PathBuf>,
   path: &'a Path,
 }
 
@@ -14,17 +15,11 @@ impl<'a> DirectoryDisplay<'a> {
   }
 
   pub(crate) fn new(path: &'a Path) -> Self {
-    Self { path }
+    Self::with_home(path, env::home_dir())
   }
 
-  #[cfg(test)]
-  fn with_home(path: &Path, home: &Path) -> String {
-    let path = path.clean();
-
-    match path.strip_prefix(home.clean()).ok() {
-      Some(relative) => Self::format_relative(relative),
-      None => path.display().to_string(),
-    }
+  fn with_home(path: &'a Path, home: Option<PathBuf>) -> Self {
+    Self { home, path }
   }
 }
 
@@ -32,7 +27,7 @@ impl Display for DirectoryDisplay<'_> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     let path = self.path.clean();
 
-    let Some(home) = env::home_dir().map(|home| home.clean()) else {
+    let Some(home) = self.home.as_ref().map(|home| home.clean()) else {
       return write!(f, "{}", path.display());
     };
 
@@ -52,8 +47,9 @@ mod tests {
     assert_eq!(
       DirectoryDisplay::with_home(
         Path::new("/foo/bar/../baz"),
-        Path::new("/foo"),
-      ),
+        Some("/foo".into()),
+      )
+      .to_string(),
       Path::new("~").join("baz").display().to_string(),
     );
   }
@@ -77,7 +73,8 @@ mod tests {
   #[test]
   fn displays_child_of_home_with_tilde() {
     assert_eq!(
-      DirectoryDisplay::with_home(Path::new("/foo/bar"), Path::new("/foo")),
+      DirectoryDisplay::with_home(Path::new("/foo/bar"), Some("/foo".into()))
+        .to_string(),
       Path::new("~").join("bar").display().to_string(),
     );
   }
@@ -85,7 +82,8 @@ mod tests {
   #[test]
   fn displays_home_as_tilde() {
     assert_eq!(
-      DirectoryDisplay::with_home(Path::new("/foo"), Path::new("/foo")),
+      DirectoryDisplay::with_home(Path::new("/foo"), Some("/foo".into()))
+        .to_string(),
       "~",
     );
   }
@@ -93,7 +91,8 @@ mod tests {
   #[test]
   fn displays_path_outside_home() {
     assert_eq!(
-      DirectoryDisplay::with_home(Path::new("/bar"), Path::new("/foo")),
+      DirectoryDisplay::with_home(Path::new("/bar"), Some("/foo".into()))
+        .to_string(),
       Path::new("/bar").clean().display().to_string(),
     );
   }
