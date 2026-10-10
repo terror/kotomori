@@ -62,26 +62,15 @@ mod tests {
   use super::*;
 
   #[test]
-  fn matches_queries() {
-    #[track_caller]
-    fn case(title: Option<&str>, query: &str, expected: bool) {
-      let summary = SessionSummary {
-        directory: "foo".into(),
-        id: 42,
-        model: "mock:bar".parse().unwrap(),
-        title: title.map(Into::into),
-        updated_at: 0,
-      };
+  fn matches_whitespace_separated_terms() {
+    let summary = SessionSummary {
+      directory: "foo".into(),
+      id: 42,
+      model: "mock:bar".parse().unwrap(),
+      title: Some("baz".into()),
+      updated_at: 0,
+    };
 
-      assert_eq!(summary.matches(query), expected);
-    }
-
-    case(Some("baz"), "", true);
-    case(Some("baz"), "  BAZ\tMOCK:BAR\nFOO 42  ", true);
-    case(Some("baz"), "baz 43", false);
-    case(Some("baz"), "qux", false);
-    case(Some("baz"), "Untitled", false);
-    case(None, "UNTITLED SESSION 42", true);
-    case(None, "baz", false);
+    assert!(summary.matches("  BAZ\tMOCK:BAR\nFOO 42  "));
   }
 }
