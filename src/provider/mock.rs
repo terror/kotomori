@@ -46,6 +46,7 @@ impl Provider for Mock {
             },
           ))
         }
+        "reasoning" => AssistantContent::reasoning("mock", "bar\nbaz"),
         "unknown-tool" if request.messages.len() == 1 => {
           AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
             "foo",
