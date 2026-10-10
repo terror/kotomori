@@ -1,3 +1,56 @@
+## [0.4.0](https://github.com/terror/kotomori/releases/tag/0.4.0) - 2026-10-10
+
+### Added
+
+- Add `fork` command ([#302](https://github.com/terror/kotomori/pull/302) by [terror](https://github.com/terror))
+- Add `copy` command ([#299](https://github.com/terror/kotomori/pull/299) by [terror](https://github.com/terror))
+- Add `rename` command ([#296](https://github.com/terror/kotomori/pull/296) by [terror](https://github.com/terror))
+
+### Fixed
+
+- Recover pending tool calls when resuming sessions ([#315](https://github.com/terror/kotomori/pull/315) by [terror](https://github.com/terror))
+- Handle bracketed paste as a single edit ([#289](https://github.com/terror/kotomori/pull/289) by [terror](https://github.com/terror))
+- Preserve whitespace in submitted prompts ([#288](https://github.com/terror/kotomori/pull/288) by [terror](https://github.com/terror))
+
+### Misc
+
+- Extract tool result predicate into `UserMessageContent` helper ([#317](https://github.com/terror/kotomori/pull/317) by [terror](https://github.com/terror))
+- Extract agent entry predicate into `TranscriptEntry` helper ([#316](https://github.com/terror/kotomori/pull/316) by [terror](https://github.com/terror))
+- Port tool entry spacing test to integration ([#310](https://github.com/terror/kotomori/pull/310) by [terror](https://github.com/terror))
+- Port draft reasoning tests to integration ([#311](https://github.com/terror/kotomori/pull/311) by [terror](https://github.com/terror))
+- Port failed tool rendering test to integration ([#314](https://github.com/terror/kotomori/pull/314) by [terror](https://github.com/terror))
+- Port database schema error test to integration ([#313](https://github.com/terror/kotomori/pull/313) by [terror](https://github.com/terror))
+- Port command screen tests to integration ([#312](https://github.com/terror/kotomori/pull/312) by [terror](https://github.com/terror))
+- Port queued input rendering test to integration ([#309](https://github.com/terror/kotomori/pull/309) by [terror](https://github.com/terror))
+- Port model argument tests to integration ([#308](https://github.com/terror/kotomori/pull/308) by [terror](https://github.com/terror))
+- Port reasoning spacing test to integration ([#304](https://github.com/terror/kotomori/pull/304) by [terror](https://github.com/terror))
+- Port error rendering tests to integration ([#306](https://github.com/terror/kotomori/pull/306) by [terror](https://github.com/terror))
+- Port startup screen tests to integration ([#305](https://github.com/terror/kotomori/pull/305) by [terror](https://github.com/terror))
+- Port empty reasoning test to integration ([#303](https://github.com/terror/kotomori/pull/303) by [terror](https://github.com/terror))
+- Port reasoning content test to integration ([#301](https://github.com/terror/kotomori/pull/301) by [terror](https://github.com/terror))
+- Wrap system prompt to 80 columns ([#300](https://github.com/terror/kotomori/pull/300) by [terror](https://github.com/terror))
+- Port reasoning toggle test to integration ([#298](https://github.com/terror/kotomori/pull/298) by [terror](https://github.com/terror))
+- Port approval interruption test to integration ([#297](https://github.com/terror/kotomori/pull/297) by [terror](https://github.com/terror))
+- Extract composer history ([#295](https://github.com/terror/kotomori/pull/295) by [terror](https://github.com/terror))
+- Port unknown command test to integration ([#294](https://github.com/terror/kotomori/pull/294) by [terror](https://github.com/terror))
+- Port command submission variants to integration ([#293](https://github.com/terror/kotomori/pull/293) by [terror](https://github.com/terror))
+- Port streaming clear test to integration ([#292](https://github.com/terror/kotomori/pull/292) by [terror](https://github.com/terror))
+- Use `key` for integration test input ([#291](https://github.com/terror/kotomori/pull/291) by [terror](https://github.com/terror))
+- Port streaming quit test to integration ([#290](https://github.com/terror/kotomori/pull/290) by [terror](https://github.com/terror))
+- Port multiline input tests to integration ([#287](https://github.com/terror/kotomori/pull/287) by [terror](https://github.com/terror))
+- Port immediate submission tests to integration ([#286](https://github.com/terror/kotomori/pull/286) by [terror](https://github.com/terror))
+- Port queue interruption test to integration ([#285](https://github.com/terror/kotomori/pull/285) by [terror](https://github.com/terror))
+- Port queue tests to integration ([#284](https://github.com/terror/kotomori/pull/284) by [terror](https://github.com/terror))
+- Port interruption tests to integration ([#283](https://github.com/terror/kotomori/pull/283) by [terror](https://github.com/terror))
+- Port command completion test to integration ([#282](https://github.com/terror/kotomori/pull/282) by [terror](https://github.com/terror))
+- Port clear command tests to integration ([#281](https://github.com/terror/kotomori/pull/281) by [terror](https://github.com/terror))
+- Port remaining prompt history tests to integration ([#280](https://github.com/terror/kotomori/pull/280) by [terror](https://github.com/terror))
+- Simplify integration screen expectations ([#279](https://github.com/terror/kotomori/pull/279) by [terror](https://github.com/terror))
+- Port prompt history tests to integration ([#278](https://github.com/terror/kotomori/pull/278) by [terror](https://github.com/terror))
+- Port approval tests to integration ([#277](https://github.com/terror/kotomori/pull/277) by [terror](https://github.com/terror))
+- Consolidate config override tests ([#276](https://github.com/terror/kotomori/pull/276) by [terror](https://github.com/terror))
+- Simplify config loading and rename parsing test ([#275](https://github.com/terror/kotomori/pull/275) by [terror](https://github.com/terror))
+
 ## [0.3.1](https://github.com/terror/kotomori/releases/tag/0.3.1) - 2026-10-08
 
 ### Fixed
