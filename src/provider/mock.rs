@@ -4,6 +4,7 @@ use super::*;
 pub(crate) struct Mock;
 
 impl Provider for Mock {
+  #[allow(clippy::too_many_lines)]
   fn stream<'a>(
     &'a self,
     request: Request,
@@ -40,6 +41,16 @@ impl Provider for Mock {
         ),
         "error" if request.messages.len() == 1 => {
           bail!("foo\nbar");
+        }
+        "failed-command" if request.messages.len() == 1 => {
+          AssistantContent::tool_call(
+            "foo",
+            ToolName::new("command")?,
+            serde_json::json!({
+              "command": "echo bar&&echo baz>&2&&exit 1",
+              "cwd": "foo",
+            }),
+          )
         }
         "malformed-tool-arguments" if request.messages.len() == 1 => {
           AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
