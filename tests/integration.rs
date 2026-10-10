@@ -1197,7 +1197,11 @@ fn ctrl_t_toggles_reasoning() -> Result {
 
     │ foo
 
+    corge
+
     Thinking...
+
+    grault
 
     │
 
@@ -1215,10 +1219,14 @@ fn ctrl_t_toggles_reasoning() -> Result {
 
       │ foo
 
+      corge
+
       Thinking...
         │ bar
         │ baz
         │ qux
+
+      grault
 
       │
 

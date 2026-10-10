@@ -62,7 +62,14 @@ impl Provider for Mock {
             },
           ]);
 
-          AssistantContent::Reasoning(reasoning.sealed("mock"))
+          return Ok(
+            vec![
+              AssistantContent::text("corge"),
+              AssistantContent::Reasoning(reasoning.sealed("mock")),
+              AssistantContent::text("grault"),
+            ]
+            .into(),
+          );
         }
         "unknown-tool" if request.messages.len() == 1 => {
           AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
