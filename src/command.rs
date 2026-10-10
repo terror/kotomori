@@ -8,6 +8,13 @@ pub(crate) enum Command {
 }
 
 impl Command {
+  fn accepts_arguments(self) -> bool {
+    match self {
+      Self::Clear | Self::Quit => false,
+      Self::Rename => true,
+    }
+  }
+
   pub(crate) fn description(self) -> &'static str {
     match self {
       Self::Clear => "Clear the transcript",
@@ -25,7 +32,7 @@ impl Command {
     let command = Self::iter().find(|command| command.name() == name)?;
     let arguments = arguments.trim();
 
-    (command == Self::Rename || arguments.is_empty())
+    (command.accepts_arguments() || arguments.is_empty())
       .then_some((command, arguments))
   }
 
