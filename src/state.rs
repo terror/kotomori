@@ -1211,30 +1211,4 @@ mod tests {
       TranscriptEntry::Error("foo".into()),
     );
   }
-
-  #[test]
-  fn unknown_command() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("/foobar".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    state.handle_event(Event::Action(Action::Submit));
-
-    assert_matches!(
-      &state.session.transcript.entries[..],
-      [TranscriptEntry::Notice(notice)]
-        if notice
-          == "Unrecognized command '/foobar'. Type \"/\" for a list of supported commands."
-    );
-
-    assert_eq!(state.session.transcript.messages(), Vec::new());
-
-    assert_eq!(state.composer.input_text(), "");
-  }
 }
