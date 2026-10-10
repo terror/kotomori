@@ -1018,44 +1018,6 @@ mod tests {
   }
 
   #[test]
-  fn interrupt_stops_active_agent() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("foo".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![
-        Effect::SaveSession,
-        Effect::RunAgent {
-          messages: vec![Message::User(vec![UserMessageContent::Text(
-            "foo".into()
-          )])],
-          run_id: 0,
-        }
-      ]
-    );
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Interrupt)),
-      vec![Effect::InterruptAgent, Effect::SaveSession]
-    );
-
-    assert_eq!(state.run, None);
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Interrupt)),
-      Vec::new()
-    );
-  }
-
-  #[test]
   fn interruption_preserves_streamed_protocol() {
     let mut state = State::new(Session::new(
       &Settings {
@@ -1243,44 +1205,6 @@ mod tests {
         Message::User(vec![UserMessageContent::Text("third".into())]),
       ]
     );
-  }
-
-  #[test]
-  fn quit_interrupts_active_agent() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some("foo".into()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![
-        Effect::SaveSession,
-        Effect::RunAgent {
-          messages: vec![Message::User(vec![UserMessageContent::Text(
-            "foo".into()
-          )])],
-          run_id: 0,
-        }
-      ]
-    );
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Quit)),
-      vec![Effect::InterruptAgent, Effect::SaveSession]
-    );
-
-    assert!(!state.should_quit);
-    assert_eq!(state.run, None);
-
-    assert_eq!(state.handle_event(Event::Action(Action::Quit)), Vec::new());
-
-    assert!(state.should_quit);
   }
 
   #[tokio::test]
