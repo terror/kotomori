@@ -94,6 +94,7 @@ use {
     env,
     fmt::{self, Debug, Display, Formatter},
     fs,
+    future::pending,
     io::{self, BufWriter, Stdout, Write},
     iter::once,
     ops::Range,

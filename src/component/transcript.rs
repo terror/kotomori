@@ -181,48 +181,6 @@ mod tests {
   }
 
   #[test]
-  fn render_active_content_in_order() {
-    let mut run = Run::new(0);
-
-    run.update_many(&[
-      MessageUpdate::ReasoningDelta {
-        index: 0,
-        delta: "foo".into(),
-      },
-      MessageUpdate::Text {
-        delta: "bar".into(),
-        index: 1,
-      },
-      MessageUpdate::ReasoningDelta {
-        index: 2,
-        delta: "baz".into(),
-      },
-      MessageUpdate::Text {
-        delta: "qux".into(),
-        index: 3,
-      },
-    ]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: Some(&run),
-        state: &Transcript::default()
-      }
-      .render(80),
-      [
-        LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
-        LineComponent::blank(),
-        LineComponent::raw("bar"),
-        LineComponent::blank(),
-        LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
-        LineComponent::blank(),
-        LineComponent::raw("qux"),
-      ]
-    );
-  }
-
-  #[test]
   fn render_active_reasoning() {
     let mut run = Run {
       elapsed: Duration::from_secs(61),
@@ -254,26 +212,6 @@ mod tests {
         ]
       );
     }
-  }
-
-  #[test]
-  fn render_active_streaming() {
-    let mut run = Run::new(0);
-
-    run.update(MessageUpdate::Text {
-      delta: "foo\nbar".into(),
-      index: 0,
-    });
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: Some(&run),
-        state: &Transcript::default()
-      }
-      .render(80),
-      [LineComponent::raw("foo bar")]
-    );
   }
 
   #[test]
@@ -345,98 +283,6 @@ mod tests {
         LineComponent::raw("ba"),
         LineComponent::raw("r"),
       ]
-    );
-  }
-
-  #[test]
-  fn render_draft_content_in_order() {
-    let mut buffer = MessageBuffer::default();
-
-    buffer.apply_many(&[
-      MessageUpdate::Text {
-        delta: "foo".into(),
-        index: 0,
-      },
-      MessageUpdate::ReasoningDelta {
-        delta: "bar".into(),
-        index: 1,
-      },
-      MessageUpdate::Text {
-        delta: "baz".into(),
-        index: 2,
-      },
-    ]);
-
-    let transcript =
-      Transcript::with_entries(vec![TranscriptEntry::Draft(buffer)]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: None,
-        state: &transcript
-      }
-      .render(80),
-      [
-        LineComponent::raw("foo"),
-        LineComponent::blank(),
-        LineComponent::from([Span::styled("Thinking...", Style::Muted,)]),
-        LineComponent::blank(),
-        LineComponent::raw("baz"),
-      ]
-    );
-  }
-
-  #[test]
-  fn render_expanded_draft_reasoning() {
-    let mut run = Run::new(0);
-
-    run.update_many(&[
-      MessageUpdate::ReasoningDelta {
-        index: 0,
-        delta: "foo\nbar".into(),
-      },
-      MessageUpdate::Text {
-        index: 1,
-        delta: "baz".into(),
-      },
-    ]);
-
-    let expected = [
-      LineComponent::from([Span::styled("Thinking...", Style::Muted)]),
-      LineComponent::from([
-        Span::styled("  │ ", Style::Muted),
-        Span::raw("foo"),
-      ]),
-      LineComponent::from([
-        Span::styled("  │ ", Style::Muted),
-        Span::raw("bar"),
-      ]),
-      LineComponent::blank(),
-      LineComponent::raw("baz"),
-    ];
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: true,
-        run: Some(&run),
-        state: &Transcript::default()
-      }
-      .render(80),
-      expected,
-    );
-
-    let transcript =
-      Transcript::with_entries(vec![TranscriptEntry::Draft(run.message)]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: true,
-        run: None,
-        state: &transcript
-      }
-      .render(80),
-      expected,
     );
   }
 

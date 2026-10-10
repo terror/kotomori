@@ -3,6 +3,39 @@ use super::*;
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Mock;
 
+impl Mock {
+  async fn unfinished_reasoning(
+    sink: &ProviderSink,
+  ) -> Result<AssistantContent> {
+    for update in [
+      MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      },
+      MessageUpdate::ReasoningDelta {
+        delta: "baz\nqux".into(),
+        index: 1,
+      },
+      MessageUpdate::Text {
+        delta: "quux".into(),
+        index: 2,
+      },
+      MessageUpdate::ReasoningDelta {
+        delta: "quuz".into(),
+        index: 3,
+      },
+      MessageUpdate::Text {
+        delta: "corge\ngrault".into(),
+        index: 4,
+      },
+    ] {
+      sink.update(update)?;
+    }
+
+    pending().await
+  }
+}
+
 impl Provider for Mock {
   fn stream<'a>(
     &'a self,
@@ -71,6 +104,7 @@ impl Provider for Mock {
             .into(),
           );
         }
+        "unfinished-reasoning" => Self::unfinished_reasoning(sink).await?,
         "unknown-tool" if request.messages.len() == 1 => {
           AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
             "foo",

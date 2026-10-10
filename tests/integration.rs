@@ -1884,6 +1884,108 @@ fn queued_submissions_run_in_order() -> Result {
 }
 
 #[test]
+fn reasoning_survives_interruption() -> Result {
+  Test::new()
+    .model("mock:unfinished-reasoning")
+    .submit("foo")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      bar
+
+      Thinking...
+
+      quux
+
+      Thinking...
+
+      corge grault
+
+      │
+
+      mock · unfinished-reasoning · \
+      "
+    })
+    .key(Key::CtrlT)
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      bar
+
+      Thinking...
+        │ baz
+        │ qux
+
+      quux
+
+      Thinking...
+        │ quuz
+
+      corge grault
+
+      │
+
+      mock · unfinished-reasoning · \
+      "
+    })
+    .key(Key::CtrlC)
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      bar
+
+      Thinking...
+        │ baz
+        │ qux
+
+      quux
+
+      Thinking...
+        │ quuz
+
+      corge grault
+
+      ■ Conversation interrupted, tell the model what to do differently.
+
+      │
+
+      mock · unfinished-reasoning · \
+      "
+    })
+    .key(Key::CtrlT)
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      bar
+
+      Thinking...
+
+      quux
+
+      Thinking...
+
+      corge grault
+
+      ■ Conversation interrupted, tell the model what to do differently.
+
+      │
+
+      mock · unfinished-reasoning · \
+      "
+    })
+    .quit()
+    .run()
+}
+
+#[test]
 fn resume_filters_and_loads_session() -> Result {
   let state = tempfile::Builder::new()
     .prefix("kotomori-state")
