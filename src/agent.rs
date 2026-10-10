@@ -164,7 +164,8 @@ impl Agent {
       "
       Current working directory: {}
 
-      The command tool runs commands using the platform's system shell. Omit `cwd` to use the current working directory. Do not invent absolute paths.
+      The command tool runs commands using the platform's system shell. Omit
+      `cwd` to use the current working directory. Do not invent absolute paths.
       ",
       self.loader.cwd.display(),
     };
@@ -818,7 +819,8 @@ mod tests {
         "
         Current working directory: {}
 
-        The command tool runs commands using the platform's system shell. Omit `cwd` to use the current working directory. Do not invent absolute paths.
+        The command tool runs commands using the platform's system shell. Omit
+        `cwd` to use the current working directory. Do not invent absolute paths.
         ",
         directory.display(),
       }
