@@ -1514,6 +1514,61 @@ fn missing_config_defaults() -> Result {
 }
 
 #[test]
+fn model_argument_errors() -> Result {
+  fn case(model: &str, error: &str) -> Result {
+    Test::new()
+      .model(model)
+      .stderr(&format!(
+        indoc! {
+          "
+          error: invalid value '{model}' for '--model <MODEL>': {error}
+
+          For more information, try '--help'.
+          "
+        },
+        model = model,
+        error = error,
+      ))
+      .status(2)
+      .with_context(|| format!("model: {model:?}"))
+  }
+
+  case("foo: ", "model name cannot be empty")?;
+  case(":foo", "model provider cannot be empty")?;
+  case("foo", "model must be PROVIDER:MODEL")
+}
+
+#[test]
+fn model_argument_parses() -> Result {
+  fn case(model: &str, expected: &str) -> Result {
+    Test::new()
+      .model(model)
+      .submit("foo")
+      .expect_screen_contains(&format!(
+        indoc! {
+          "
+
+          │ foo
+
+          queued for mock:{model}: foo
+
+          │
+
+          mock · {model} · \
+          "
+        },
+        model = expected,
+      ))
+      .run()
+      .with_context(|| format!("model: {model:?}"))
+  }
+
+  case("mock:bar", "bar")?;
+  case("mock:bar:baz", "bar:baz")?;
+  case("mock: bar ", "bar")
+}
+
+#[test]
 fn multiline_input() -> Result {
   let input = indoc! {
     "
