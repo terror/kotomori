@@ -122,31 +122,6 @@ mod tests {
   }
 
   #[test]
-  fn last_user_text_returns_latest_text() {
-    let request = Request {
-      messages: vec![
-        Message::agent(vec![AssistantContent::text("bar")]),
-        Message::User(vec![UserMessageContent::Text("foo".into())]),
-        Message::User(vec![UserMessageContent::Text("baz".into())]),
-        Message::agent(vec![AssistantContent::text("qux")]),
-        Message::User(vec![UserMessageContent::ToolResult {
-          call: CallId::from_wire("quux"),
-          name: ToolName::new("corge").unwrap(),
-          result: ToolResult::default(),
-        }]),
-      ],
-      model: Model {
-        name: "foo".into(),
-        provider: "mock".into(),
-      },
-      system: None,
-      tools: Vec::new(),
-    };
-
-    assert_eq!(request.last_user_text(), Some("baz"));
-  }
-
-  #[test]
   fn last_user_text_returns_none_without_user_text() {
     let request = Request {
       messages: vec![

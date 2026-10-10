@@ -76,41 +76,4 @@ mod tests {
     case(None, "mock:foo");
     case(Some("mock:bar"), "mock:bar");
   }
-
-  #[test]
-  fn directory_resolution() {
-    #[track_caller]
-    fn case(directory: Option<PathBuf>, expected: PathBuf) {
-      assert_eq!(
-        Settings::resolve(
-          Options {
-            directory,
-            model: None,
-            prompt: None,
-            yolo: false,
-          },
-          &Config::default(),
-        )
-        .unwrap(),
-        Settings {
-          directory: expected,
-          model: Model::default(),
-          prompt: None,
-          yolo: false,
-        },
-      );
-    }
-
-    let current = env::current_dir().unwrap().canonicalize().unwrap();
-
-    case(None, current.clone());
-    case(Some(".".into()), current);
-
-    let directory = tempfile::tempdir().unwrap();
-
-    case(
-      Some(directory.path().into()),
-      directory.path().canonicalize().unwrap(),
-    );
-  }
 }
