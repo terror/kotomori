@@ -4,7 +4,7 @@ mod resume;
 
 #[derive(Debug, Parser)]
 pub(crate) enum Subcommand {
-  #[command(about = "Resume a previous session")]
+  #[command(about = "Resume a previous session", alias = "r")]
   Resume(Resume),
 }
 
