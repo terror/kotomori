@@ -19,32 +19,3 @@ impl Config {
     .context("failed to load configuration")
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn parsing() {
-    let directory = tempfile::tempdir().unwrap();
-
-    let path = directory.path().join("config.toml");
-
-    fs::write(
-      &path,
-      r#"
-      default_provider = "mock"
-      default_model = "foo"
-      "#,
-    )
-    .unwrap();
-
-    assert_eq!(
-      confy::load_path::<Config>(&path).unwrap(),
-      Config {
-        default_model: Some("foo".into()),
-        default_provider: Some("mock".into()),
-      },
-    );
-  }
-}

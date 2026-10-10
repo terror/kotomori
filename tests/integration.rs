@@ -1144,16 +1144,42 @@ fn command_rename_persists() -> Result {
 
 #[test]
 fn config_sets_default_model() -> Result {
-  Test::new()
-    .config(
+  fn case(model: Option<&str>, expected: &str) -> Result {
+    let test = Test::new().config(
       r#"
       default_provider = "mock"
       default_model = "bar"
       "#,
-    )
-    .submit("foo")
-    .expect_screen_contains("queued for mock:bar: foo")
-    .run()
+    );
+
+    let test = match model {
+      Some(model) => test.model(model),
+      None => test,
+    };
+
+    test
+      .submit("foo")
+      .expect_screen_contains(&format!(
+        indoc! {
+          "
+
+          │ foo
+
+          queued for mock:{model}: foo
+
+          │
+
+          mock · {model} · \
+          "
+        },
+        model = expected,
+      ))
+      .run()
+      .with_context(|| format!("model: {model:?}"))
+  }
+
+  case(None, "bar")?;
+  case(Some("mock:baz"), "baz")
 }
 
 #[test]
@@ -2167,10 +2193,19 @@ fn unknown_command() -> Result {
 
 #[test]
 fn unknown_provider() -> Result {
-  Test::new()
-    .model("foo:bar")
-    .stderr("error: no registered provider is named `foo`\n")
-    .status(1)
+  fn case(test: Test) -> Result {
+    test
+      .stderr("error: no registered provider is named `foo`\n")
+      .status(1)
+  }
+
+  case(Test::new().model("foo:bar"))?;
+  case(Test::new().config(
+    r#"
+    default_provider = "foo"
+    default_model = "bar"
+    "#,
+  ))
 }
 
 #[test]
