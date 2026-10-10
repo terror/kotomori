@@ -408,6 +408,10 @@ impl Test {
     self.bytes(key.bytes())
   }
 
+  fn keys(self, keys: impl IntoIterator<Item = Key>) -> Self {
+    keys.into_iter().fold(self, Self::key)
+  }
+
   fn model(self, model: &str) -> Self {
     self.arguments(["--model", model])
   }
@@ -629,10 +633,7 @@ fn approval_prompt_approves_command() -> Result {
         "
       })
       .type_text("x")
-      .key(Key::Tab)
-      .key(Key::Up)
-      .key(Key::Down)
-      .key(Key::Enter)
+      .keys([Key::Tab, Key::Up, Key::Down, Key::Enter])
       .type_text(key)
       .expect_screen_contains(indoc! {
         "
@@ -667,10 +668,7 @@ fn approval_prompt_denies_command() -> Result {
       .submit("foo")
       .expect_screen_contains("Approve echo bar?")
       .type_text("x")
-      .key(Key::Tab)
-      .key(Key::Up)
-      .key(Key::Down)
-      .key(Key::Enter)
+      .keys([Key::Tab, Key::Up, Key::Down, Key::Enter])
       .bytes(key)
       .expect_screen_contains(indoc! {
         "
@@ -815,8 +813,7 @@ fn command_completion_clears() -> Result {
     .type_text("/")
     .expect_screen_contains("/clear")
     .key(Key::Down)
-    .key(Key::Up)
-    .key(Key::Tab)
+    .keys([Key::Up, Key::Tab])
     .key(Key::Enter)
     .expect_screen_excludes("queued for mock:local: foo")
     .run()
@@ -1307,8 +1304,7 @@ fn prompt_history_loads_session() -> Result {
       mock · local · \
       "
     })
-    .key(Key::Up)
-    .key(Key::Up)
+    .keys([Key::Up, Key::Up])
     .expect_screen_contains(indoc! {
       "
 
