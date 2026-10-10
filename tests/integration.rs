@@ -884,6 +884,54 @@ fn command_completion_quits() -> Result {
 }
 
 #[test]
+fn command_quit_interrupts_active_agent_and_saves_partial_output() -> Result {
+  let state = tempfile::Builder::new()
+    .prefix("kotomori-state")
+    .tempdir()?;
+
+  let workspace = tempfile::Builder::new()
+    .prefix("kotomori-workspace")
+    .tempdir()?;
+
+  let state = state.path().to_str().unwrap();
+
+  let interrupted = indoc! {
+    "
+
+    ■ Conversation interrupted, tell the model what to do differently.
+
+    │
+
+    mock · slow-streaming · \
+    "
+  };
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .model("mock:slow-streaming")
+    .submit("foo")
+    .expect_screen_contains("queued")
+    .submit("/quit")
+    .expect_screen_contains(interrupted)
+    .expect_screen_contains("│ foo\n\nqueued")
+    .expect_screen_excludes("queued for mock:slow-streaming: foo")
+    .submit("/quit")
+    .expect_exit(0)
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .arguments(["resume", "--last"])
+    .expect_screen_contains(interrupted)
+    .expect_screen_contains("│ foo\n\nqueued")
+    .expect_screen_excludes("queued for mock:slow-streaming: foo")
+    .quit()
+    .run()
+}
+
+#[test]
 fn command_quits() -> Result {
   #[track_caller]
   fn case(command: &str) -> Result {
