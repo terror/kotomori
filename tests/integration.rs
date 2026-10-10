@@ -2434,6 +2434,87 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
 }
 
 #[test]
+fn resume_matches_queries() -> Result {
+  let directory = tempfile::tempdir()?;
+
+  let workspace = directory.path().join("foo");
+
+  fs::create_dir(&workspace)?;
+
+  let state = tempfile::tempdir()?;
+
+  Test::new()
+    .cwd(&workspace)
+    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+    .model("mock:bar")
+    .submit("bazbazbaz")
+    .expect_screen_contains("queued for mock:bar: bazbazbaz")
+    .quit()
+    .run()?;
+
+  for (title, queries) in [
+    (
+      Some("bazbazbaz"),
+      [
+        ("", true),
+        ("  BAZBAZBAZ\tMOCK:BAR\nFOO 1234567890123456789  ", true),
+        ("bazbazbaz 1234567890123456788", false),
+        ("quxquxqux", false),
+        ("Untitled", false),
+      ]
+      .as_slice(),
+    ),
+    (
+      None,
+      [
+        ("UNTITLED SESSION 1234567890123456789", true),
+        ("bazbazbaz", false),
+      ]
+      .as_slice(),
+    ),
+  ] {
+    Connection::open(state.path().join("kotomori.db"))?.execute(
+      "UPDATE sessions SET id = 1234567890123456789, title = ?1",
+      [title],
+    )?;
+
+    let test = Test::new()
+      .cwd(&workspace)
+      .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+      .argument("resume");
+
+    let test = queries.iter().fold(test, |test, (query, matches)| {
+      let search = format!("Search: {}", query.escape_debug());
+
+      let expected = if *matches {
+        format!("> {}  mock:bar", title.unwrap_or("Untitled session"))
+      } else {
+        "No matching sessions.".into()
+      };
+
+      test
+        .key(Key::CtrlU)
+        .paste(query)
+        .expect_screen_contains(&format!(
+          indoc! {
+            "
+            {search}
+
+            {expected}\
+            "
+          },
+          search = search.trim_end(),
+          expected = expected,
+        ))
+    });
+
+    test.key(Key::Escape).expect_exit(0).run()?;
+  }
+
+  Ok(())
+}
+
+#[test]
 fn resume_picker_cancels_with_escape_and_ctrl_c() -> Result {
   let state = tempfile::Builder::new()
     .prefix("kotomori-state")
