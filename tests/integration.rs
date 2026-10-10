@@ -1900,7 +1900,10 @@ fn queued_submissions_run_in_order() -> Result {
       "
     })
     .key(Key::Enter)
-    .submit("baz")
+    .type_text("baz")
+    .keys([Key::CtrlJ, Key::CtrlJ])
+    .type_text("qux")
+    .keys([Key::CtrlJ, Key::Enter])
     .expect_screen_contains(indoc! {
       "
 
@@ -1909,6 +1912,9 @@ fn queued_submissions_run_in_order() -> Result {
 
       Queued
       │ baz
+      │
+      │ qux
+      │
 
       │
 
@@ -1927,8 +1933,13 @@ fn queued_submissions_run_in_order() -> Result {
       queued for mock:slow-streaming: bar
 
       │ baz
+      │
+      │ qux
+      │
 
       queued for mock:slow-streaming: baz
+
+      qux
 
       │
 
