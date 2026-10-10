@@ -876,14 +876,41 @@ fn initial_prompt_submits() -> Result {
 
 #[test]
 fn interrupt_active_agent() -> Result {
-  Test::new()
-    .model("mock:slow-streaming")
-    .submit("foo")
-    .ctrl_c()
-    .expect_screen_contains("Conversation interrupted")
-    .ctrl_c()
-    .expect_exit(0)
-    .run()
+  #[track_caller]
+  fn case(key: Key) -> Result {
+    let test = Test::new()
+      .model("mock:slow-streaming")
+      .submit("foo")
+      .expect_screen_contains("queued")
+      .key(key)
+      .expect_screen_contains("Conversation interrupted");
+
+    let test = if matches!(key, Key::Escape) {
+      test
+        .escape()
+        .wait(SETTLE_INTERVAL)
+        .key(Key::Up)
+        .expect_screen_contains(indoc! {
+          "
+
+          │ foo
+
+          mock · slow-streaming · \
+          "
+        })
+    } else {
+      test
+    };
+
+    test
+      .ctrl_c()
+      .expect_exit(0)
+      .run()
+      .with_context(|| format!("interruption key: {key:?}"))
+  }
+
+  case(Key::CtrlC)?;
+  case(Key::Escape)
 }
 
 #[test]

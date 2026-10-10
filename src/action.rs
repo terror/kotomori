@@ -77,12 +77,4 @@ mod tests {
       Action::ToggleReasoning
     );
   }
-
-  #[test]
-  fn esc_interrupts() {
-    assert_eq!(
-      Action::from_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-      Action::Interrupt
-    );
-  }
 }
