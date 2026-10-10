@@ -890,7 +890,7 @@ fn command_completion_clears() -> Result {
 #[test]
 fn command_completion_quits() -> Result {
   #[track_caller]
-  fn case(key: Key) -> Result {
+  fn case(keys: &[Key]) -> Result {
     Test::new()
       .model("mock:local")
       .type_text("/")
@@ -901,11 +901,12 @@ fn command_completion_quits() -> Result {
 
         /clear  Clear the transcript
         /quit  Quit kotomori
+        /rename  Rename the session
 
         mock · local · \
         "
       })
-      .key(key)
+      .keys(keys.iter().copied())
       .key(Key::Tab)
       .expect_screen_contains(indoc! {
         "
@@ -920,11 +921,11 @@ fn command_completion_quits() -> Result {
       .key(Key::Enter)
       .expect_exit(0)
       .run()
-      .with_context(|| format!("completion key: {key:?}"))
+      .with_context(|| format!("completion keys: {keys:?}"))
   }
 
-  case(Key::Down)?;
-  case(Key::Up)
+  case(&[Key::Down])?;
+  case(&[Key::Up, Key::Up])
 }
 
 #[test]
@@ -1001,6 +1002,54 @@ fn command_quits() -> Result {
 
   case("/q")?;
   case("/quit")
+}
+
+#[test]
+fn command_rename_persists() -> Result {
+  let state = tempfile::Builder::new()
+    .prefix("kotomori-state")
+    .tempdir()?;
+
+  let workspace = tempfile::Builder::new()
+    .prefix("kotomori-workspace")
+    .tempdir()?;
+
+  let state = state.path().to_str().unwrap();
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .model("mock:local")
+    .submit("foo")
+    .expect_screen_contains("queued for mock:local: foo")
+    .submit("/rename")
+    .expect_screen_contains("Usage: /rename <title>")
+    .submit("  /rename  bar   baz  ")
+    .expect_screen_contains("Session renamed to 'bar baz'.")
+    .submit("qux")
+    .expect_screen_contains("queued for mock:local: qux")
+    .quit()
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("resume")
+    .expect_screen_contains("> bar baz  mock:local")
+    .submit("bar baz")
+    .expect_screen_contains("queued for mock:local: qux")
+    .submit("quux")
+    .expect_screen_contains("queued for mock:local: quux")
+    .quit()
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("resume")
+    .expect_screen_contains("> bar baz  mock:local")
+    .quit()
+    .run()
 }
 
 #[test]

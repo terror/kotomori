@@ -93,7 +93,11 @@ impl State {
     Vec::new()
   }
 
-  fn handle_command(&mut self, command: Command) -> Vec<Effect> {
+  fn handle_command(
+    &mut self,
+    command: Command,
+    arguments: &str,
+  ) -> Vec<Effect> {
     let effects = match command {
       Command::Clear => {
         let interrupt_agent = self.run.take().is_some();
@@ -109,6 +113,24 @@ impl State {
         }
       }
       Command::Quit => self.handle_action(Action::Quit),
+      Command::Rename => {
+        if arguments.is_empty() {
+          self.session.transcript.notice("Usage: /rename <title>");
+          Vec::new()
+        } else {
+          let title =
+            arguments.split_whitespace().collect::<Vec<_>>().join(" ");
+
+          self
+            .session
+            .transcript
+            .notice(format!("Session renamed to '{title}'."));
+
+          self.session.title = Some(title);
+
+          vec![Effect::SaveSession]
+        }
+      }
     };
 
     self.reset_input();
@@ -264,10 +286,15 @@ impl State {
     let input = self.composer.input_text();
     let trimmed = input.trim();
 
-    if let Some(command) =
-      Command::from_input(trimmed).or_else(|| self.composer.selected_command())
+    if let Some((command, arguments)) =
+      Command::from_input(trimmed).or_else(|| {
+        self
+          .composer
+          .selected_command()
+          .map(|command| (command, ""))
+      })
     {
-      return self.handle_command(command);
+      return self.handle_command(command, arguments);
     }
 
     if trimmed.starts_with('/') {

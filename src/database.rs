@@ -101,7 +101,7 @@ impl Database {
     let entries = serde_json::to_string(&session.transcript.entries)
       .context("failed to serialize session transcript")?;
 
-    let title = session.generate_title();
+    let title = session.title.clone().or_else(|| session.generate_title());
 
     let id = if let Some(id) = session.id {
       let updated = self.connection.execute(

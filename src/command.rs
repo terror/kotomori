@@ -4,6 +4,7 @@ use super::*;
 pub(crate) enum Command {
   Clear,
   Quit,
+  Rename,
 }
 
 impl Command {
@@ -11,17 +12,21 @@ impl Command {
     match self {
       Self::Clear => "Clear the transcript",
       Self::Quit => "Quit kotomori",
+      Self::Rename => "Rename the session",
     }
   }
 
-  pub(crate) fn from_input(input: &str) -> Option<Self> {
-    let name = input.strip_prefix('/')?;
+  pub(crate) fn from_input(input: &str) -> Option<(Self, &str)> {
+    let input = input.strip_prefix('/')?;
 
-    if name.contains(char::is_whitespace) {
-      return None;
-    }
+    let (name, arguments) =
+      input.split_once(char::is_whitespace).unwrap_or((input, ""));
 
-    Self::iter().find(|command| command.name() == name)
+    let command = Self::iter().find(|command| command.name() == name)?;
+    let arguments = arguments.trim();
+
+    (command == Self::Rename || arguments.is_empty())
+      .then_some((command, arguments))
   }
 
   pub(crate) fn input(self) -> String {
@@ -40,6 +45,7 @@ impl Command {
     match self {
       Self::Clear => "clear",
       Self::Quit => "quit",
+      Self::Rename => "rename",
     }
   }
 }

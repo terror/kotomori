@@ -92,6 +92,11 @@ mod tests {
           Span::styled("  ", Style::Muted),
           Span::styled("Quit kotomori", Style::Muted),
         ]),
+        LineComponent::from([
+          Span::styled("/rename", Style::Secondary),
+          Span::styled("  ", Style::Muted),
+          Span::styled("Rename the session", Style::Muted),
+        ]),
       ]
     );
   }
