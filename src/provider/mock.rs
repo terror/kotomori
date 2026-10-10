@@ -4,6 +4,7 @@ use super::*;
 pub(crate) struct Mock;
 
 impl Provider for Mock {
+  #[allow(clippy::too_many_lines)]
   fn stream<'a>(
     &'a self,
     request: Request,
@@ -23,18 +24,24 @@ impl Provider for Mock {
           if has_tool_result {
             AssistantContent::text("done")
           } else {
-            AssistantContent::tool_call(
+            AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
               "foo",
-              ToolName::new("command")?,
-              serde_json::json!({"command": "echo bar"}),
-            )
+              ToolFunction {
+                arguments: serde_json::json!({
+                  "command": "echo bar",
+                }),
+                name: ToolName::new("command")?,
+              },
+            ))
           }
         }
         "empty-reasoning" => AssistantContent::reasoning("mock", ""),
         "encrypted-reasoning" => AssistantContent::Reasoning(
           Reasoning::encrypted("bar").sealed("mock"),
         ),
-        "error" if request.messages.len() == 1 => bail!("foo\nbar"),
+        "error" if request.messages.len() == 1 => {
+          bail!("foo\nbar");
+        }
         "failed-command" if request.messages.len() == 1 => {
           AssistantContent::tool_call(
             "foo",
@@ -46,11 +53,13 @@ impl Provider for Mock {
           )
         }
         "malformed-tool-arguments" if request.messages.len() == 1 => {
-          AssistantContent::tool_call(
+          AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
             "foo",
-            ToolName::new("command")?,
-            serde_json::json!({}),
-          )
+            ToolFunction {
+              arguments: serde_json::json!({}),
+              name: ToolName::new("command")?,
+            },
+          ))
         }
         "reasoning" => {
           let mut reasoning =
