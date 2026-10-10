@@ -13,15 +13,7 @@ impl Provider for Mock {
     Box::pin(async move {
       let content = match request.model.name.as_str() {
         "approval-required-command" => {
-          let has_tool_result =
-            request.messages.iter().any(|message| match message {
-              Message::Agent(_) => false,
-              Message::User(content) => content.iter().any(|content| {
-                matches!(content, UserMessageContent::ToolResult { .. })
-              }),
-            });
-
-          if has_tool_result {
+          if request.messages.iter().any(Message::has_tool_result) {
             AssistantContent::text("done")
           } else {
             return Ok(
