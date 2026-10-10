@@ -15,14 +15,11 @@ impl Transcript {
   }
 
   pub(crate) fn interrupt_pending_calls(&mut self) {
-    let Some((index, TranscriptEntry::Message(Message::Agent(message)))) =
-      self.entries.iter().enumerate().rfind(|(_, entry)| {
-        matches!(
-          entry,
-          TranscriptEntry::Draft(_)
-            | TranscriptEntry::Message(Message::Agent(_))
-        )
-      })
+    let Some((index, TranscriptEntry::Message(Message::Agent(message)))) = self
+      .entries
+      .iter()
+      .enumerate()
+      .rfind(|(_, entry)| entry.is_agent())
     else {
       return;
     };

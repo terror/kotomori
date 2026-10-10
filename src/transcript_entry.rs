@@ -10,6 +10,10 @@ pub(crate) enum TranscriptEntry {
 }
 
 impl TranscriptEntry {
+  pub(crate) fn is_agent(&self) -> bool {
+    matches!(self, Self::Draft(_) | Self::Message(Message::Agent(_)))
+  }
+
   pub(crate) fn message(&self) -> Option<&Message> {
     match self {
       Self::Message(message) => Some(message),
