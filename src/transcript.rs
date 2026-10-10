@@ -37,15 +37,9 @@ impl Transcript {
         })
         .filter(|call| {
           !self.entries[index + 1..].iter().any(|entry| match entry {
-            TranscriptEntry::Message(Message::User(content)) => {
-              content.iter().any(|content| {
-                matches!(
-                  content,
-                  UserMessageContent::ToolResult { call: id, .. }
-                    if *id == call.id
-                )
-              })
-            }
+            TranscriptEntry::Message(Message::User(content)) => content
+              .iter()
+              .any(|content| content.is_tool_result_for(&call.id)),
             _ => false,
           })
         })
