@@ -852,12 +852,25 @@ fn command_clears() -> Result {
     Test::new()
       .model("mock:local")
       .submit("foo")
-      .expect_screen_contains("queued for mock:local: foo")
-      .submit(command)
-      .expect_screen_excludes("│ foo")
-      .expect_screen_excludes("queued for mock:local: foo")
       .expect_screen_contains(indoc! {
         "
+
+        Type a prompt. Press Ctrl-C to quit.
+
+        │ foo
+
+        queued for mock:local: foo
+
+        │
+
+        mock · local · \
+        "
+      })
+      .submit(command)
+      .expect_screen_contains(indoc! {
+        "
+
+        Type a prompt. Press Ctrl-C to quit.
 
         │
 
@@ -881,7 +894,20 @@ fn command_completion_clears() -> Result {
     .submit("foo")
     .expect_screen_contains("queued for mock:local: foo")
     .type_text("/")
-    .expect_screen_contains("/clear")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ /
+
+      /clear  Clear the transcript
+      /copy  Copy the last assistant response to the clipboard
+      /fork  Branch the conversation to explore another approach
+      /quit  Quit kotomori
+      /rename  Rename the session
+
+      mock · local · \
+      "
+    })
     .key(Key::Down)
     .keys([Key::Up, Key::Tab])
     .key(Key::Enter)

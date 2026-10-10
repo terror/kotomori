@@ -117,21 +117,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn clear_removes_history() {
-    let mut transcript = Transcript::default();
-
-    assert!(transcript.is_empty());
-
-    transcript.send("foo".into());
-
-    assert!(!transcript.is_empty());
-
-    transcript.clear();
-
-    assert_eq!(transcript, Transcript::default());
-  }
-
-  #[test]
   fn messages_preserve_completed_content_and_boundaries() {
     let messages = vec![
       Message::User(vec![UserMessageContent::Text("foo".into())]),
