@@ -130,6 +130,14 @@ impl State {
           Vec::new()
         }
       }
+      Command::Fork => {
+        if self.run.is_some() {
+          self.finish_run(Some(TranscriptEntry::Interrupted));
+          vec![Effect::InterruptAgent, Effect::ForkSession]
+        } else {
+          vec![Effect::ForkSession]
+        }
+      }
       Command::Quit => self.handle_action(Action::Quit),
       Command::Rename => {
         if arguments.is_empty() {
@@ -216,6 +224,17 @@ impl State {
           .chain(once(Effect::SaveSession))
           .collect();
       }
+      Event::SessionForked(result) => match result {
+        Ok(session) => {
+          self.session = session;
+          self.session.transcript.notice("Forked conversation.");
+          self.queued_inputs.clear();
+        }
+        Err(error) => self
+          .session
+          .transcript
+          .error(format!("failed to fork session: {error}")),
+      },
       Event::SessionSaved(result) => match result {
         Ok(saved) => {
           self.session.id = Some(saved.id);

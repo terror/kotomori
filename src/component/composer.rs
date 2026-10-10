@@ -96,6 +96,14 @@ mod tests {
           ),
         ]),
         LineComponent::from([
+          Span::styled("/fork", Style::Secondary),
+          Span::styled("  ", Style::Muted),
+          Span::styled(
+            "Branch the conversation to explore another approach",
+            Style::Muted,
+          ),
+        ]),
+        LineComponent::from([
           Span::styled("/quit", Style::Secondary),
           Span::styled("  ", Style::Muted),
           Span::styled("Quit kotomori", Style::Muted),

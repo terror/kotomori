@@ -903,6 +903,7 @@ fn command_completion_quits() -> Result {
 
         /clear  Clear the transcript
         /copy  Copy the last assistant response to the clipboard
+        /fork  Branch the conversation to explore another approach
         /quit  Quit kotomori
         /rename  Rename the session
 
@@ -927,8 +928,94 @@ fn command_completion_quits() -> Result {
       .with_context(|| format!("completion keys: {keys:?}"))
   }
 
-  case(&[Key::Down, Key::Down])?;
+  case(&[Key::Down, Key::Down, Key::Down])?;
   case(&[Key::Up, Key::Up])
+}
+
+#[test]
+fn command_fork_persists_independent_sessions() -> Result {
+  let state = tempfile::Builder::new()
+    .prefix("kotomori-state")
+    .tempdir()?;
+
+  let workspace = tempfile::Builder::new()
+    .prefix("kotomori-workspace")
+    .tempdir()?;
+
+  let state = state.path().to_str().unwrap();
+
+  let original = indoc! {
+    "
+
+    Type a prompt. Press Ctrl-C to quit.
+
+    │ foo
+
+    queued for mock:local: foo
+
+    │
+
+    mock · local · \
+    "
+  };
+
+  let forked = indoc! {
+    "
+
+    Type a prompt. Press Ctrl-C to quit.
+
+    │ foo
+
+    queued for mock:local: foo
+
+    Forked conversation.
+
+    Session renamed to 'bar'.
+
+    │ baz
+
+    queued for mock:local: baz
+
+    │
+
+    mock · local · \
+    "
+  };
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .model("mock:local")
+    .submit("foo")
+    .expect_screen_contains(original)
+    .submit("/fork")
+    .expect_screen_contains("Forked conversation.")
+    .submit("/rename bar")
+    .expect_screen_contains("Session renamed to 'bar'.")
+    .submit("baz")
+    .expect_screen_contains(forked)
+    .quit()
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("resume")
+    .submit("foo")
+    .expect_screen_contains(original)
+    .submit("qux")
+    .expect_screen_contains("queued for mock:local: qux")
+    .quit()
+    .run()?;
+
+  Test::new()
+    .cwd(workspace.path())
+    .env("KOTOMORI_HOME", state)
+    .argument("resume")
+    .submit("bar")
+    .expect_screen_contains(forked)
+    .quit()
+    .run()
 }
 
 #[test]

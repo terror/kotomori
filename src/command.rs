@@ -4,6 +4,7 @@ use super::*;
 pub(crate) enum Command {
   Clear,
   Copy,
+  Fork,
   Quit,
   Rename,
 }
@@ -11,7 +12,7 @@ pub(crate) enum Command {
 impl Command {
   fn accepts_arguments(self) -> bool {
     match self {
-      Self::Clear | Self::Copy | Self::Quit => false,
+      Self::Clear | Self::Copy | Self::Fork | Self::Quit => false,
       Self::Rename => true,
     }
   }
@@ -20,6 +21,7 @@ impl Command {
     match self {
       Self::Clear => "Clear the transcript",
       Self::Copy => "Copy the last assistant response to the clipboard",
+      Self::Fork => "Branch the conversation to explore another approach",
       Self::Quit => "Quit kotomori",
       Self::Rename => "Rename the session",
     }
@@ -59,6 +61,7 @@ impl Command {
     match self {
       Self::Clear => "clear",
       Self::Copy => "copy",
+      Self::Fork => "fork",
       Self::Quit => "quit",
       Self::Rename => "rename",
     }

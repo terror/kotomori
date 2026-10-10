@@ -34,6 +34,17 @@ impl App {
 
         self.handle_event(Event::ClipboardCopied(result))?;
       }
+      Effect::ForkSession => {
+        let Screen::Session(state) = &self.screen else {
+          return Ok(());
+        };
+
+        let result = now()
+          .and_then(|now| self.database.fork_session(&state.session, now))
+          .map_err(|error| error.to_string());
+
+        self.handle_event(Event::SessionForked(result))?;
+      }
       Effect::InterruptAgent => {
         if let Some(agent) = &mut self.agent {
           agent.interrupt();
@@ -85,6 +96,7 @@ impl App {
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
         Event::Agent { .. }
         | Event::ClipboardCopied(_)
+        | Event::SessionForked(_)
         | Event::SessionSaved(_)
         | Event::Tick(_) => {}
       },
