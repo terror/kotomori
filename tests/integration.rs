@@ -2,6 +2,7 @@ use {
   anyhow::{Context, Error, bail, ensure},
   indoc::indoc,
   portable_pty::{CommandBuilder, PtySize, native_pty_system},
+  rusqlite::Connection,
   std::{
     collections::BTreeMap,
     fs,
@@ -2270,6 +2271,30 @@ fn unknown_provider() -> Result {
   Test::new()
     .model("foo:bar")
     .stderr("error: no registered provider is named `foo`\n")
+    .status(1)
+}
+
+#[test]
+fn unsupported_database_schema() -> Result {
+  let directory = tempfile::tempdir()?;
+
+  let path = directory.path().join("kotomori.db");
+
+  Connection::open(&path)?.execute_batch("PRAGMA user_version = 2")?;
+
+  Test::new()
+    .env("KOTOMORI_HOME", directory.path().to_str().unwrap())
+    .stderr(&format!(
+      indoc! {
+        "
+        error: failed to open database `{path}`
+
+        because:
+        - database schema version 2 is unsupported; expected 1
+        "
+      },
+      path = path.display(),
+    ))
     .status(1)
 }
 
