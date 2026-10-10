@@ -1044,12 +1044,38 @@ fn missing_config_defaults() -> Result {
 
 #[test]
 fn multiline_input() -> Result {
+  let input = indoc! {
+    "
+
+    │ foo
+    │ bar
+
+    mock · local · \
+    "
+  };
+
   Test::new()
     .model("mock:local")
     .type_text("foo")
     .ctrl_j()
-    .submit("bar")
-    .expect_screen_contains("queued for mock:local: foo bar")
+    .type_text("bar")
+    .expect_screen_contains(input)
+    .enter()
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+      │ bar
+
+      queued for mock:local: foo bar
+
+      │
+
+      mock · local · \
+      "
+    })
+    .key(Key::Up)
+    .expect_screen_contains(input)
     .run()
 }
 

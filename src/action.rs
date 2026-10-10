@@ -46,20 +46,6 @@ mod tests {
   use super::*;
 
   #[test]
-  fn ctrl_j_inserts_newline() {
-    assert_eq!(
-      Action::from_key(&KeyEvent::new(
-        KeyCode::Char('j'),
-        KeyModifiers::CONTROL
-      )),
-      Action::Edit(Input {
-        key: Key::Enter,
-        ..Default::default()
-      })
-    );
-  }
-
-  #[test]
   fn ctrl_t_toggles_reasoning() {
     assert_eq!(
       Action::from_key(&KeyEvent::new(
