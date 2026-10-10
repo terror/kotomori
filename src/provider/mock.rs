@@ -34,6 +34,10 @@ impl Provider for Mock {
             ))
           }
         }
+        "empty-reasoning" => AssistantContent::reasoning("mock", ""),
+        "encrypted-reasoning" => AssistantContent::Reasoning(
+          Reasoning::encrypted("bar").sealed("mock"),
+        ),
         "error" if request.messages.len() == 1 => {
           bail!("mock provider error");
         }

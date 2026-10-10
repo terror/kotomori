@@ -1280,6 +1280,43 @@ fn directory_is_missing() -> Result {
 }
 
 #[test]
+fn empty_reasoning_is_hidden() -> Result {
+  #[track_caller]
+  fn case(model: &str, expanded: bool) -> Result {
+    let test = Test::new().model(&format!("mock:{model}"));
+
+    let test = if expanded { test.key(Key::CtrlT) } else { test };
+
+    test
+      .submit("foo")
+      .expect_screen_contains(&format!(
+        indoc! {
+          "
+
+          Type a prompt. Press Ctrl-C to quit.
+
+          │ foo
+
+          │
+
+          mock · {model} · \
+          "
+        },
+        model = model,
+      ))
+      .run()
+      .with_context(|| format!("model: {model:?}, expanded: {expanded}"))
+  }
+
+  for model in ["empty-reasoning", "encrypted-reasoning"] {
+    case(model, false)?;
+    case(model, true)?;
+  }
+
+  Ok(())
+}
+
+#[test]
 fn immediate_submit_interrupts_active_agent_and_starts_new_run() -> Result {
   let queued = indoc! {
     "
