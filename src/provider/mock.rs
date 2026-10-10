@@ -23,15 +23,24 @@ impl Provider for Mock {
           if has_tool_result {
             AssistantContent::text("done")
           } else {
-            AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
-              "foo",
-              ToolFunction {
-                arguments: serde_json::json!({
-                  "command": "echo bar",
-                }),
-                name: ToolName::new("command")?,
-              },
-            ))
+            return Ok(
+              vec![
+                AssistantContent::text("baz"),
+                AssistantContent::ToolCall(
+                  ::rig::message::ToolCall::from_wire(
+                    "foo",
+                    ToolFunction {
+                      arguments: serde_json::json!({
+                        "command": "echo bar",
+                      }),
+                      name: ToolName::new("command")?,
+                    },
+                  ),
+                ),
+                AssistantContent::text("qux"),
+              ]
+              .into(),
+            );
           }
         }
         "empty-reasoning" => AssistantContent::reasoning("mock", ""),
