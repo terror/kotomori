@@ -1187,7 +1187,20 @@ fn ctrl_c_interrupts_active_approval() -> Result {
 
 #[test]
 fn ctrl_c_quits_gracefully() -> Result {
-  Test::new().quit().run()
+  Test::new()
+    .expect_screen_contains(indoc! {
+      "
+
+      Type a prompt. Press Ctrl-C to quit.
+
+      │
+
+      mock · local · \
+      "
+    })
+    .key(Key::CtrlC)
+    .expect_exit(0)
+    .run()
 }
 
 #[test]
@@ -1758,9 +1771,39 @@ fn provider_error_recovers() -> Result {
   Test::new()
     .model("mock:error")
     .submit("foo")
-    .expect_screen_contains("mock provider error")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      ● Error
+        │ foo
+        │ bar
+
+      │
+
+      mock · error · \
+      "
+    })
     .submit("bar")
-    .expect_screen_contains("queued for mock:error: bar")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      ● Error
+        │ foo
+        │ bar
+
+      │ bar
+
+      queued for mock:error: bar
+
+      │
+
+      mock · error · \
+      "
+    })
     .run()
 }
 
