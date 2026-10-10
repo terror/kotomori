@@ -5,6 +5,7 @@ pub(crate) enum Action {
   CompleteCommand,
   Edit(Input),
   Interrupt,
+  Paste(String),
   Quit,
   SelectNext,
   SelectPrevious,

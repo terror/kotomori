@@ -103,15 +103,13 @@ impl App {
           }
         };
 
-        let CrosstermEvent::Key(key) = event else {
-          continue;
+        let action = match event {
+          CrosstermEvent::Key(key) if key.kind == KeyEventKind::Press => {
+            Action::from_key(&key)
+          }
+          CrosstermEvent::Paste(input) => Action::Paste(input),
+          _ => continue,
         };
-
-        if key.kind != KeyEventKind::Press {
-          continue;
-        }
-
-        let action = Action::from_key(&key);
 
         if sender.send(Event::Action(action)).is_err() {
           return;

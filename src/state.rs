@@ -51,6 +51,7 @@ impl State {
         }
         Action::CompleteCommand
         | Action::Edit(_)
+        | Action::Paste(_)
         | Action::Quit
         | Action::SelectNext
         | Action::SelectPrevious
@@ -76,6 +77,7 @@ impl State {
 
           return effects.into_iter().chain(self.run_next_queued()).collect();
         }
+        Action::Paste(input) => self.composer.paste(&input),
         Action::Quit => self.quit(),
         Action::SelectNext => self.composer.select_next(),
         Action::SelectPrevious => self.composer.select_previous(),

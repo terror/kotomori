@@ -12,9 +12,7 @@ pub(crate) struct Composer {
 impl Composer {
   pub(crate) fn clear(&mut self) {
     self.textarea = TextArea::default();
-    self.command_index = 0;
-    self.history_draft = None;
-    self.history_index = None;
+    self.reset_navigation();
   }
 
   pub(crate) fn clear_history(&mut self) {
@@ -57,9 +55,7 @@ impl Composer {
 
   pub(crate) fn input(&mut self, input: Input) {
     if self.textarea.input(input) {
-      self.command_index = 0;
-      self.history_draft = None;
-      self.history_index = None;
+      self.reset_navigation();
     }
   }
 
@@ -81,8 +77,26 @@ impl Composer {
     }
   }
 
+  pub(crate) fn paste(&mut self, input: &str) {
+    if input.is_empty() {
+      return;
+    }
+
+    let input = input.replace("\r\n", "\n").replace('\r', "\n");
+
+    if self.textarea.insert_str(input) {
+      self.reset_navigation();
+    }
+  }
+
   pub(crate) fn remember(&mut self, input: &str) {
     self.history.push(input.into());
+    self.history_draft = None;
+    self.history_index = None;
+  }
+
+  fn reset_navigation(&mut self) {
+    self.command_index = 0;
     self.history_draft = None;
     self.history_index = None;
   }
