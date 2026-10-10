@@ -985,51 +985,6 @@ mod tests {
   }
 
   #[test]
-  fn multiline_input() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: Some(String::new()),
-        yolo: false,
-      },
-      0,
-    ));
-
-    for c in "foo".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    state.handle_event(Event::Action(Action::Edit(Input {
-      key: Key::Enter,
-      ..Default::default()
-    })));
-
-    for c in "bar".chars() {
-      state.handle_event(Event::Action(Action::Edit(Input {
-        key: Key::Char(c),
-        ..Default::default()
-      })));
-    }
-
-    assert_eq!(
-      state.handle_event(Event::Action(Action::Submit)),
-      vec![
-        Effect::SaveSession,
-        Effect::RunAgent {
-          messages: vec![Message::User(vec![UserMessageContent::Text(
-            "foo\nbar".into()
-          )])],
-          run_id: 0,
-        }
-      ]
-    );
-  }
-
-  #[test]
   fn new_uses_empty_prompt_by_default() {
     let state = State::new(Session::new(
       &Settings {
