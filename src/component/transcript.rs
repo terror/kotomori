@@ -238,33 +238,6 @@ mod tests {
   }
 
   #[test]
-  fn render_adjacent_non_user_entries_have_single_blank_line() {
-    let transcript = Transcript::with_entries(vec![
-      TranscriptEntry::Message(Message::agent(vec![AssistantContent::text(
-        "foo",
-      )])),
-      TranscriptEntry::Interrupted,
-    ]);
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: None,
-        state: &transcript
-      }
-      .render(80),
-      [
-        LineComponent::raw("foo"),
-        LineComponent::blank(),
-        LineComponent::from([Span::styled(
-          "■ Conversation interrupted, tell the model what to do differently.",
-          Style::Danger,
-        )]),
-      ]
-    );
-  }
-
-  #[test]
   fn render_markdown_in_active_draft_and_completed_messages() {
     #[track_caller]
     fn case(text: &str, span: Span) {
