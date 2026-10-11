@@ -15,13 +15,9 @@ impl State {
   fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
     let transcript = &mut self.session.transcript;
 
-    transcript
-      .entries
-      .extend(self.run.take().and_then(Run::finish));
-
+    transcript.push_many(self.run.take().and_then(Run::finish));
     transcript.interrupt_pending_calls();
-
-    transcript.entries.extend(entry);
+    transcript.push_many(entry);
   }
 
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
@@ -122,10 +118,9 @@ impl State {
         if let Some(response) = response {
           vec![Effect::CopyToClipboard(response)]
         } else {
-          self
-            .session
-            .transcript
-            .notice("No assistant response to copy.");
+          self.session.transcript.push(TranscriptEntry::Notice(
+            "No assistant response to copy.".into(),
+          ));
 
           Vec::new()
         }
@@ -141,7 +136,11 @@ impl State {
       Command::Quit => self.handle_action(Action::Quit),
       Command::Rename => {
         if arguments.is_empty() {
-          self.session.transcript.notice("Usage: /rename <title>");
+          self
+            .session
+            .transcript
+            .push(TranscriptEntry::Notice("Usage: /rename <title>".into()));
+
           Vec::new()
         } else {
           let title =
@@ -150,7 +149,9 @@ impl State {
           self
             .session
             .transcript
-            .notice(format!("Session renamed to '{title}'."));
+            .push(TranscriptEntry::Notice(format!(
+              "Session renamed to '{title}'."
+            )));
 
           self.session.title = Some(title);
 
@@ -185,7 +186,12 @@ impl State {
           }
           AgentEvent::Message(message) => {
             run.reset_message();
-            self.session.transcript.push_message(message);
+
+            self
+              .session
+              .transcript
+              .push(TranscriptEntry::Message(message));
+
             return vec![Effect::SaveSession];
           }
           AgentEvent::Error(error) => {
@@ -201,14 +207,12 @@ impl State {
         }
       }
       Event::ClipboardCopied(result) => match result {
-        Ok(()) => self
-          .session
-          .transcript
-          .notice("Copied last assistant response to clipboard."),
-        Err(error) => self
-          .session
-          .transcript
-          .error(format!("failed to copy response to clipboard: {error}")),
+        Ok(()) => self.session.transcript.push(TranscriptEntry::Notice(
+          "Copied last assistant response to clipboard.".into(),
+        )),
+        Err(error) => self.session.transcript.push(TranscriptEntry::Error(
+          format!("failed to copy response to clipboard: {error}"),
+        )),
       },
       Event::Error(error) => {
         let effects = if self.run.is_some() {
@@ -227,13 +231,17 @@ impl State {
       Event::SessionForked(result) => match result {
         Ok(session) => {
           self.session = session;
-          self.session.transcript.notice("Forked conversation.");
+
+          self
+            .session
+            .transcript
+            .push(TranscriptEntry::Notice("Forked conversation.".into()));
+
           self.queued_inputs.clear();
         }
-        Err(error) => self
-          .session
-          .transcript
-          .error(format!("failed to fork session: {error}")),
+        Err(error) => self.session.transcript.push(TranscriptEntry::Error(
+          format!("failed to fork session: {error}"),
+        )),
       },
       Event::SessionSaved(result) => match result {
         Ok(saved) => {
@@ -241,10 +249,9 @@ impl State {
           self.session.title = saved.title;
           self.session.updated_at = saved.updated_at;
         }
-        Err(error) => self
-          .session
-          .transcript
-          .error(format!("failed to save session: {error}")),
+        Err(error) => self.session.transcript.push(TranscriptEntry::Error(
+          format!("failed to save session: {error}"),
+        )),
       },
       Event::Tick(elapsed) => {
         if let Some(run) = &mut self.run {
@@ -307,7 +314,12 @@ impl State {
   }
 
   fn run(&mut self, input: String) -> Effect {
-    self.session.transcript.send(input);
+    self
+      .session
+      .transcript
+      .push(TranscriptEntry::Message(Message::User(vec![
+        UserMessageContent::Text(input),
+      ])));
 
     let messages = self.session.transcript.messages();
 
@@ -348,9 +360,9 @@ impl State {
 
     if trimmed.starts_with('/') {
       if trimmed.len() > 1 {
-        self.session.transcript.notice(format!(
+        self.session.transcript.push(TranscriptEntry::Notice(format!(
           "Unrecognized command '{trimmed}'. Type \"/\" for a list of supported commands."
-        ));
+        )));
 
         self.reset_input();
       }
@@ -944,7 +956,12 @@ mod tests {
       0,
     ));
 
-    state.session.transcript.send("foo".into());
+    state
+      .session
+      .transcript
+      .push(TranscriptEntry::Message(Message::User(vec![
+        UserMessageContent::Text("foo".into()),
+      ])));
 
     state.run = Some({
       let mut run = Run::new(0);
@@ -1075,7 +1092,12 @@ mod tests {
 
     let mut state = State::new(Session::new(&settings, 1));
 
-    state.session.transcript.send("bar".into());
+    state
+      .session
+      .transcript
+      .push(TranscriptEntry::Message(Message::User(vec![
+        UserMessageContent::Text("bar".into()),
+      ])));
 
     assert_eq!(
       state.handle_event(Event::SessionSaved(Ok(SavedSession {
@@ -1092,7 +1114,7 @@ mod tests {
         id: Some(2),
         settings,
         title: Some("bar".into()),
-        transcript: Transcript::with_entries(vec![TranscriptEntry::Message(
+        transcript: Transcript::new(vec![TranscriptEntry::Message(
           Message::User(vec![UserMessageContent::Text("bar".into())]),
         )]),
         updated_at: 3,

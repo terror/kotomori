@@ -20,7 +20,7 @@ impl Database {
 
     let session = Session {
       title: session.title.clone(),
-      transcript: Transcript::with_entries(session.transcript.entries.clone()),
+      transcript: Transcript::new(session.transcript.entries.clone()),
       ..Session::new(&session.settings, now)
     };
 
@@ -86,7 +86,7 @@ impl Database {
             },
             title: row.get(5)?,
             transcript: serde_json::from_str(&row.get::<_, String>(6)?)
-              .map(Transcript::with_entries)
+              .map(Transcript::new)
               .map_err(|error| {
                 rusqlite::Error::FromSqlConversionFailure(
                   6,
@@ -343,7 +343,7 @@ mod tests {
         model: "mock:bar".parse().unwrap(),
         ..session.settings
       },
-      transcript: Transcript::with_entries(vec![TranscriptEntry::Message(
+      transcript: Transcript::new(vec![TranscriptEntry::Message(
         Message::User(vec![UserMessageContent::Text("foo".into())]),
       )]),
       ..session

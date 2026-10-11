@@ -154,9 +154,10 @@ mod tests {
   fn render_active_activity_is_separated_from_user_entry() {
     let run = Run::new(0);
 
-    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
-      Message::User(vec![UserMessageContent::Text("foo".into())]),
-    )]);
+    let transcript =
+      Transcript::new(vec![TranscriptEntry::Message(Message::User(vec![
+        UserMessageContent::Text("foo".into()),
+      ]))]);
 
     assert_eq!(
       TranscriptComponent {
@@ -270,7 +271,7 @@ mod tests {
           TranscriptComponent {
             reasoning_expanded: false,
             run: None,
-            state: &Transcript::with_entries(vec![entry])
+            state: &Transcript::new(vec![entry])
           }
           .render(80),
           expected,
@@ -288,7 +289,7 @@ mod tests {
 
   #[test]
   fn render_notice_entry_handles_multiline_content() {
-    let transcript = Transcript::with_entries(vec![TranscriptEntry::Notice(
+    let transcript = Transcript::new(vec![TranscriptEntry::Notice(
       "\nfoo\n\n\nbar\n\n".into(),
     )]);
 
@@ -320,7 +321,7 @@ mod tests {
       }),
     );
 
-    let transcript = Transcript::with_entries(vec![
+    let transcript = Transcript::new(vec![
       TranscriptEntry::Message(Message::User(vec![
         UserMessageContent::Text("foo".into()),
         UserMessageContent::Text("bar".into()),
@@ -386,7 +387,7 @@ mod tests {
     let message =
       Message::agent(vec![AssistantContent::ToolCall(invocation.protocol)]);
 
-    let transcript = Transcript::with_entries(vec![
+    let transcript = Transcript::new(vec![
       TranscriptEntry::Message(message.clone()),
       TranscriptEntry::Message(message),
       TranscriptEntry::Message(Message::User(vec![
@@ -431,17 +432,16 @@ mod tests {
 
   #[test]
   fn render_unknown_tool() {
-    let transcript = Transcript::with_entries(vec![TranscriptEntry::Message(
-      Message::agent(vec![AssistantContent::ToolCall(
-        ::rig::message::ToolCall::from_wire(
+    let transcript =
+      Transcript::new(vec![TranscriptEntry::Message(Message::agent(vec![
+        AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
           "foo",
           ToolFunction {
             arguments: serde_json::json!({"bar": "baz"}),
             name: ToolName::new("foo").unwrap(),
           },
-        ),
-      )]),
-    )]);
+        )),
+      ]))]);
 
     assert_eq!(
       TranscriptComponent {
