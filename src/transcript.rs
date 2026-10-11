@@ -10,10 +10,6 @@ impl Transcript {
     self.entries.clear();
   }
 
-  pub(crate) fn error(&mut self, error: String) {
-    self.entries.push(TranscriptEntry::Error(error));
-  }
-
   pub(crate) fn interrupt_pending_calls(&mut self) {
     let Some((index, TranscriptEntry::Message(Message::Agent(message)))) = self
       .entries
@@ -24,7 +20,7 @@ impl Transcript {
       return;
     };
 
-    self.entries.extend(
+    self.push_many(
       message
         .content
         .iter()
@@ -86,20 +82,19 @@ impl Transcript {
       .collect()
   }
 
-  pub(crate) fn notice(&mut self, notice: impl Into<String>) {
-    self.entries.push(TranscriptEntry::Notice(notice.into()));
-  }
-
-  pub(crate) fn push_message(&mut self, message: Message) {
-    self.entries.push(TranscriptEntry::Message(message));
-  }
-
-  pub(crate) fn send(&mut self, input: String) {
-    self.push_message(Message::User(vec![UserMessageContent::Text(input)]));
-  }
-
-  pub(crate) fn with_entries(entries: Vec<TranscriptEntry>) -> Self {
+  pub(crate) fn new(entries: Vec<TranscriptEntry>) -> Self {
     Self { entries }
+  }
+
+  pub(crate) fn push(&mut self, entry: TranscriptEntry) {
+    self.entries.push(entry);
+  }
+
+  pub(crate) fn push_many(
+    &mut self,
+    entries: impl IntoIterator<Item = TranscriptEntry>,
+  ) {
+    self.entries.extend(entries);
   }
 }
 
@@ -134,7 +129,7 @@ mod tests {
       Message::agent(vec![AssistantContent::text("quux")]),
     ];
 
-    let transcript = Transcript::with_entries(
+    let transcript = Transcript::new(
       messages
         .iter()
         .cloned()
@@ -149,10 +144,14 @@ mod tests {
   fn messages_skip_display_entries() {
     let mut transcript = Transcript::default();
 
-    transcript.send("foo".into());
-    transcript.error("bar".into());
-    transcript.entries.push(TranscriptEntry::Interrupted);
-    transcript.notice("baz");
+    transcript.push_many([
+      TranscriptEntry::Message(Message::User(vec![UserMessageContent::Text(
+        "foo".into(),
+      )])),
+      TranscriptEntry::Error("bar".into()),
+      TranscriptEntry::Interrupted,
+      TranscriptEntry::Notice("baz".into()),
+    ]);
 
     assert_eq!(
       transcript.messages(),
@@ -170,7 +169,7 @@ mod tests {
     });
 
     assert_eq!(
-      Transcript::with_entries(vec![TranscriptEntry::Draft(buffer)]).messages(),
+      Transcript::new(vec![TranscriptEntry::Draft(buffer)]).messages(),
       Vec::new()
     );
   }
