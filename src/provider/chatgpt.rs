@@ -14,7 +14,7 @@ struct ChatGpt {
 impl Provider for ChatGpt {
   fn stream<'a>(
     &'a self,
-    request: Request,
+    request: Request<'a>,
     sink: &'a ProviderSink,
   ) -> BoxFuture<'a, Result<AgentMessage>> {
     Box::pin(async move {

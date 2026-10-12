@@ -25,7 +25,7 @@ impl Rig {
 impl Provider for Rig {
   fn stream<'a>(
     &'a self,
-    request: Request,
+    request: Request<'a>,
     sink: &'a ProviderSink,
   ) -> BoxFuture<'a, Result<AgentMessage>> {
     Box::pin(async move {
