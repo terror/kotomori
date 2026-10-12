@@ -80,6 +80,8 @@ impl Agent {
   async fn stream(&self, run_id: u64, mut messages: Vec<Message>) -> Result {
     let system = self.system_prompt()?;
 
+    let tools = ToolInvocationKind::definitions();
+
     loop {
       let sink = ProviderSink {
         event_sender: self.event_sender.clone(),
@@ -87,10 +89,10 @@ impl Agent {
       };
 
       let request = Request {
-        messages: messages.clone(),
-        model: self.settings.model.clone(),
-        system: (!system.is_empty()).then(|| system.clone()),
-        tools: ToolInvocationKind::definitions(),
+        messages: &messages,
+        model: &self.settings.model,
+        system: (!system.is_empty()).then_some(system.as_str()),
+        tools: &tools,
       };
 
       let message = self.provider.stream(request, &sink).await?;
@@ -223,13 +225,17 @@ mod tests {
   impl Provider for TestProvider {
     fn stream<'a>(
       &'a self,
-      request: Request,
+      request: Request<'a>,
       sink: &'a ProviderSink,
     ) -> BoxFuture<'a, Result<AgentMessage>> {
       Box::pin(async move {
         assert_eq!(request.tools, ToolInvocationKind::definitions());
 
-        self.requests.lock().unwrap().push(request.messages);
+        self
+          .requests
+          .lock()
+          .unwrap()
+          .push(request.messages.to_vec());
 
         let mut index = 0;
         let mut message = MessageBuffer::default();
@@ -656,10 +662,10 @@ mod tests {
     .unwrap();
 
     let request = CompletionRequest::from(&Request {
-      messages,
-      model: "mock:foo".parse().unwrap(),
+      messages: &messages,
+      model: &"mock:foo".parse().unwrap(),
       system: None,
-      tools: Vec::new(),
+      tools: &[],
     });
 
     let result = ToolResult {
