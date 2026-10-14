@@ -1,3 +1,24 @@
+## [0.4.1](https://github.com/terror/kotomori/releases/tag/0.4.1) - 2026-10-14
+
+### Added
+
+- Add `r` alias for `resume` ([#320](https://github.com/terror/kotomori/pull/320) by [terror](https://github.com/terror))
+
+### Misc
+
+- Borrow request inputs until provider conversion ([#334](https://github.com/terror/kotomori/pull/334) by [terror](https://github.com/terror))
+- Simplify `Transcript` surface area ([#333](https://github.com/terror/kotomori/pull/333) by [terror](https://github.com/terror))
+- Remove unit tests covered by integration tests ([#330](https://github.com/terror/kotomori/pull/330) by [terror](https://github.com/terror))
+- Port corrupt transcript test to integration ([#329](https://github.com/terror/kotomori/pull/329) by [terror](https://github.com/terror))
+- Port database migration test to integration ([#328](https://github.com/terror/kotomori/pull/328) by [terror](https://github.com/terror))
+- Port tool output preview test to integration ([#326](https://github.com/terror/kotomori/pull/326) by [terror](https://github.com/terror))
+- Extract tool result predicate into `Message` helper ([#325](https://github.com/terror/kotomori/pull/325) by [terror](https://github.com/terror))
+- Port transcript wrapping tests to integration ([#324](https://github.com/terror/kotomori/pull/324) by [terror](https://github.com/terror))
+- Port approval escaping test to integration ([#323](https://github.com/terror/kotomori/pull/323) by [terror](https://github.com/terror))
+- Port unknown tool error test to integration ([#322](https://github.com/terror/kotomori/pull/322) by [terror](https://github.com/terror))
+- Simplify agent instruction loading ([#321](https://github.com/terror/kotomori/pull/321) by [terror](https://github.com/terror))
+- Share directory formatting between production and tests ([#319](https://github.com/terror/kotomori/pull/319) by [terror](https://github.com/terror))
+
 ## [0.4.0](https://github.com/terror/kotomori/releases/tag/0.4.0) - 2026-10-10
 
 ### Added
