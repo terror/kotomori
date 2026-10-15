@@ -36,6 +36,28 @@ impl Provider for Mock {
             );
           }
         }
+        model @ ("command-absolute-directory"
+        | "command-default-directory"
+        | "command-relative-directory")
+          if request.messages.len() == 1 =>
+        {
+          let cwd = match model {
+            "command-absolute-directory" => {
+              Some(env::current_dir()?.join("foo"))
+            }
+            "command-relative-directory" => Some(PathBuf::from("foo")),
+            _ => None,
+          };
+
+          AssistantContent::tool_call(
+            "foo",
+            ToolName::new("command")?,
+            serde_json::json!({
+              "command": if cfg!(windows) { "type bar" } else { "cat bar" },
+              "cwd": cwd,
+            }),
+          )
+        }
         "command-output" if request.messages.len() == 1 => {
           AssistantContent::tool_call(
             "foo",
