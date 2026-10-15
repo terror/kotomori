@@ -1,11 +1,11 @@
 use super::*;
 
 #[derive(Debug, Default)]
-pub(crate) struct ScrollState {
+pub(crate) struct Scroll {
   pub(crate) offset: usize,
 }
 
-impl ScrollState {
+impl Scroll {
   pub(crate) fn update(
     &mut self,
     focus: Range<usize>,
@@ -36,7 +36,7 @@ mod tests {
   fn follows_focus_and_clamps_after_resizing() {
     #[track_caller]
     fn case(
-      scroll: &mut ScrollState,
+      scroll: &mut Scroll,
       focus: Range<usize>,
       height: usize,
       rows: usize,
@@ -47,7 +47,7 @@ mod tests {
       assert_eq!(scroll.offset, expected);
     }
 
-    let mut scroll = ScrollState::default();
+    let mut scroll = Scroll::default();
 
     case(&mut scroll, 0..1, 3, 5, 0);
     case(&mut scroll, 2..3, 3, 5, 0);

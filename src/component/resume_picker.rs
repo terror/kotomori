@@ -56,59 +56,41 @@ impl ResumePickerComponent<'_> {
 
     let filtered = picker.filtered();
 
-    let (rows, focus) = if filtered.is_empty() {
-      (
-        LineComponent::from([Span::styled(
-          "No matching sessions.",
-          Style::Muted,
-        )])
-        .render(dimensions.width),
-        0..0,
-      )
+    let selected = picker.selection.index(filtered.len());
+
+    let items = if filtered.is_empty() {
+      vec![LineComponent::styled("No matching sessions.", Style::Muted)]
     } else {
-      filtered.into_iter().enumerate().fold(
-        (Vec::new(), 0..0),
-        |(mut rows, focus), (index, session)| {
-          let (marker, style) = if index == picker.selected {
+      filtered
+        .into_iter()
+        .enumerate()
+        .map(|(index, session)| {
+          let (marker, style) = if selected == Some(index) {
             ("> ", Style::Accent)
           } else {
             ("  ", Style::Secondary)
           };
 
-          let start = rows.len();
-
-          rows.extend(
-            LineComponent::from([
-              Span::styled(marker, style),
-              Span::styled(
-                session.title.as_deref().unwrap_or("Untitled session"),
-                style,
-              ),
-              Span::styled("  ", Style::Muted),
-              Span::styled(session.detail(), Style::Muted),
-            ])
-            .render(dimensions.width),
-          );
-
-          let focus = if index == picker.selected {
-            start..rows.len()
-          } else {
-            focus
-          };
-
-          (rows, focus)
-        },
-      )
+          LineComponent::from([
+            Span::styled(marker, style),
+            Span::styled(
+              session.title.as_deref().unwrap_or("Untitled session"),
+              style,
+            ),
+            Span::styled("  ", Style::Muted),
+            Span::styled(session.detail(), Style::Muted),
+          ])
+        })
+        .collect()
     };
 
-    picker.scroll.update(focus, height, rows.len());
-
-    let rows = ScrollComponent {
-      height,
-      offset: picker.scroll.offset,
-      rows,
-    }
-    .layout();
+    let rows = ListComponent { items, selected }.layout(
+      Dimensions {
+        height,
+        ..dimensions
+      },
+      &mut picker.scroll,
+    );
 
     if !rows.is_empty() {
       header.resize_with(header.len() + gap, LineComponent::blank);

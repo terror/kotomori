@@ -79,7 +79,8 @@ use {
   saved_session::SavedSession,
   schemars::JsonSchema,
   screen::Screen,
-  scroll_state::ScrollState,
+  scroll::Scroll,
+  selection::Selection,
   serde::{Deserialize, Serialize, de::DeserializeOwned},
   session::Session,
   session_summary::SessionSummary,
@@ -208,7 +209,8 @@ mod resume_picker_action;
 mod run;
 mod saved_session;
 mod screen;
-mod scroll_state;
+mod scroll;
+mod selection;
 mod session;
 mod session_summary;
 mod settings;

@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct Composer {
-  command_index: usize,
+  command: Selection,
   history: History,
   textarea: TextArea<'static>,
 }
@@ -65,7 +65,7 @@ impl Composer {
 
   pub(crate) fn new(input: &str, history: Vec<String>) -> Self {
     Self {
-      command_index: 0,
+      command: Selection::default(),
       history: History::new(history),
       textarea: Self::textarea(input),
     }
@@ -88,13 +88,13 @@ impl Composer {
   }
 
   fn reset_navigation(&mut self) {
-    self.command_index = 0;
+    self.command = Selection::default();
     self.history.reset_navigation();
   }
 
   pub(crate) fn select_next(&mut self) {
     if self.selected_command().is_some() {
-      self.select_next_command();
+      self.command.select_next(self.commands().count());
     } else if self.cursor().0 == self.lines().len().saturating_sub(1) {
       self.select_next_history();
     } else {
@@ -102,14 +102,6 @@ impl Composer {
         key: Key::Down,
         ..Default::default()
       });
-    }
-  }
-
-  fn select_next_command(&mut self) {
-    let len = self.commands().count();
-
-    if len > 0 {
-      self.command_index = self.command_index.saturating_add(1) % len;
     }
   }
 
@@ -121,7 +113,7 @@ impl Composer {
 
   pub(crate) fn select_previous(&mut self) {
     if self.selected_command().is_some() {
-      self.select_previous_command();
+      self.command.select_previous(self.commands().count());
     } else if self.cursor().0 == 0 {
       self.select_previous_history();
     } else {
@@ -129,18 +121,6 @@ impl Composer {
         key: Key::Up,
         ..Default::default()
       });
-    }
-  }
-
-  fn select_previous_command(&mut self) {
-    let len = self.commands().count();
-
-    if len > 0 {
-      self.command_index = if self.command_index == 0 {
-        len.saturating_sub(1)
-      } else {
-        self.command_index.saturating_sub(1)
-      };
     }
   }
 
@@ -155,18 +135,12 @@ impl Composer {
   }
 
   pub(crate) fn selected_command_index(&self) -> Option<usize> {
-    let len = self.commands().count();
-
-    if len == 0 {
-      None
-    } else {
-      Some(self.command_index.min(len.saturating_sub(1)))
-    }
+    self.command.index(self.commands().count())
   }
 
   fn set_input(&mut self, input: &str) {
     self.textarea = Self::textarea(input);
-    self.command_index = 0;
+    self.command = Selection::default();
   }
 
   fn textarea(input: &str) -> TextArea<'static> {

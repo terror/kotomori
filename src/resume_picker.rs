@@ -3,20 +3,14 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct ResumePicker {
   pub(crate) query: String,
-  pub(crate) scroll: ScrollState,
-  pub(crate) selected: usize,
-  sessions: Vec<SessionSummary>,
+  pub(crate) scroll: Scroll,
+  pub(crate) selection: Selection,
+  pub(crate) sessions: Vec<SessionSummary>,
 }
 
 impl ResumePicker {
   fn clamp_selection(&mut self) {
-    let len = self.filtered_len();
-
-    self.selected = if len == 0 {
-      0
-    } else {
-      self.selected.min(len.saturating_sub(1))
-    };
+    self.selection.clamp(self.filtered_len());
   }
 
   pub(crate) fn filtered(&self) -> Vec<&SessionSummary> {
@@ -62,11 +56,7 @@ impl ResumePicker {
         self.clamp_selection();
       }
       Action::SelectNext => {
-        let len = self.filtered_len();
-
-        if len > 0 {
-          self.selected = self.selected.saturating_add(1) % len;
-        }
+        self.selection.select_next(self.filtered_len());
       }
       Action::Submit | Action::SubmitImmediately => {
         if let Some(id) = self.selected_id() {
@@ -77,15 +67,7 @@ impl ResumePicker {
         return Some(ResumePickerAction::Cancel);
       }
       Action::SelectPrevious => {
-        let len = self.filtered_len();
-
-        if len > 0 {
-          self.selected = if self.selected == 0 {
-            len.saturating_sub(1)
-          } else {
-            self.selected.saturating_sub(1)
-          };
-        }
+        self.selection.select_previous(self.filtered_len());
       }
       Action::CompleteCommand | Action::Edit(_) | Action::ToggleReasoning => {}
     }
@@ -96,13 +78,17 @@ impl ResumePicker {
   pub(crate) fn new(sessions: Vec<SessionSummary>) -> Self {
     Self {
       query: String::new(),
-      scroll: ScrollState::default(),
-      selected: 0,
+      scroll: Scroll::default(),
+      selection: Selection::default(),
       sessions,
     }
   }
 
   fn selected_id(&self) -> Option<i64> {
-    self.filtered().get(self.selected).map(|session| session.id)
+    let filtered = self.filtered();
+
+    filtered
+      .get(self.selection.index(filtered.len())?)
+      .map(|session| session.id)
   }
 }
