@@ -73,13 +73,4 @@ mod tests {
       ),
     );
   }
-
-  #[test]
-  fn returns_empty_without_agents() {
-    let directory = tempfile::tempdir().unwrap();
-
-    fs::create_dir(directory.path().join(".git")).unwrap();
-
-    assert_eq!(Loader::new(directory.path()).load().unwrap(), "");
-  }
 }

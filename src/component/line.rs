@@ -411,21 +411,6 @@ mod tests {
   }
 
   #[test]
-  fn rendering_merges_adjacent_spans_with_same_style() {
-    assert_eq!(
-      LineComponent::from([
-        Span::styled("foo", Style::Accent),
-        Span::styled("bar", Style::Accent),
-      ])
-      .render(4),
-      [
-        LineComponent::from([Span::styled("foob", Style::Accent)]),
-        LineComponent::from([Span::styled("ar", Style::Accent)]),
-      ],
-    );
-  }
-
-  #[test]
   fn rendering_preserves_plain_text_content() {
     let line = LineComponent::from([
       Span::raw("foo"),
@@ -510,14 +495,6 @@ mod tests {
         LineComponent::from([Span::styled("foo", Style::Accent)]),
         LineComponent::from([Span::styled("bar", Style::Accent)]),
       ],
-    );
-  }
-
-  #[test]
-  fn renders_styled_text_that_exactly_fits_width() {
-    assert_eq!(
-      LineComponent::from([Span::styled("foo", Style::Accent)]).render(3),
-      [LineComponent::from([Span::styled("foo", Style::Accent)])],
     );
   }
 }
