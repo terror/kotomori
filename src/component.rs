@@ -17,10 +17,10 @@ mod scroll;
 mod session;
 mod stack;
 mod text_field;
+mod tool_invocation;
 mod tool_output;
 mod transcript;
 mod transcript_error;
-mod transcript_tool_invocation;
 mod view;
 
 pub(crate) use {
@@ -30,10 +30,9 @@ pub(crate) use {
   list::ListComponent, markdown::MarkdownComponent, padding::PaddingComponent,
   queued_inputs::QueuedInputsComponent, resume_picker::ResumePickerComponent,
   scroll::ScrollComponent, session::SessionComponent, stack::StackComponent,
-  text_field::TextFieldComponent, tool_output::ToolOutputComponent,
-  transcript::TranscriptComponent, transcript_error::TranscriptErrorComponent,
-  transcript_tool_invocation::TranscriptToolInvocationComponent,
-  view::ViewComponent,
+  text_field::TextFieldComponent, tool_invocation::ToolInvocationComponent,
+  tool_output::ToolOutputComponent, transcript::TranscriptComponent,
+  transcript_error::TranscriptErrorComponent, view::ViewComponent,
 };
 
 pub(crate) trait Component: Debug {
