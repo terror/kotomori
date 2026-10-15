@@ -1,18 +1,19 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct PaddingComponent<C> {
-  pub(crate) component: C,
+pub(crate) struct PaddingComponent {
   pub(crate) padding: u16,
 }
 
-impl<C: Component> Component for PaddingComponent<C> {
-  fn render(&self, width: u16) -> Vec<LineComponent> {
+impl PaddingComponent {
+  pub(crate) fn layout(
+    &self,
+    width: u16,
+    render: impl FnOnce(u16) -> Vec<LineComponent>,
+  ) -> Vec<LineComponent> {
     let padding = self.padding.min(width.saturating_sub(1) / 2);
 
-    self
-      .component
-      .render(width - padding * 2)
+    render(width - padding * 2)
       .into_iter()
       .map(|line| {
         if line.is_blank() {
@@ -40,7 +41,7 @@ mod tests {
       .push(LineComponent::raw("baz"));
 
     assert_eq!(
-      stack.padded(2).render(9),
+      PaddingComponent { padding: 2 }.layout(9, |width| stack.render(width)),
       [
         LineComponent::from([
           Span::raw("  "),
@@ -68,9 +69,8 @@ mod tests {
     #[track_caller]
     fn case(width: u16, expected: &[&str]) {
       assert_eq!(
-        LineComponent::raw("foo")
-          .padded(2)
-          .render(width)
+        PaddingComponent { padding: 2 }
+          .layout(width, |width| LineComponent::raw("foo").render(width))
           .into_iter()
           .map(|line| line.to_string())
           .collect::<Vec<_>>(),

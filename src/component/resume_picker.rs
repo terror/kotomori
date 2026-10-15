@@ -1,16 +1,18 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct ResumePickerComponent {
-  stack: StackComponent<'static>,
+pub(crate) struct ResumePickerComponent<'a> {
+  pub(crate) picker: &'a mut ResumePicker,
 }
 
-impl ResumePickerComponent {
+impl ResumePickerComponent<'_> {
   pub(crate) fn layout(
-    picker: &mut ResumePicker,
+    &mut self,
     dimensions: Dimensions,
-  ) -> Self {
-    let (header, gap) = if dimensions.height == 0 {
+  ) -> Vec<LineComponent> {
+    let picker = &mut *self.picker;
+
+    let (mut header, gap) = if dimensions.height == 0 {
       (Vec::new(), 0)
     } else {
       let mut lines = StackComponent::default()
@@ -101,19 +103,18 @@ impl ResumePickerComponent {
 
     picker.scroll.update(focus, height, rows.len());
 
-    Self {
-      stack: StackComponent::default()
-        .gap(gap)
-        .push(LinesComponent { lines: header })
-        .push(
-          LinesComponent { lines: rows }.scrolled(picker.scroll.offset, height),
-        ),
+    let rows = ScrollComponent {
+      height,
+      offset: picker.scroll.offset,
+      rows,
     }
-  }
-}
+    .layout();
 
-impl Component for ResumePickerComponent {
-  fn render(&self, width: u16) -> Vec<LineComponent> {
-    self.stack.render(width)
+    if !rows.is_empty() {
+      header.resize_with(header.len() + gap, LineComponent::blank);
+      header.extend(rows);
+    }
+
+    header
   }
 }
