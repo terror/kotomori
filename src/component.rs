@@ -2,6 +2,7 @@ use super::*;
 
 mod approval_prompt;
 mod composer;
+mod error;
 mod footer;
 mod gutter;
 mod header;
@@ -20,19 +21,19 @@ mod text_field;
 mod tool_invocation;
 mod tool_output;
 mod transcript;
-mod transcript_error;
 mod view;
 
 pub(crate) use {
   approval_prompt::ApprovalPromptComponent, composer::ComposerComponent,
-  footer::FooterComponent, gutter::GutterComponent, header::HeaderComponent,
-  hint::HintComponent, line::LineComponent, lines::LinesComponent,
-  list::ListComponent, markdown::MarkdownComponent, padding::PaddingComponent,
-  queued_inputs::QueuedInputsComponent, resume_picker::ResumePickerComponent,
-  scroll::ScrollComponent, session::SessionComponent, stack::StackComponent,
+  error::ErrorComponent, footer::FooterComponent, gutter::GutterComponent,
+  header::HeaderComponent, hint::HintComponent, line::LineComponent,
+  lines::LinesComponent, list::ListComponent, markdown::MarkdownComponent,
+  padding::PaddingComponent, queued_inputs::QueuedInputsComponent,
+  resume_picker::ResumePickerComponent, scroll::ScrollComponent,
+  session::SessionComponent, stack::StackComponent,
   text_field::TextFieldComponent, tool_invocation::ToolInvocationComponent,
   tool_output::ToolOutputComponent, transcript::TranscriptComponent,
-  transcript_error::TranscriptErrorComponent, view::ViewComponent,
+  view::ViewComponent,
 };
 
 pub(crate) trait Component: Debug {

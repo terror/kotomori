@@ -102,7 +102,7 @@ impl<'a> TranscriptComponent<'a> {
                 )))
               }
               TranscriptEntry::Error(error) => {
-                stack.push(TranscriptErrorComponent { error })
+                stack.push(ErrorComponent { error })
               }
               TranscriptEntry::Interrupted => {
                 stack.push(LineComponent::from([Span::styled(
