@@ -7,6 +7,7 @@ license = "CC0-1.0"
 homepage = "https://github.com/terror/kotomori"
 repository = "https://github.com/terror/kotomori"
 edition = "2024"
+autotests = false
 categories = ["command-line-utilities", "development-tools"]
 keywords = ["ai", "agent", "coding", "terminal", "cli"]
 include = [
@@ -37,7 +38,7 @@ workspace = true
 
 [[test]]
 name = "integration"
-path = "tests/integration/lib.rs"
+path = "tests/lib.rs"
 
 [profile.release]
 lto = true
