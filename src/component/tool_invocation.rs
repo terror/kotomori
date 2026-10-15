@@ -1,12 +1,12 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct TranscriptToolInvocationComponent<'a> {
+pub(crate) struct ToolInvocationComponent<'a> {
   pub(crate) invocation: ToolInvocation,
   pub(crate) result: Option<&'a ToolResult>,
 }
 
-impl TranscriptToolInvocationComponent<'_> {
+impl ToolInvocationComponent<'_> {
   const OUTPUT_LIMIT: usize = 3;
 
   fn details(&self) -> Vec<(&'static str, String)> {
@@ -22,7 +22,7 @@ impl TranscriptToolInvocationComponent<'_> {
   }
 }
 
-impl Component for TranscriptToolInvocationComponent<'_> {
+impl Component for ToolInvocationComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     let (symbol, symbol_style, tense) = match self.result {
       Some(result) if result.outcome == ToolOutcome::Failure => {
@@ -46,7 +46,7 @@ impl Component for TranscriptToolInvocationComponent<'_> {
         .gutter(Span::styled("  │ ", Style::Muted))
       }))
       .push(self.result.and_then(ToolResult::output).map(|output| {
-        OutputPreviewComponent {
+        ToolOutputComponent {
           limit: Self::OUTPUT_LIMIT,
           output,
         }
@@ -76,7 +76,7 @@ mod tests {
     };
 
     assert_eq!(
-      TranscriptToolInvocationComponent {
+      ToolInvocationComponent {
         invocation,
         result: Some(&result)
       }

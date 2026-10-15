@@ -70,7 +70,7 @@ impl<'a> TranscriptComponent<'a> {
             })
           }
           TranscriptBlock::Tool { invocation, result } => {
-            stack.push(TranscriptToolInvocationComponent { invocation, result })
+            stack.push(ToolInvocationComponent { invocation, result })
           }
         },
       )

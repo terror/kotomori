@@ -11,7 +11,6 @@ mod line;
 mod lines;
 mod list;
 mod markdown;
-mod output_preview;
 mod padding;
 mod queued_inputs;
 mod resume_picker;
@@ -19,8 +18,9 @@ mod scroll;
 mod session;
 mod stack;
 mod text_field;
+mod tool_invocation;
+mod tool_output;
 mod transcript;
-mod transcript_tool_invocation;
 mod view;
 
 pub(crate) use {
@@ -28,11 +28,11 @@ pub(crate) use {
   error::ErrorComponent, footer::FooterComponent, gutter::GutterComponent,
   header::HeaderComponent, hint::HintComponent, line::LineComponent,
   lines::LinesComponent, list::ListComponent, markdown::MarkdownComponent,
-  output_preview::OutputPreviewComponent, padding::PaddingComponent,
-  queued_inputs::QueuedInputsComponent, resume_picker::ResumePickerComponent,
-  scroll::ScrollComponent, session::SessionComponent, stack::StackComponent,
-  text_field::TextFieldComponent, transcript::TranscriptComponent,
-  transcript_tool_invocation::TranscriptToolInvocationComponent,
+  padding::PaddingComponent, queued_inputs::QueuedInputsComponent,
+  resume_picker::ResumePickerComponent, scroll::ScrollComponent,
+  session::SessionComponent, stack::StackComponent,
+  text_field::TextFieldComponent, tool_invocation::ToolInvocationComponent,
+  tool_output::ToolOutputComponent, transcript::TranscriptComponent,
   view::ViewComponent,
 };
 
