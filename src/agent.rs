@@ -299,10 +299,7 @@ mod tests {
           message: vec![tool_call.clone()].into(),
           ..Default::default()
         },
-        TestResponse {
-          message: vec![AssistantContent::text("bar")].into(),
-          ..Default::default()
-        },
+        TestResponse::default(),
       ],
       false,
     );
@@ -352,6 +349,14 @@ mod tests {
             result: tool_result.clone(),
           }
         ])),
+        run_id: 0,
+      },
+    );
+
+    assert_eq!(
+      events.recv().await.unwrap(),
+      Event::Agent {
+        event: AgentEvent::Done,
         run_id: 0,
       },
     );
@@ -419,158 +424,78 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn loops_until_provider_returns_no_tool_calls() {
-    let tool_call = AssistantContent::tool_call(
-      "foo",
-      ToolName::new("command").unwrap(),
-      json!({"command": "echo bar"}),
-    );
+  async fn preserves_protocol_in_subsequent_requests() {
+    let reasoning = Reasoning::encrypted("foo")
+      .with_id("bar".into())
+      .sealed("mock");
+
+    let message = AgentMessage {
+      content: vec![
+        AssistantContent::text("foo"),
+        AssistantContent::Reasoning(
+          Reasoning::new_with_signature("bar", Some("baz".into()))
+            .with_id("qux".into())
+            .sealed("mock"),
+        ),
+        AssistantContent::Reasoning(reasoning),
+        AssistantContent::ToolCall(
+          ::rig::message::ToolCall::from_dual_wire(
+            "baz",
+            "qux",
+            ToolFunction {
+              arguments: json!({"command": "echo bar", "cwd": null}),
+              name: ToolName::new("command").unwrap(),
+            },
+          )
+          .with_signature(Some("quux".into()))
+          .with_additional_params(Some(json!({"foo": "bar"}))),
+        ),
+        AssistantContent::text("baz"),
+      ],
+      id: Some("quuz".into()),
+    };
+
+    let update = |delta: &str| MessageUpdate::Text {
+      delta: delta.into(),
+      index: 0,
+    };
+
+    let complete = AgentMessage::from(vec![AssistantContent::text("bar")]);
 
     let mut test_agent = TestAgent::new(
       vec![
         TestResponse {
-          message: vec![tool_call.clone()].into(),
-          ..Default::default()
+          message: message.clone(),
+          updates: vec![update("quux")],
         },
         TestResponse {
-          message: vec![AssistantContent::text("bar")].into(),
-          updates: vec![MessageUpdate::Text {
-            delta: "bar".into(),
-            index: 0,
-          }],
+          message: complete.clone(),
+          updates: vec![update("bar")],
         },
       ],
       true,
     );
 
-    test_agent
-      .agent
-      .stream(
-        0,
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-      )
-      .await
-      .unwrap();
+    let user = Message::User(vec![UserMessageContent::Text("foo".into())]);
 
-    let requests = test_agent.requests.lock().unwrap();
+    test_agent.agent.stream(0, vec![user]).await.unwrap();
 
-    let tool_result = ToolResult {
+    let result = ToolResult {
       exit_status: Some(0),
       outcome: ToolOutcome::Success,
       stdout: Some(COMMAND_OUTPUT.into()),
       ..Default::default()
     };
 
-    assert_eq!(
-      *requests,
-      [
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-        vec![
-          Message::User(vec![UserMessageContent::Text("foo".into())]),
-          Message::agent(vec![tool_call.clone()]),
-          Message::User(vec![UserMessageContent::ToolResult {
-            call: CallId::from_wire("foo"),
-            name: ToolName::new("command").unwrap(),
-            result: tool_result.clone(),
-          }]),
-        ],
-      ],
-    );
-
-    let mut events = Vec::new();
-
-    while let Ok(event) = test_agent.events.try_recv() {
-      events.push(event);
-    }
-
-    assert_eq!(
-      events,
-      [
-        Event::Agent {
-          event: AgentEvent::Message(Message::agent(vec![tool_call])),
-          run_id: 0,
-        },
-        Event::Agent {
-          event: AgentEvent::Message(Message::User(vec![
-            UserMessageContent::ToolResult {
-              call: CallId::from_wire("foo"),
-              name: ToolName::new("command").unwrap(),
-              result: tool_result,
-            }
-          ])),
-          run_id: 0,
-        },
-        Event::Agent {
-          event: AgentEvent::Update(MessageUpdate::Text {
-            delta: "bar".into(),
-            index: 0
-          }),
-          run_id: 0,
-        },
-        Event::Agent {
-          event: AgentEvent::Message(Message::agent(vec![
-            AssistantContent::text("bar")
-          ])),
-          run_id: 0,
-        },
-        Event::Agent {
-          event: AgentEvent::Done,
-          run_id: 0,
-        },
-      ],
-    );
-  }
-
-  #[tokio::test]
-  async fn preserves_protocol_in_subsequent_requests() {
-    let reasoning = Reasoning::encrypted("foo")
-      .with_id("bar".into())
-      .sealed("mock");
-
-    let tool_call = ::rig::message::ToolCall::from_dual_wire(
-      "baz",
-      "qux",
-      ToolFunction {
-        arguments: json!({"command": "echo bar", "cwd": null}),
-        name: ToolName::new("command").unwrap(),
-      },
-    )
-    .with_signature(Some("quux".into()))
-    .with_additional_params(Some(json!({"foo": "bar"})));
-
-    let test_agent = TestAgent::new(
-      vec![
-        TestResponse {
-          message: AgentMessage {
-            content: vec![
-              AssistantContent::text("foo"),
-              AssistantContent::Reasoning(Reasoning::new("bar").sealed("mock")),
-              AssistantContent::Reasoning(reasoning.clone()),
-              AssistantContent::ToolCall(tool_call.clone()),
-              AssistantContent::text("baz"),
-            ],
-            id: Some("quuz".into()),
-          },
-          updates: vec![MessageUpdate::Text {
-            delta: "quux".into(),
-            index: 0,
-          }],
-        },
-        TestResponse::default(),
-      ],
-      true,
-    );
-
-    test_agent
-      .agent
-      .stream(
-        0,
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-      )
-      .await
-      .unwrap();
+    let tool_result = Message::User(vec![UserMessageContent::ToolResult {
+      call: CallId::from_dual_wire("baz", "qux"),
+      name: ToolName::new("command").unwrap(),
+      result: result.clone(),
+    }]);
 
     let requests = test_agent.requests.lock().unwrap();
+
+    assert_eq!(requests.len(), 2);
 
     let messages = serde_json::from_str::<Vec<Message>>(
       &serde_json::to_string(&requests[1]).unwrap(),
@@ -584,26 +509,13 @@ mod tests {
       tools: &[],
     });
 
-    let result = ToolResult {
-      exit_status: Some(0),
-      outcome: ToolOutcome::Success,
-      stdout: Some(COMMAND_OUTPUT.into()),
-      ..Default::default()
-    };
-
     assert_eq!(
       request.chat_history,
       vec![
         RigMessage::user("foo"),
         RigMessage::Assistant {
-          content: vec![
-            AssistantContent::text("foo"),
-            AssistantContent::Reasoning(Reasoning::new("bar").sealed("mock")),
-            AssistantContent::Reasoning(reasoning),
-            AssistantContent::ToolCall(tool_call),
-            AssistantContent::text("baz"),
-          ],
-          id: Some("quuz".into()),
+          content: message.content.clone(),
+          id: message.id.clone(),
         },
         RigMessage::tool_result(
           CallId::from_dual_wire("baz", "qux"),
@@ -611,6 +523,22 @@ mod tests {
           result.message_content()
         ),
       ]
+    );
+
+    let events = std::iter::from_fn(|| test_agent.events.try_recv().ok())
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      events,
+      [
+        AgentEvent::Update(update("quux")),
+        AgentEvent::Message(Message::Agent(message)),
+        AgentEvent::Message(tool_result),
+        AgentEvent::Update(update("bar")),
+        AgentEvent::Message(Message::Agent(complete)),
+        AgentEvent::Done,
+      ]
+      .map(|event| Event::Agent { event, run_id: 0 }),
     );
   }
 
