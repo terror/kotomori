@@ -392,6 +392,59 @@ fn command_rename_persists() -> Result {
 }
 
 #[test]
+fn command_rename_save_failure_preserves_active_run() -> Result {
+  let state = tempfile::tempdir()?;
+
+  Test::new()
+    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+    .quit()
+    .run()?;
+
+  Connection::open(state.path().join("kotomori.db"))?.execute(
+    indoc! {
+      "
+      CREATE TRIGGER foo BEFORE UPDATE ON sessions
+      WHEN NEW.title = 'bar'
+      BEGIN
+        SELECT RAISE(ABORT, 'baz');
+      END;
+      "
+    },
+    [],
+  )?;
+
+  let draft = indoc! {
+    "
+    bar
+
+    Thinking...
+
+    quux
+
+    Thinking...
+
+    corge grault
+    "
+  };
+
+  Test::new()
+    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+    .model("mock:unfinished-reasoning")
+    .submit("foo")
+    .expect_screen_contains(draft)
+    .submit("/rename bar")
+    .expect_screen_contains(&format!(
+      "● Error\n  │ failed to save session: baz\n\n{draft}"
+    ))
+    .key(Key::Escape)
+    .expect_screen_contains(&format!(
+      "{draft}\n■ Conversation interrupted, tell the model what to do differently."
+    ))
+    .quit()
+    .run()
+}
+
+#[test]
 fn unknown_command() -> Result {
   #[track_caller]
   fn case(key: Key) -> Result {

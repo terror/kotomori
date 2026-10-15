@@ -688,51 +688,6 @@ mod tests {
   }
 
   #[test]
-  fn failed_save_preserves_run() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        model: "mock:local".parse().unwrap(),
-        prompt: None,
-        yolo: false,
-      },
-      0,
-    ));
-
-    state.run = Some({
-      let mut run = Run::new(0);
-      run.update(MessageUpdate::Text {
-        delta: "foo".into(),
-        index: 0,
-      });
-      run
-    });
-
-    state.session.id = Some(0);
-
-    assert_eq!(
-      state.handle_event(Event::SessionSaved(Err("foo".into()))),
-      Vec::new()
-    );
-
-    assert_eq!(
-      state.run,
-      Some({
-        let mut run = Run::new(0);
-        run.update(MessageUpdate::Text {
-          delta: "foo".into(),
-          index: 0,
-        });
-        run
-      })
-    );
-    assert_eq!(
-      state.session.transcript.entries,
-      [TranscriptEntry::Error("failed to save session: foo".into())]
-    );
-  }
-
-  #[test]
   fn finish_run_saves_partial_output() {
     let mut state = State::new(Session::new(
       &Settings {
