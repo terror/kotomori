@@ -10,7 +10,6 @@ mod line;
 mod lines;
 mod list;
 mod markdown;
-mod output_preview;
 mod padding;
 mod queued_inputs;
 mod resume_picker;
@@ -18,6 +17,7 @@ mod scroll;
 mod session;
 mod stack;
 mod text_field;
+mod tool_output;
 mod transcript;
 mod transcript_error;
 mod transcript_tool_invocation;
@@ -27,12 +27,11 @@ pub(crate) use {
   approval_prompt::ApprovalPromptComponent, composer::ComposerComponent,
   footer::FooterComponent, gutter::GutterComponent, header::HeaderComponent,
   hint::HintComponent, line::LineComponent, lines::LinesComponent,
-  list::ListComponent, markdown::MarkdownComponent,
-  output_preview::OutputPreviewComponent, padding::PaddingComponent,
+  list::ListComponent, markdown::MarkdownComponent, padding::PaddingComponent,
   queued_inputs::QueuedInputsComponent, resume_picker::ResumePickerComponent,
   scroll::ScrollComponent, session::SessionComponent, stack::StackComponent,
-  text_field::TextFieldComponent, transcript::TranscriptComponent,
-  transcript_error::TranscriptErrorComponent,
+  text_field::TextFieldComponent, tool_output::ToolOutputComponent,
+  transcript::TranscriptComponent, transcript_error::TranscriptErrorComponent,
   transcript_tool_invocation::TranscriptToolInvocationComponent,
   view::ViewComponent,
 };
