@@ -47,26 +47,5 @@ pub(crate) trait Component: Debug {
     }
   }
 
-  fn padded(self, padding: u16) -> PaddingComponent<Self>
-  where
-    Self: Sized,
-  {
-    PaddingComponent {
-      component: self,
-      padding,
-    }
-  }
-
   fn render(&self, width: u16) -> Vec<LineComponent>;
-
-  fn scrolled(self, offset: usize, height: usize) -> ScrollComponent<Self>
-  where
-    Self: Sized,
-  {
-    ScrollComponent {
-      component: self,
-      height,
-      offset,
-    }
-  }
 }

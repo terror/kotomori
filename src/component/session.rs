@@ -2,18 +2,18 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct SessionComponent<'a> {
-  stack: StackComponent<'a>,
+  pub(crate) first_draw_duration: Option<Duration>,
+  pub(crate) state: &'a State,
 }
 
-impl<'a> SessionComponent<'a> {
-  pub(crate) fn layout(
-    state: &'a State,
-    first_draw_duration: Option<Duration>,
-  ) -> Self {
+impl Component for SessionComponent<'_> {
+  fn render(&self, width: u16) -> Vec<LineComponent> {
+    let state = self.state;
+
     let stack = StackComponent::default()
       .gap(1)
       .push(HeaderComponent {
-        first_draw_duration,
+        first_draw_duration: self.first_draw_duration,
       })
       .push(HintComponent)
       .push(TranscriptComponent {
@@ -32,19 +32,12 @@ impl<'a> SessionComponent<'a> {
       }),
     };
 
-    Self {
-      stack: StackComponent::default().push(LineComponent::blank()).push(
-        stack.push(FooterComponent {
-          directory: &state.session.settings.directory,
-          model: &state.session.settings.model,
-        }),
-      ),
-    }
-  }
-}
-
-impl Component for SessionComponent<'_> {
-  fn render(&self, width: u16) -> Vec<LineComponent> {
-    self.stack.render(width)
+    StackComponent::default()
+      .push(LineComponent::blank())
+      .push(stack.push(FooterComponent {
+        directory: &state.session.settings.directory,
+        model: &state.session.settings.model,
+      }))
+      .render(width)
   }
 }

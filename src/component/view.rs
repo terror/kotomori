@@ -11,23 +11,21 @@ impl ViewComponent<'_> {
     &mut self,
     dimensions: Dimensions,
   ) -> Vec<LineComponent> {
-    let padding = 2.min(dimensions.width.saturating_sub(1) / 2);
+    let padding = PaddingComponent { padding: 2 };
 
-    let stack = match self.screen {
-      Screen::Quit => StackComponent::default(),
+    padding.layout(dimensions.width, |width| match self.screen {
+      Screen::Quit => Vec::new(),
       Screen::Resume(picker) => {
-        StackComponent::default().push(ResumePickerComponent::layout(
-          picker,
-          Dimensions {
-            width: dimensions.width - padding * 2,
-            ..dimensions
-          },
-        ))
+        ResumePickerComponent { picker }.layout(Dimensions {
+          width,
+          ..dimensions
+        })
       }
-      Screen::Session(state) => StackComponent::default()
-        .push(SessionComponent::layout(state, self.first_draw_duration)),
-    };
-
-    stack.padded(padding).render(dimensions.width)
+      Screen::Session(state) => SessionComponent {
+        first_draw_duration: self.first_draw_duration,
+        state,
+      }
+      .render(width),
+    })
   }
 }

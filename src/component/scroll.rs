@@ -2,21 +2,16 @@ use super::*;
 
 #[derive(Debug)]
 #[must_use]
-pub(crate) struct ScrollComponent<C> {
-  pub(crate) component: C,
+pub(crate) struct ScrollComponent {
   pub(crate) height: usize,
   pub(crate) offset: usize,
+  pub(crate) rows: Vec<LineComponent>,
 }
 
-impl<C: Component> Component for ScrollComponent<C> {
-  fn render(&self, width: u16) -> Vec<LineComponent> {
-    if self.height == 0 {
-      return Vec::new();
-    }
-
+impl ScrollComponent {
+  pub(crate) fn layout(self) -> Vec<LineComponent> {
     self
-      .component
-      .render(width)
+      .rows
       .into_iter()
       .skip(self.offset)
       .take(self.height)
@@ -31,10 +26,14 @@ mod tests {
   #[test]
   fn scrolls_wrapped_rows_inside_padding() {
     assert_eq!(
-      LineComponent::from([Span::styled("foobarbaz", Style::Accent)])
-        .scrolled(1, 2)
-        .padded(2)
-        .render(7),
+      PaddingComponent { padding: 2 }.layout(7, |width| {
+        ScrollComponent {
+          height: 2,
+          offset: 1,
+          rows: LineComponent::styled("foobarbaz", Style::Accent).render(width),
+        }
+        .layout()
+      }),
       [
         LineComponent::from([
           Span::raw("  "),
@@ -53,13 +52,14 @@ mod tests {
     #[track_caller]
     fn case(offset: usize, height: usize, len: usize, expected: Range<usize>) {
       assert_eq!(
-        LinesComponent {
-          lines: (0..len)
+        ScrollComponent {
+          height,
+          offset,
+          rows: (0..len)
             .map(|index| LineComponent::raw(format!("foo{index}")))
             .collect()
         }
-        .scrolled(offset, height)
-        .render(80),
+        .layout(),
         expected
           .map(|index| LineComponent::raw(format!("foo{index}")))
           .collect::<Vec<_>>(),
