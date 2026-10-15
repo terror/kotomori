@@ -1,11 +1,11 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct TranscriptErrorComponent<'a> {
+pub(crate) struct ErrorComponent<'a> {
   pub(crate) error: &'a str,
 }
 
-impl Component for TranscriptErrorComponent<'_> {
+impl Component for ErrorComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     StackComponent::default()
       .push(LineComponent::from([
@@ -28,7 +28,7 @@ mod tests {
   #[test]
   fn wraps_details_inside_gutter() {
     assert_eq!(
-      TranscriptErrorComponent { error: "foobar" }.render(8),
+      ErrorComponent { error: "foobar" }.render(8),
       [
         LineComponent::from([
           Span::styled("●", Style::Danger),

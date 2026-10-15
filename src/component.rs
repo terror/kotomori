@@ -2,6 +2,7 @@ use super::*;
 
 mod approval_prompt;
 mod composer;
+mod error;
 mod footer;
 mod gutter;
 mod header;
@@ -19,20 +20,18 @@ mod session;
 mod stack;
 mod text_field;
 mod transcript;
-mod transcript_error;
 mod transcript_tool_invocation;
 mod view;
 
 pub(crate) use {
   approval_prompt::ApprovalPromptComponent, composer::ComposerComponent,
-  footer::FooterComponent, gutter::GutterComponent, header::HeaderComponent,
-  hint::HintComponent, line::LineComponent, lines::LinesComponent,
-  list::ListComponent, markdown::MarkdownComponent,
+  error::ErrorComponent, footer::FooterComponent, gutter::GutterComponent,
+  header::HeaderComponent, hint::HintComponent, line::LineComponent,
+  lines::LinesComponent, list::ListComponent, markdown::MarkdownComponent,
   output_preview::OutputPreviewComponent, padding::PaddingComponent,
   queued_inputs::QueuedInputsComponent, resume_picker::ResumePickerComponent,
   scroll::ScrollComponent, session::SessionComponent, stack::StackComponent,
   text_field::TextFieldComponent, transcript::TranscriptComponent,
-  transcript_error::TranscriptErrorComponent,
   transcript_tool_invocation::TranscriptToolInvocationComponent,
   view::ViewComponent,
 };
