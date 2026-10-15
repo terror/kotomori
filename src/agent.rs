@@ -424,7 +424,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn preserves_protocol_in_subsequent_requests() {
+  async fn loops_until_provider_returns_no_tool_calls() {
     let reasoning = Reasoning::encrypted("foo")
       .with_id("bar".into())
       .sealed("mock");
