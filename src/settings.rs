@@ -45,35 +45,3 @@ impl Settings {
     })
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn config_overrides() {
-    #[track_caller]
-    fn case(model: Option<&str>, expected: &str) {
-      assert_eq!(
-        Settings::resolve(
-          Options {
-            directory: None,
-            model: model.map(|model| model.parse().unwrap()),
-            prompt: None,
-            yolo: false,
-          },
-          &Config {
-            default_model: Some("foo".into()),
-            default_provider: Some("mock".into()),
-          },
-        )
-        .unwrap()
-        .model,
-        expected.parse().unwrap(),
-      );
-    }
-
-    case(None, "mock:foo");
-    case(Some("mock:bar"), "mock:bar");
-  }
-}

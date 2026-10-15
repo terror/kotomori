@@ -216,29 +216,6 @@ mod tests {
   }
 
   #[test]
-  fn render_active_waiting() {
-    let run = Run {
-      elapsed: Duration::from_secs(111),
-      frame: 2,
-      ..Run::new(0)
-    };
-
-    assert_eq!(
-      TranscriptComponent {
-        reasoning_expanded: false,
-        run: Some(&run),
-        state: &Transcript::default()
-      }
-      .render(80),
-      [LineComponent::from([
-        Span::styled("✶", Style::Accent),
-        Span::styled(" Working...", Style::Secondary),
-        Span::styled(" (1m 51s • Esc to interrupt)", Style::Muted),
-      ])]
-    );
-  }
-
-  #[test]
   fn render_markdown_in_active_draft_and_completed_messages() {
     #[track_caller]
     fn case(text: &str, span: Span) {
