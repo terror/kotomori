@@ -8,45 +8,6 @@ pub(crate) struct ToolInvocationComponent<'a> {
 
 impl ToolInvocationComponent<'_> {
   const OUTPUT_LIMIT: usize = 3;
-
-  fn details(&self) -> Vec<(&'static str, String)> {
-    let mut details = self.invocation.kind.details();
-
-    let exit_status = self.result.and_then(|result| result.exit_status);
-
-    if matches!(exit_status, Some(status) if status != 0) {
-      details.push(("exit", exit_status.unwrap().to_string()));
-    }
-
-    details
-  }
-
-  fn output(output: &str, width: u16) -> LinesComponent {
-    let output = output
-      .lines()
-      .filter(|line| !line.is_empty())
-      .collect::<Vec<_>>();
-
-    let mut lines = output
-      .iter()
-      .take(Self::OUTPUT_LIMIT)
-      .map(|line| LineComponent::raw(*line).ellipsize(width))
-      .collect::<Vec<_>>();
-
-    let omitted = output.len().saturating_sub(Self::OUTPUT_LIMIT);
-
-    if omitted > 0 {
-      lines.push(LineComponent::from([Span::styled(
-        format!(
-          "... {omitted} more {}",
-          if omitted == 1 { "line" } else { "lines" }
-        ),
-        Style::Muted,
-      )]));
-    }
-
-    LinesComponent { lines }
-  }
 }
 
 impl Component for ToolInvocationComponent<'_> {
@@ -64,25 +25,53 @@ impl Component for ToolInvocationComponent<'_> {
     let output_width =
       width.saturating_sub(u16::try_from(gutter.width()).unwrap_or(u16::MAX));
 
+    let mut details = self.invocation.kind.details();
+
+    let exit_status = self.result.and_then(|result| result.exit_status);
+
+    if matches!(exit_status, Some(status) if status != 0) {
+      details.push(("exit", exit_status.unwrap().to_string()));
+    }
+
     StackComponent::default()
       .push(LineComponent::from([
         Span::styled(symbol, symbol_style),
         Span::raw(" "),
         Span::raw(self.invocation.title(tense)),
       ]))
-      .extend(self.details().into_iter().map(|(label, value)| {
+      .extend(details.into_iter().map(|(label, value)| {
         LineComponent::from([
           Span::styled(format!("{label} "), Style::Muted),
           Span::raw(value),
         ])
         .gutter(gutter.clone())
       }))
-      .push(
-        self
-          .result
-          .and_then(ToolResult::output)
-          .map(|output| Self::output(&output, output_width).gutter(gutter)),
-      )
+      .push(self.result.and_then(ToolResult::output).map(|output| {
+        let output = output
+          .lines()
+          .filter(|line| !line.is_empty())
+          .collect::<Vec<_>>();
+
+        let mut lines = output
+          .iter()
+          .take(Self::OUTPUT_LIMIT)
+          .map(|line| LineComponent::raw(*line).ellipsize(output_width))
+          .collect::<Vec<_>>();
+
+        let omitted = output.len().saturating_sub(Self::OUTPUT_LIMIT);
+
+        if omitted > 0 {
+          lines.push(LineComponent::from([Span::styled(
+            format!(
+              "... {omitted} more {}",
+              if omitted == 1 { "line" } else { "lines" }
+            ),
+            Style::Muted,
+          )]));
+        }
+
+        LinesComponent { lines }.gutter(gutter)
+      }))
       .render(width)
   }
 }
@@ -95,9 +84,34 @@ mod tests {
   fn renders_limited_non_empty_lines() {
     #[track_caller]
     fn case(output: &str, expected: &[LineComponent]) {
+      let invocation = ToolInvocation::new(
+        "foo",
+        ToolInvocationKind::Command(CommandTool {
+          command: "bar".into(),
+          cwd: None,
+        }),
+      );
+
+      let result = ToolResult {
+        outcome: ToolOutcome::Success,
+        stdout: Some(output.into()),
+        ..Default::default()
+      };
+
       assert_eq!(
-        ToolInvocationComponent::output(output, 5).render(5),
-        expected
+        ToolInvocationComponent {
+          invocation,
+          result: Some(&result)
+        }
+        .render(9),
+        once(LineComponent::from([
+          Span::styled("●", Style::Success),
+          Span::raw(" Ran bar"),
+        ]))
+        .chain(expected.iter().cloned().map(|line| {
+          LineComponent::styled("  │ ", Style::Muted).append(line)
+        }))
+        .collect::<Vec<_>>(),
       );
     }
 
