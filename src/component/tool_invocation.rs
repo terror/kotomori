@@ -149,44 +149,4 @@ mod tests {
       ],
     );
   }
-
-  #[test]
-  fn wraps_details_inside_gutter() {
-    let invocation = ToolInvocation::new(
-      "foo",
-      ToolInvocationKind::Command(CommandTool {
-        command: "bar".into(),
-        cwd: Some("foobar".into()),
-      }),
-    );
-
-    let result = ToolResult {
-      outcome: ToolOutcome::Success,
-      ..Default::default()
-    };
-
-    assert_eq!(
-      ToolInvocationComponent {
-        invocation,
-        result: Some(&result)
-      }
-      .render(10),
-      [
-        LineComponent::from([
-          Span::styled("●", Style::Success),
-          Span::raw(" "),
-          Span::raw("Ran bar"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::styled("cwd ", Style::Muted),
-          Span::raw("fo"),
-        ]),
-        LineComponent::from([
-          Span::styled("  │ ", Style::Muted),
-          Span::raw("obar"),
-        ]),
-      ],
-    );
-  }
 }

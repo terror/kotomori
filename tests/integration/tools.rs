@@ -200,7 +200,7 @@ fn ctrl_c_interrupts_active_approval() -> Result {
 fn failed_command_reports_output() -> Result {
   let directory = tempfile::tempdir()?;
 
-  fs::create_dir(directory.path().join("foo"))?;
+  fs::create_dir(directory.path().join("foobar".repeat(12)))?;
 
   Test::new()
     .cwd(directory.path())
@@ -214,7 +214,8 @@ fn failed_command_reports_output() -> Result {
       │ foo
 
       ● Failed running echo bar&&echo baz>&2&&exit 1
-        │ cwd foo
+        │ cwd foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfo
+        │ obar
         │ exit 1
         │ bar
         │ baz

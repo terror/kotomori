@@ -67,7 +67,7 @@ impl Provider for Mock {
             ToolName::new("command")?,
             serde_json::json!({
               "command": "echo bar&&echo baz>&2&&exit 1",
-              "cwd": "foo",
+              "cwd": "foobar".repeat(12),
             }),
           )
         }
