@@ -72,13 +72,26 @@ impl Provider for Mock {
           )
         }
         "malformed-tool-arguments" if request.messages.len() == 1 => {
-          AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
-            "foo",
-            ToolFunction {
-              arguments: serde_json::json!({}),
-              name: ToolName::new("command")?,
-            },
-          ))
+          let content = vec![
+            AssistantContent::tool_call(
+              "foo",
+              ToolName::new("command")?,
+              serde_json::json!({"command": "echo bar>foo"}),
+            ),
+            AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
+              "bar",
+              ToolFunction {
+                arguments: serde_json::json!({}),
+                name: ToolName::new("command")?,
+              },
+            )),
+          ];
+
+          sink.update_many(content.iter().cloned().enumerate().map(
+            |(index, content)| MessageUpdate::Content { index, content },
+          ))?;
+
+          return Ok(content.into());
         }
         "reasoning" => {
           let mut reasoning =
