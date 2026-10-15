@@ -9,8 +9,6 @@ impl Component for ComposerComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     let cursor = self.composer.cursor();
 
-    let selected = self.composer.selected_command_index();
-
     let input = LinesComponent {
       lines: self
         .composer
@@ -24,9 +22,11 @@ impl Component for ComposerComponent<'_> {
 
           let mut chars = line.chars();
 
-          let before = chars.by_ref().take(cursor.1).collect::<String>();
-          let under_cursor = chars.next().unwrap_or(' ');
-          let after = chars.collect::<String>();
+          let (before, under_cursor, after) = (
+            chars.by_ref().take(cursor.1).collect::<String>(),
+            chars.next().unwrap_or(' '),
+            chars.collect::<String>(),
+          );
 
           LineComponent::from([
             Span::raw(before),
@@ -46,13 +46,14 @@ impl Component for ComposerComponent<'_> {
           .commands()
           .enumerate()
           .map(|(index, command)| {
-            let input_style = match selected {
-              Some(selected) if selected == index => Style::Accent,
-              _ => Style::Secondary,
-            };
-
             LineComponent::from([
-              Span::styled(command.input(), input_style),
+              Span::styled(
+                command.input(),
+                match self.composer.selected_command_index() {
+                  Some(selected) if selected == index => Style::Accent,
+                  _ => Style::Secondary,
+                },
+              ),
               Span::styled("  ", Style::Muted),
               Span::styled(command.description(), Style::Muted),
             ])
