@@ -35,6 +35,10 @@ wildcard_imports = "allow"
 [lints]
 workspace = true
 
+[[test]]
+name = "integration"
+path = "tests/integration/lib.rs"
+
 [profile.release]
 lto = true
 codegen-units = 1
