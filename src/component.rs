@@ -18,9 +18,9 @@ mod scroll;
 mod session;
 mod stack;
 mod text_field;
+mod tool_invocation;
 mod transcript;
 mod transcript_error;
-mod transcript_tool_invocation;
 mod view;
 
 pub(crate) use {
@@ -31,9 +31,8 @@ pub(crate) use {
   output_preview::OutputPreviewComponent, padding::PaddingComponent,
   queued_inputs::QueuedInputsComponent, resume_picker::ResumePickerComponent,
   scroll::ScrollComponent, session::SessionComponent, stack::StackComponent,
-  text_field::TextFieldComponent, transcript::TranscriptComponent,
-  transcript_error::TranscriptErrorComponent,
-  transcript_tool_invocation::TranscriptToolInvocationComponent,
+  text_field::TextFieldComponent, tool_invocation::ToolInvocationComponent,
+  transcript::TranscriptComponent, transcript_error::TranscriptErrorComponent,
   view::ViewComponent,
 };
 
