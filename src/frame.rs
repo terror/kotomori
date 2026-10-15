@@ -32,54 +32,20 @@ mod tests {
   use super::*;
 
   #[test]
-  fn exact_fit_starts_at_zero() {
-    let frame = Frame::new(
-      vec![String::new(); 10],
-      Dimensions {
-        height: 10,
-        width: 80,
-      },
-    );
+  fn viewport_top() {
+    #[track_caller]
+    fn case(lines: usize, height: usize, expected: usize) {
+      let frame = Frame::new(
+        vec![String::new(); lines],
+        Dimensions { height, width: 80 },
+      );
 
-    assert_eq!(frame.viewport_top, 0);
-  }
+      assert_eq!(frame.viewport_top, expected);
+    }
 
-  #[test]
-  fn short_frame_starts_at_zero() {
-    let frame = Frame::new(
-      vec![String::new(); 3],
-      Dimensions {
-        height: 10,
-        width: 80,
-      },
-    );
-
-    assert_eq!(frame.viewport_top, 0);
-  }
-
-  #[test]
-  fn tall_frame_starts_at_last_page() {
-    let frame = Frame::new(
-      vec![String::new(); 30],
-      Dimensions {
-        height: 10,
-        width: 80,
-      },
-    );
-
-    assert_eq!(frame.viewport_top, 20);
-  }
-
-  #[test]
-  fn zero_height_starts_at_frame_len() {
-    let frame = Frame::new(
-      vec![String::new(); 10],
-      Dimensions {
-        height: 0,
-        width: 80,
-      },
-    );
-
-    assert_eq!(frame.viewport_top, 10);
+    case(10, 10, 0);
+    case(3, 10, 0);
+    case(30, 10, 20);
+    case(10, 0, 10);
   }
 }

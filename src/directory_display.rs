@@ -43,65 +43,43 @@ mod tests {
   use super::*;
 
   #[test]
-  fn cleans_before_matching_home() {
-    assert_eq!(
-      DirectoryDisplay::with_home(
-        Path::new("/foo/bar/../baz"),
-        Some("/foo".into()),
-      )
-      .to_string(),
-      Path::new("~").join("baz").display().to_string(),
+  fn displays_paths() {
+    #[track_caller]
+    fn case(path: &str, expected: &str) {
+      assert_eq!(DirectoryDisplay::new(Path::new(path)).to_string(), expected);
+    }
+
+    case("foo/bar/..", "foo");
+    case(
+      "/foo/./bar",
+      &Path::new("/foo/bar").clean().display().to_string(),
+    );
+    case(
+      "foo/./bar",
+      &Path::new("foo").join("bar").display().to_string(),
     );
   }
 
   #[test]
-  fn cleans_parent_components() {
-    assert_eq!(
-      DirectoryDisplay::new(Path::new("foo/bar/..")).to_string(),
-      "foo"
-    );
-  }
+  fn displays_paths_with_home() {
+    #[track_caller]
+    fn case(path: &str, expected: &str) {
+      assert_eq!(
+        DirectoryDisplay::with_home(Path::new(path), Some("/foo".into()))
+          .to_string(),
+        expected,
+      );
+    }
 
-  #[test]
-  fn displays_absolute_path() {
-    assert_eq!(
-      DirectoryDisplay::new(Path::new("/foo/./bar")).to_string(),
-      Path::new("/foo/bar").clean().display().to_string(),
+    case(
+      "/foo/bar/../baz",
+      &Path::new("~").join("baz").display().to_string(),
     );
-  }
-
-  #[test]
-  fn displays_child_of_home_with_tilde() {
-    assert_eq!(
-      DirectoryDisplay::with_home(Path::new("/foo/bar"), Some("/foo".into()))
-        .to_string(),
-      Path::new("~").join("bar").display().to_string(),
+    case(
+      "/foo/bar",
+      &Path::new("~").join("bar").display().to_string(),
     );
-  }
-
-  #[test]
-  fn displays_home_as_tilde() {
-    assert_eq!(
-      DirectoryDisplay::with_home(Path::new("/foo"), Some("/foo".into()))
-        .to_string(),
-      "~",
-    );
-  }
-
-  #[test]
-  fn displays_path_outside_home() {
-    assert_eq!(
-      DirectoryDisplay::with_home(Path::new("/bar"), Some("/foo".into()))
-        .to_string(),
-      Path::new("/bar").clean().display().to_string(),
-    );
-  }
-
-  #[test]
-  fn displays_relative_path() {
-    assert_eq!(
-      DirectoryDisplay::new(Path::new("foo/./bar")).to_string(),
-      Path::new("foo").join("bar").display().to_string(),
-    );
+    case("/foo", "~");
+    case("/bar", &Path::new("/bar").clean().display().to_string());
   }
 }

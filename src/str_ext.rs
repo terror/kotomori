@@ -23,24 +23,17 @@ mod tests {
   use super::*;
 
   #[test]
-  fn leaves_short_strings_alone() {
-    assert_eq!("foo".truncate(3), "foo");
-    assert_eq!("foo".truncate(4), "foo");
-  }
+  fn truncate() {
+    #[track_caller]
+    fn case(text: &str, len: usize, expected: &str) {
+      assert_eq!(text.truncate(len), expected);
+    }
 
-  #[test]
-  fn truncates_long_strings() {
-    assert_eq!("foobarbaz".truncate(3), "foo...");
-  }
-
-  #[test]
-  fn truncates_unicode_on_character_boundaries() {
-    assert_eq!("åéî".truncate(2), "åé...");
-  }
-
-  #[test]
-  fn zero_length_truncates_non_empty_strings() {
-    assert_eq!("".truncate(0), "");
-    assert_eq!("foo".truncate(0), "...");
+    case("foo", 3, "foo");
+    case("foo", 4, "foo");
+    case("foobarbaz", 3, "foo...");
+    case("åéî", 2, "åé...");
+    case("", 0, "");
+    case("foo", 0, "...");
   }
 }
