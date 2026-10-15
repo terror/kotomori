@@ -24,20 +24,16 @@ mod tests {
   use super::*;
 
   #[test]
-  fn formats_exact_minute_boundaries() {
-    assert_eq!(Duration::from_mins(1).format(), "1m 0s");
-    assert_eq!(Duration::from_mins(2).format(), "2m 0s");
-  }
+  fn format() {
+    #[track_caller]
+    fn case(duration: Duration, expected: &str) {
+      assert_eq!(duration.format(), expected);
+    }
 
-  #[test]
-  fn formats_minutes_and_seconds_when_at_least_one_minute() {
-    assert_eq!(Duration::from_mins(1).format(), "1m 0s");
-    assert_eq!(Duration::from_secs(111).format(), "1m 51s");
-  }
-
-  #[test]
-  fn formats_seconds_only_when_under_one_minute() {
-    assert_eq!(Duration::from_secs(0).format(), "0s");
-    assert_eq!(Duration::from_secs(59).format(), "59s");
+    case(Duration::from_secs(0), "0s");
+    case(Duration::from_secs(59), "59s");
+    case(Duration::from_mins(1), "1m 0s");
+    case(Duration::from_secs(111), "1m 51s");
+    case(Duration::from_mins(2), "2m 0s");
   }
 }
