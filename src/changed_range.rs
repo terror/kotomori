@@ -30,101 +30,55 @@ mod tests {
   use super::*;
 
   #[test]
-  fn between_detects_added_blank_tail() {
-    assert_eq!(
-      ChangedRange::between(&["foo"], &["foo", ""]),
+  fn between() {
+    #[track_caller]
+    fn case(previous: &[&str], next: &[&str], expected: Option<ChangedRange>) {
+      assert_eq!(ChangedRange::between(previous, next), expected);
+    }
+
+    case(
+      &["foo"],
+      &["foo", ""],
       Some(ChangedRange { first: 1, last: 1 }),
     );
-  }
-
-  #[test]
-  fn between_detects_added_tail() {
-    assert_eq!(
-      ChangedRange::between(&["foo", "bar"], &["foo", "bar", "baz"]),
+    case(
+      &["foo", "bar"],
+      &["foo", "bar", "baz"],
       Some(ChangedRange { first: 2, last: 2 }),
     );
-  }
-
-  #[test]
-  fn between_detects_changed_middle_span() {
-    assert_eq!(
-      ChangedRange::between(
-        &["foo", "bar", "baz", "qux"],
-        &["foo", "bob", "rob", "qux"],
-      ),
+    case(
+      &["foo", "bar", "baz", "qux"],
+      &["foo", "bob", "rob", "qux"],
       Some(ChangedRange { first: 1, last: 2 }),
     );
-  }
-
-  #[test]
-  fn between_detects_changed_prefix() {
-    assert_eq!(
-      ChangedRange::between(&["foo", "bar", "baz"], &["qux", "bar", "baz"]),
+    case(
+      &["foo", "bar", "baz"],
+      &["qux", "bar", "baz"],
       Some(ChangedRange { first: 0, last: 0 }),
     );
-  }
-
-  #[test]
-  fn between_detects_changed_suffix() {
-    assert_eq!(
-      ChangedRange::between(&["foo", "bar", "baz"], &["foo", "bar", "qux"]),
+    case(
+      &["foo", "bar", "baz"],
+      &["foo", "bar", "qux"],
       Some(ChangedRange { first: 2, last: 2 }),
     );
-  }
-
-  #[test]
-  fn between_detects_disjoint_changes_as_one_span() {
-    assert_eq!(
-      ChangedRange::between(
-        &["foo", "bar", "baz", "qux"],
-        &["bob", "bar", "baz", "rob"],
-      ),
+    case(
+      &["foo", "bar", "baz", "qux"],
+      &["bob", "bar", "baz", "rob"],
       Some(ChangedRange { first: 0, last: 3 }),
     );
-  }
-
-  #[test]
-  fn between_detects_empty_string_changed_to_non_empty_string() {
-    assert_eq!(
-      ChangedRange::between(&[""], &["foo"]),
-      Some(ChangedRange { first: 0, last: 0 }),
-    );
-  }
-
-  #[test]
-  fn between_detects_non_empty_string_changed_to_empty_string() {
-    assert_eq!(
-      ChangedRange::between(&["foo"], &[""]),
-      Some(ChangedRange { first: 0, last: 0 }),
-    );
-  }
-
-  #[test]
-  fn between_detects_removed_blank_tail() {
-    assert_eq!(
-      ChangedRange::between(&["foo", ""], &["foo"]),
+    case(&[""], &["foo"], Some(ChangedRange { first: 0, last: 0 }));
+    case(&["foo"], &[""], Some(ChangedRange { first: 0, last: 0 }));
+    case(
+      &["foo", ""],
+      &["foo"],
       Some(ChangedRange { first: 1, last: 1 }),
     );
-  }
-
-  #[test]
-  fn between_detects_removed_tail() {
-    assert_eq!(
-      ChangedRange::between(&["foo", "bar", "baz"], &["foo", "bar"]),
+    case(
+      &["foo", "bar", "baz"],
+      &["foo", "bar"],
       Some(ChangedRange { first: 2, last: 2 }),
     );
-  }
-
-  #[test]
-  fn between_returns_none_for_empty_inputs() {
-    assert_eq!(ChangedRange::between(&[] as &[&str], &[] as &[&str]), None);
-  }
-
-  #[test]
-  fn between_returns_none_for_identical_inputs() {
-    assert_eq!(
-      ChangedRange::between(&["foo", "bar", "baz"], &["foo", "bar", "baz"]),
-      None,
-    );
+    case(&[], &[], None);
+    case(&["foo", "bar", "baz"], &["foo", "bar", "baz"], None);
   }
 }
