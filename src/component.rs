@@ -19,7 +19,6 @@ mod session;
 mod stack;
 mod text_field;
 mod tool_invocation;
-mod tool_output;
 mod transcript;
 mod view;
 
@@ -32,8 +31,7 @@ pub(crate) use {
   resume_picker::ResumePickerComponent, scroll::ScrollComponent,
   session::SessionComponent, stack::StackComponent,
   text_field::TextFieldComponent, tool_invocation::ToolInvocationComponent,
-  tool_output::ToolOutputComponent, transcript::TranscriptComponent,
-  view::ViewComponent,
+  transcript::TranscriptComponent, view::ViewComponent,
 };
 
 pub(crate) trait Component: Debug {
