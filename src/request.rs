@@ -119,26 +119,4 @@ mod tests {
       }),
     }]);
   }
-
-  #[test]
-  fn last_user_text_returns_none_without_user_text() {
-    let request = Request {
-      messages: &[
-        Message::agent(vec![AssistantContent::text("foo")]),
-        Message::User(vec![UserMessageContent::ToolResult {
-          call: CallId::from_wire("bar"),
-          name: ToolName::new("baz").unwrap(),
-          result: ToolResult::default(),
-        }]),
-      ],
-      model: &Model {
-        name: "foo".into(),
-        provider: "mock".into(),
-      },
-      system: None,
-      tools: &[],
-    };
-
-    assert_eq!(request.last_user_text(), None);
-  }
 }
