@@ -49,3 +49,11 @@ pub(crate) trait Component: Debug {
 
   fn render(&self, width: u16) -> Vec<LineComponent>;
 }
+
+impl<C: Component> Component for Option<C> {
+  fn render(&self, width: u16) -> Vec<LineComponent> {
+    self
+      .as_ref()
+      .map_or_else(Vec::new, |component| component.render(width))
+  }
+}
