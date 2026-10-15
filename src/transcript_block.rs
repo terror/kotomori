@@ -155,9 +155,9 @@ mod tests {
 
     for boundary in [
       TranscriptEntry::Draft(MessageBuffer::default()),
-      TranscriptEntry::Message(Message::agent(vec![AssistantContent::text(
-        "foo",
-      )])),
+      TranscriptEntry::Message(Message::Agent(
+        vec![AssistantContent::text("foo")].into(),
+      )),
     ] {
       case(&[boundary, entry.clone()], None);
     }

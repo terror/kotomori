@@ -69,7 +69,7 @@ mod tests {
     let request = CompletionRequest::from(&Request {
       messages: &[
         Message::User(vec![UserMessageContent::Text("bar".into())]),
-        Message::agent(vec![AssistantContent::text("qux")]),
+        Message::Agent(vec![AssistantContent::text("qux")].into()),
       ],
       model: &Model {
         name: "foo".into(),

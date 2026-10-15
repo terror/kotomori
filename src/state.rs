@@ -417,9 +417,9 @@ mod tests {
     );
 
     for event in [
-      AgentEvent::Message(Message::agent(vec![AssistantContent::ToolCall(
-        invocation.protocol,
-      )])),
+      AgentEvent::Message(Message::Agent(
+        vec![AssistantContent::ToolCall(invocation.protocol)].into(),
+      )),
       AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
           call: CallId::from_wire("foo"),
@@ -548,31 +548,34 @@ mod tests {
     });
 
     let messages = vec![
-      Message::agent(vec![
-        AssistantContent::reasoning("foo", "foo"),
-        AssistantContent::text("bar"),
-        AssistantContent::ToolCall(
-          ToolInvocation::new(
-            "foo",
-            ToolInvocationKind::Command(CommandTool {
-              command: "bar".into(),
-              cwd: None,
-            }),
-          )
-          .protocol,
-        ),
-        AssistantContent::text("baz"),
-        AssistantContent::ToolCall(
-          ToolInvocation::new(
-            "bar",
-            ToolInvocationKind::Command(CommandTool {
-              command: "qux".into(),
-              cwd: None,
-            }),
-          )
-          .protocol,
-        ),
-      ]),
+      Message::Agent(
+        vec![
+          AssistantContent::reasoning("foo", "foo"),
+          AssistantContent::text("bar"),
+          AssistantContent::ToolCall(
+            ToolInvocation::new(
+              "foo",
+              ToolInvocationKind::Command(CommandTool {
+                command: "bar".into(),
+                cwd: None,
+              }),
+            )
+            .protocol,
+          ),
+          AssistantContent::text("baz"),
+          AssistantContent::ToolCall(
+            ToolInvocation::new(
+              "bar",
+              ToolInvocationKind::Command(CommandTool {
+                command: "qux".into(),
+                cwd: None,
+              }),
+            )
+            .protocol,
+          ),
+        ]
+        .into(),
+      ),
       Message::User(vec![
         UserMessageContent::ToolResult {
           call: CallId::from_wire("bar"),
@@ -591,7 +594,7 @@ mod tests {
           },
         },
       ]),
-      Message::agent(vec![AssistantContent::text("qux")]),
+      Message::Agent(vec![AssistantContent::text("qux")].into()),
     ];
 
     for message in &messages {
@@ -764,7 +767,7 @@ mod tests {
     assert_eq!(state.run, None);
     assert_eq!(
       state.session.transcript.messages(),
-      [Message::agent(vec![AssistantContent::text("foo")])]
+      [Message::Agent(vec![AssistantContent::text("foo")].into())]
     );
   }
 
@@ -835,7 +838,7 @@ mod tests {
     assert_eq!(
       session.transcript.entries,
       [
-        TranscriptEntry::Message(Message::agent(content)),
+        TranscriptEntry::Message(Message::Agent(content.into())),
         TranscriptEntry::Interrupted,
       ]
     );
@@ -887,9 +890,9 @@ mod tests {
         delta: "stale".into(),
         index: 0,
       }),
-      AgentEvent::Message(Message::agent(vec![AssistantContent::ToolCall(
-        invocation.protocol,
-      )])),
+      AgentEvent::Message(Message::Agent(
+        vec![AssistantContent::ToolCall(invocation.protocol)].into(),
+      )),
       AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
           call: CallId::from_wire("stale"),
@@ -937,7 +940,7 @@ mod tests {
       [
         Message::User(vec![UserMessageContent::Text("old".into())]),
         Message::User(vec![UserMessageContent::Text("new".into())]),
-        Message::agent(vec![AssistantContent::text("current")]),
+        Message::Agent(vec![AssistantContent::text("current")].into()),
       ]
     );
   }
@@ -1085,10 +1088,13 @@ mod tests {
           Effect::SaveSession,
           Effect::RunAgent {
             messages: vec![
-              Message::agent(vec![
-                AssistantContent::Reasoning(reasoning),
-                AssistantContent::text("baz"),
-              ]),
+              Message::Agent(
+                vec![
+                  AssistantContent::Reasoning(reasoning),
+                  AssistantContent::text("baz"),
+                ]
+                .into(),
+              ),
               Message::User(vec![UserMessageContent::Text("qux".into())]),
             ],
             run_id: 0,
