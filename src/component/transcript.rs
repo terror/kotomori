@@ -240,9 +240,9 @@ mod tests {
 
       for entry in [
         TranscriptEntry::Draft(run.message),
-        TranscriptEntry::Message(Message::agent(vec![AssistantContent::text(
-          text,
-        )])),
+        TranscriptEntry::Message(Message::Agent(
+          vec![AssistantContent::text(text)].into(),
+        )),
       ] {
         assert_eq!(
           TranscriptComponent {
@@ -306,9 +306,9 @@ mod tests {
       TranscriptEntry::Message(Message::User(vec![UserMessageContent::Text(
         "baz".into(),
       )])),
-      TranscriptEntry::Message(Message::agent(vec![
-        AssistantContent::ToolCall(invocation.protocol.clone()),
-      ])),
+      TranscriptEntry::Message(Message::Agent(
+        vec![AssistantContent::ToolCall(invocation.protocol.clone())].into(),
+      )),
       TranscriptEntry::Message(Message::User(vec![
         UserMessageContent::ToolResult {
           call: invocation.protocol.id.clone(),
@@ -361,8 +361,9 @@ mod tests {
       }),
     );
 
-    let message =
-      Message::agent(vec![AssistantContent::ToolCall(invocation.protocol)]);
+    let message = Message::Agent(
+      vec![AssistantContent::ToolCall(invocation.protocol)].into(),
+    );
 
     let transcript = Transcript::new(vec![
       TranscriptEntry::Message(message.clone()),
@@ -410,15 +411,18 @@ mod tests {
   #[test]
   fn render_unknown_tool() {
     let transcript =
-      Transcript::new(vec![TranscriptEntry::Message(Message::agent(vec![
-        AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
-          "foo",
-          ToolFunction {
-            arguments: serde_json::json!({"bar": "baz"}),
-            name: ToolName::new("foo").unwrap(),
-          },
-        )),
-      ]))]);
+      Transcript::new(vec![TranscriptEntry::Message(Message::Agent(
+        vec![AssistantContent::ToolCall(
+          ::rig::message::ToolCall::from_wire(
+            "foo",
+            ToolFunction {
+              arguments: serde_json::json!({"bar": "baz"}),
+              name: ToolName::new("foo").unwrap(),
+            },
+          ),
+        )]
+        .into(),
+      ))]);
 
     assert_eq!(
       TranscriptComponent {

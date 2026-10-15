@@ -106,27 +106,30 @@ mod tests {
   fn messages_preserve_completed_content_and_boundaries() {
     let messages = vec![
       Message::User(vec![UserMessageContent::Text("foo".into())]),
-      Message::agent(vec![
-        AssistantContent::text("bar"),
-        AssistantContent::ToolCall(
-          ToolInvocation::new(
-            "foo",
-            ToolInvocationKind::Command(CommandTool {
-              command: "bar".into(),
-              cwd: None,
-            }),
-          )
-          .protocol,
-        ),
-        AssistantContent::text("baz"),
-      ]),
+      Message::Agent(
+        vec![
+          AssistantContent::text("bar"),
+          AssistantContent::ToolCall(
+            ToolInvocation::new(
+              "foo",
+              ToolInvocationKind::Command(CommandTool {
+                command: "bar".into(),
+                cwd: None,
+              }),
+            )
+            .protocol,
+          ),
+          AssistantContent::text("baz"),
+        ]
+        .into(),
+      ),
       Message::User(vec![UserMessageContent::ToolResult {
         call: CallId::from_wire("foo"),
         name: ToolName::new("command").unwrap(),
         result: ToolResult::default(),
       }]),
-      Message::agent(vec![AssistantContent::reasoning("foo", "qux")]),
-      Message::agent(vec![AssistantContent::text("quux")]),
+      Message::Agent(vec![AssistantContent::reasoning("foo", "qux")].into()),
+      Message::Agent(vec![AssistantContent::text("quux")].into()),
     ];
 
     let transcript = Transcript::new(

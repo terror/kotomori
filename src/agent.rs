@@ -317,7 +317,9 @@ mod tests {
     assert_eq!(
       events.recv().await.unwrap(),
       Event::Agent {
-        event: AgentEvent::Message(Message::agent(vec![tool_call.clone()])),
+        event: AgentEvent::Message(Message::Agent(
+          vec![tool_call.clone()].into(),
+        )),
         run_id: 0,
       }
     );
@@ -369,7 +371,7 @@ mod tests {
         vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
         vec![
           Message::User(vec![UserMessageContent::Text("foo".into())]),
-          Message::agent(vec![tool_call]),
+          Message::Agent(vec![tool_call].into()),
           Message::User(vec![UserMessageContent::ToolResult {
             call: CallId::from_wire("foo"),
             name: ToolName::new("command").unwrap(),

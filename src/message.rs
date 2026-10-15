@@ -7,11 +7,6 @@ pub(crate) enum Message {
 }
 
 impl Message {
-  #[cfg(test)]
-  pub(crate) fn agent(content: Vec<AssistantContent>) -> Self {
-    Self::Agent(content.into())
-  }
-
   pub(crate) fn has_tool_result(&self) -> bool {
     match self {
       Self::Agent(_) => false,
