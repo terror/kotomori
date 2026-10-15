@@ -8,6 +8,13 @@ pub(crate) struct StackComponent<'a> {
 }
 
 impl<'a> StackComponent<'a> {
+  pub(crate) fn extend(
+    self,
+    components: impl IntoIterator<Item = impl Component + 'a>,
+  ) -> Self {
+    components.into_iter().fold(self, Self::push)
+  }
+
   pub(crate) fn gap(mut self, gap: usize) -> Self {
     self.gap = gap;
 

@@ -32,41 +32,27 @@ impl Component for TranscriptToolInvocationComponent<'_> {
       None => ("●", Style::Accent, ToolActionTense::Progressive),
     };
 
-    let stack = StackComponent::default()
+    StackComponent::default()
       .push(LineComponent::from([
         Span::styled(symbol, symbol_style),
         Span::raw(" "),
         Span::raw(self.invocation.title(tense)),
       ]))
-      .push(
-        LinesComponent {
-          lines: self
-            .details()
-            .into_iter()
-            .map(|(label, value)| {
-              LineComponent::from([
-                Span::styled(format!("{label} "), Style::Muted),
-                Span::raw(value),
-              ])
-            })
-            .collect(),
-        }
-        .gutter(Span::styled("  │ ", Style::Muted)),
-      );
-
-    let stack = if let Some(output) = self.result.and_then(ToolResult::output) {
-      stack.push(
+      .extend(self.details().into_iter().map(|(label, value)| {
+        LineComponent::from([
+          Span::styled(format!("{label} "), Style::Muted),
+          Span::raw(value),
+        ])
+        .gutter(Span::styled("  │ ", Style::Muted))
+      }))
+      .push(self.result.and_then(ToolResult::output).map(|output| {
         OutputPreviewComponent {
           limit: Self::OUTPUT_LIMIT,
           output,
         }
-        .gutter(Span::styled("  │ ", Style::Muted)),
-      )
-    } else {
-      stack
-    };
-
-    stack.render(width)
+        .gutter(Span::styled("  │ ", Style::Muted))
+      }))
+      .render(width)
   }
 }
 
