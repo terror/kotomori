@@ -46,7 +46,7 @@ impl Component for TranscriptToolInvocationComponent<'_> {
         .gutter(Span::styled("  │ ", Style::Muted))
       }))
       .push(self.result.and_then(ToolResult::output).map(|output| {
-        OutputPreviewComponent {
+        ToolOutputComponent {
           limit: Self::OUTPUT_LIMIT,
           output,
         }

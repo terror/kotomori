@@ -1,12 +1,12 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct OutputPreviewComponent {
+pub(crate) struct ToolOutputComponent {
   pub(crate) limit: usize,
   pub(crate) output: String,
 }
 
-impl Component for OutputPreviewComponent {
+impl Component for ToolOutputComponent {
   fn render(&self, width: u16) -> Vec<LineComponent> {
     let output = self
       .output
@@ -48,7 +48,7 @@ mod tests {
     #[track_caller]
     fn case(limit: usize, expected: &[LineComponent]) {
       assert_eq!(
-        OutputPreviewComponent {
+        ToolOutputComponent {
           limit,
           output: "\n👩‍💻foobar\n\nbar\nbaz\n".into()
         }
