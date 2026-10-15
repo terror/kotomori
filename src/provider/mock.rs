@@ -50,7 +50,7 @@ impl Provider for Mock {
           Reasoning::encrypted("bar").sealed("mock"),
         ),
         "error" if request.messages.len() == 1 => {
-          bail!("foo\nbar");
+          bail!("{}\nbar", "foo".repeat(25));
         }
         "escaped-command" if request.messages.len() == 1 => {
           AssistantContent::tool_call(

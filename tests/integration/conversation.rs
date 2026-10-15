@@ -182,6 +182,7 @@ fn provider_error_recovers() -> Result {
       │ foo
 
       ● Error
+        │ foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo
         │ foo
         │ bar
 
@@ -197,6 +198,7 @@ fn provider_error_recovers() -> Result {
       │ foo
 
       ● Error
+        │ foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo
         │ foo
         │ bar
 
