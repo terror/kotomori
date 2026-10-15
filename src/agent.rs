@@ -376,49 +376,6 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn does_not_emit_tool_calls_when_round_contains_malformed_call() {
-    let content = vec![
-      AssistantContent::tool_call(
-        "foo",
-        ToolName::new("command").unwrap(),
-        json!({"command": "echo bar"}),
-      ),
-      AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
-        "bar",
-        ToolFunction {
-          arguments: json!({}),
-          name: ToolName::new("command").unwrap(),
-        },
-      )),
-    ];
-
-    let test_agent = TestAgent::new(
-      vec![TestResponse {
-        message: content.clone().into(),
-        updates: content
-          .into_iter()
-          .enumerate()
-          .map(|(index, content)| MessageUpdate::Content { index, content })
-          .collect(),
-      }],
-      true,
-    );
-
-    let error = test_agent
-      .agent
-      .stream(
-        0,
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-      )
-      .await
-      .unwrap_err();
-
-    assert!(test_agent.events.is_empty());
-
-    assert_eq!(error.to_string(), "failed to decode `command` arguments");
-  }
-
-  #[tokio::test]
   async fn loops_until_provider_returns_no_tool_calls() {
     let tool_call = AssistantContent::tool_call(
       "foo",

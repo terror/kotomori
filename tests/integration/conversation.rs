@@ -214,13 +214,49 @@ fn provider_error_recovers() -> Result {
 
 #[test]
 fn provider_malformed_tool_arguments_recovers() -> Result {
+  let directory = tempfile::tempdir()?;
+
   Test::new()
+    .cwd(directory.path())
     .model("mock:malformed-tool-arguments")
+    .argument("--yolo")
     .submit("foo")
-    .expect_screen_contains("failed to decode `command` arguments")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      ● Error
+        │ failed to decode `command` arguments
+
+      │
+
+      mock · malformed-tool-arguments · \
+      "
+    })
     .submit("bar")
-    .expect_screen_contains("queued for mock:malformed-tool-arguments: bar")
-    .run()
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      ● Error
+        │ failed to decode `command` arguments
+
+      │ bar
+
+      queued for mock:malformed-tool-arguments: bar
+
+      │
+
+      mock · malformed-tool-arguments · \
+      "
+    })
+    .run()?;
+
+  assert!(!directory.path().join("foo").try_exists()?);
+
+  Ok(())
 }
 
 #[test]
