@@ -6,7 +6,10 @@ pub(crate) struct Database {
 }
 
 impl Database {
-  const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
+  const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0001_initial.sql"),
+    include_str!("../migrations/0002_session_snapshots.sql"),
+  ];
   const SCHEMA_VERSION: usize = Self::MIGRATIONS.len();
 
   pub(crate) fn fork_session(
@@ -16,7 +19,7 @@ impl Database {
   ) -> Result<Session> {
     let transaction = self.connection.unchecked_transaction()?;
 
-    self.save_session(session, now)?;
+    self.save_session_inner(session, now)?;
 
     let session = Session {
       conversation: session.conversation.clone(),
@@ -25,7 +28,7 @@ impl Database {
       ..Session::new(&session.settings, now)
     };
 
-    let saved = self.save_session(&session, now)?;
+    let saved = self.save_session_inner(&session, now)?;
 
     transaction.commit()?;
 
@@ -72,13 +75,41 @@ impl Database {
     self
       .connection
       .query_row(
-        "SELECT id, created_at, updated_at, directory, model, title, entries
+        "SELECT id, created_at, updated_at, directory, model, title, entries, snapshot
          FROM sessions
          WHERE id = ?1",
         [id],
         |row| {
-          let mut session = Session {
-            conversation: Conversation::default(),
+          let entries = row.get::<_, String>(6)?;
+          let snapshot = row.get::<_, Option<String>>(7)?;
+
+          let core = Self::snapshot(&entries, snapshot.as_deref())
+            .map_err(|error| {
+              rusqlite::Error::FromSqlConversionFailure(
+                if snapshot.is_some() { 7 } else { 6 },
+                rusqlite::types::Type::Text,
+                error.into(),
+              )
+            })?;
+
+          let transcript = if snapshot.is_some() {
+            serde_json::from_str::<Vec<SessionEntry>>(&entries)
+              .map_err(Error::from)
+              .and_then(|entries| SessionEntry::restore(entries, &core))
+          } else {
+            serde_json::from_str::<Vec<TranscriptEntry>>(&entries)
+              .map_err(Error::from)
+          }
+          .map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+              6,
+              rusqlite::types::Type::Text,
+              error.into(),
+            )
+          })?;
+
+          Ok(Session {
+            conversation: core.conversation(),
             created_at: row.get(1)?,
             id: Some(row.get(0)?),
             settings: Settings {
@@ -87,24 +118,9 @@ impl Database {
               ..settings.clone()
             },
             title: row.get(5)?,
-            transcript: Vec::new(),
+            transcript,
             updated_at: row.get(2)?,
-          };
-
-          session.push_many(
-            serde_json::from_str::<Vec<TranscriptEntry>>(
-              &row.get::<_, String>(6)?,
-            )
-            .map_err(|error| {
-              rusqlite::Error::FromSqlConversionFailure(
-                6,
-                rusqlite::types::Type::Text,
-                Box::new(error),
-              )
-            })?,
-          );
-
-          Ok(session)
+          })
         },
       )
       .with_context(|| format!("failed to load session `{id}`"))
@@ -127,14 +143,36 @@ impl Database {
     session: &Session,
     updated_at: u64,
   ) -> Result<SavedSession> {
+    let transaction = self.connection.unchecked_transaction()?;
+
+    let saved = self.save_session_inner(session, updated_at)?;
+
+    transaction.commit()?;
+
+    Ok(saved)
+  }
+
+  fn save_session_inner(
+    &self,
+    session: &Session,
+    updated_at: u64,
+  ) -> Result<SavedSession> {
+    let snapshot = session.snapshot()?;
+
     let directory = session
       .settings
       .directory
       .to_str()
       .context("session directory is not valid UTF-8")?;
 
-    let entries = serde_json::to_string(&session.transcript)
-      .context("failed to serialize session transcript")?;
+    let entries = serde_json::to_string(
+      &session
+        .transcript
+        .iter()
+        .map(SessionEntry::from)
+        .collect::<Vec<_>>(),
+    )
+    .context("failed to serialize session transcript")?;
 
     let title = session.title.clone().or_else(|| session.generate_title());
 
@@ -180,11 +218,69 @@ impl Database {
       )?
     };
 
+    self.save(&id, &snapshot)?;
+
     Ok(SavedSession {
       id,
       title,
       updated_at,
     })
+  }
+
+  fn snapshot(
+    entries: &str,
+    snapshot: Option<&str>,
+  ) -> Result<SessionSnapshot> {
+    match snapshot {
+      Some(snapshot) => serde_json::from_str(snapshot).map_err(Into::into),
+      None => SessionSnapshot::new(
+        serde_json::from_str::<Vec<TranscriptEntry>>(entries)?
+          .into_iter()
+          .filter_map(TranscriptEntry::into_run_entry)
+          .collect(),
+      ),
+    }
+  }
+}
+
+impl SessionStore for Database {
+  type Key = i64;
+
+  fn load(&self, id: &i64) -> Result<Option<SessionSnapshot>> {
+    self
+      .connection
+      .query_row(
+        "SELECT entries, snapshot FROM sessions WHERE id = ?1",
+        [id],
+        |row| {
+          let entries = row.get::<_, String>(0)?;
+          let snapshot = row.get::<_, Option<String>>(1)?;
+
+          Self::snapshot(&entries, snapshot.as_deref()).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+              usize::from(snapshot.is_some()),
+              rusqlite::types::Type::Text,
+              error.into(),
+            )
+          })
+        },
+      )
+      .optional()
+      .with_context(|| format!("failed to load session snapshot `{id}`"))
+  }
+
+  fn save(&self, id: &i64, snapshot: &SessionSnapshot) -> Result {
+    let snapshot = serde_json::to_string(snapshot)
+      .context("failed to serialize session snapshot")?;
+
+    let updated = self.connection.execute(
+      "UPDATE sessions SET snapshot = ?1 WHERE id = ?2",
+      params![snapshot, id],
+    )?;
+
+    ensure!(updated != 0, "session `{id}` no longer exists");
+
+    Ok(())
   }
 }
 

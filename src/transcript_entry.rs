@@ -9,6 +9,16 @@ pub(crate) enum TranscriptEntry {
   Notice(String),
 }
 
+impl TranscriptEntry {
+  pub(crate) fn into_run_entry(self) -> Option<RunEntry> {
+    match self {
+      Self::Draft(buffer) => Some(RunEntry::Draft(buffer)),
+      Self::Message(message) => Some(RunEntry::Message(message)),
+      Self::Error(_) | Self::Interrupted | Self::Notice(_) => None,
+    }
+  }
+}
+
 impl From<RunEntry> for TranscriptEntry {
   fn from(entry: RunEntry) -> Self {
     match entry {

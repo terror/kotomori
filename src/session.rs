@@ -62,17 +62,10 @@ impl Session {
   }
 
   pub(crate) fn push(&mut self, entry: TranscriptEntry) {
-    let message = match &entry {
-      TranscriptEntry::Message(message) => {
-        RunEntry::Message(message.clone()).into_message()
-      }
-      TranscriptEntry::Draft(buffer) => {
-        RunEntry::Draft(buffer.clone()).into_message()
-      }
-      TranscriptEntry::Error(_)
-      | TranscriptEntry::Interrupted
-      | TranscriptEntry::Notice(_) => None,
-    };
+    let message = entry
+      .clone()
+      .into_run_entry()
+      .and_then(RunEntry::into_message);
 
     if let Some(message) = message {
       self.conversation.push(message);
@@ -83,6 +76,7 @@ impl Session {
     self.transcript.push(entry);
   }
 
+  #[cfg(test)]
   pub(crate) fn push_many(
     &mut self,
     entries: impl IntoIterator<Item = TranscriptEntry>,
@@ -90,6 +84,24 @@ impl Session {
     for entry in entries {
       self.push(entry);
     }
+  }
+
+  pub(crate) fn snapshot(&self) -> Result<SessionSnapshot> {
+    let snapshot = SessionSnapshot::new(
+      self
+        .transcript
+        .iter()
+        .cloned()
+        .filter_map(TranscriptEntry::into_run_entry)
+        .collect(),
+    )?;
+
+    ensure!(
+      snapshot.conversation() == self.conversation,
+      "session transcript does not match its conversation"
+    );
+
+    Ok(snapshot)
   }
 }
 
