@@ -73,6 +73,7 @@ impl Session {
     self
       .transcript
       .push_many(messages.into_iter().map(TranscriptEntry::Message));
+
     self.transcript.push(entry);
   }
 
