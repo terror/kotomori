@@ -403,7 +403,7 @@ mod tests {
       0,
     ));
 
-    let invocation = ToolInvocation::new(
+    let invocation = tool_invocation(
       "foo",
       CommandArguments {
         command: "bar".into(),
@@ -446,14 +446,13 @@ mod tests {
       0,
     ));
 
-    let (request, response_receiver) =
-      ApprovalRequest::new(ToolInvocation::new(
-        "foo",
-        CommandArguments {
-          command: "bar".into(),
-          cwd: None,
-        },
-      ));
+    let (request, response_receiver) = ApprovalRequest::new(tool_invocation(
+      "foo",
+      CommandArguments {
+        command: "bar".into(),
+        cwd: None,
+      },
+    ));
 
     state.run = Some(Run {
       approval: Some(request),
@@ -490,14 +489,13 @@ mod tests {
       0,
     ));
 
-    let (request, response_receiver) =
-      ApprovalRequest::new(ToolInvocation::new(
-        "foo",
-        CommandArguments {
-          command: "bar".into(),
-          cwd: None,
-        },
-      ));
+    let (request, response_receiver) = ApprovalRequest::new(tool_invocation(
+      "foo",
+      CommandArguments {
+        command: "bar".into(),
+        cwd: None,
+      },
+    ));
 
     state.run = Some(Run {
       approval: Some(request),
@@ -548,7 +546,7 @@ mod tests {
           AssistantContent::reasoning("foo", "foo"),
           AssistantContent::text("bar"),
           AssistantContent::ToolCall(
-            ToolInvocation::new(
+            tool_invocation(
               "foo",
               CommandArguments {
                 command: "bar".into(),
@@ -559,7 +557,7 @@ mod tests {
           ),
           AssistantContent::text("baz"),
           AssistantContent::ToolCall(
-            ToolInvocation::new(
+            tool_invocation(
               "bar",
               CommandArguments {
                 command: "qux".into(),
@@ -784,7 +782,7 @@ mod tests {
 
     let (event_sender, mut events) = mpsc::unbounded_channel();
 
-    let sink = ProviderSink { event_sender };
+    let sink = ProviderSink::new(event_sender);
 
     let reasoning = Reasoning {
       content: vec![ReasoningContent::Text {
@@ -872,7 +870,7 @@ mod tests {
       [Effect::SaveSession, Effect::RunAgent { run_id: 1, .. }]
     );
 
-    let invocation = ToolInvocation::new(
+    let invocation = tool_invocation(
       "stale",
       CommandArguments {
         command: "echo".into(),

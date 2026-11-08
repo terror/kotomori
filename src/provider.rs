@@ -17,14 +17,6 @@ mod copilot;
 mod mock;
 mod rig;
 
-pub(crate) trait Provider: fmt::Debug + Send + Sync {
-  fn stream<'a>(
-    &'a self,
-    request: Request<'a>,
-    sink: &'a ProviderSink,
-  ) -> BoxFuture<'a, Result<AgentMessage>>;
-}
-
 pub(crate) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
   let provider = match model.provider.as_str() {
     "azure" => "azure.openai/openai",

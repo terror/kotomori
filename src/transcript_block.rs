@@ -78,7 +78,7 @@ mod tests {
   fn tool_results() {
     #[track_caller]
     fn case(following: &[TranscriptEntry], result: Option<&ToolResult>) {
-      let invocation = ToolInvocation::new(
+      let invocation = tool_invocation(
         "foo",
         CommandArguments {
           command: "bar".into(),

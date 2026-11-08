@@ -55,7 +55,7 @@ impl Database {
       Ok(SessionSummary {
         directory: row.get::<_, String>(2)?.into(),
         id: row.get(0)?,
-        model: row.get(3)?,
+        model: row.get::<_, DatabaseModel>(3)?.0,
         title: row.get(4)?,
         updated_at: row.get(1)?,
       })
@@ -83,7 +83,7 @@ impl Database {
             id: Some(row.get(0)?),
             settings: Settings {
               directory: row.get::<_, String>(3)?.into(),
-              model: row.get(4)?,
+              model: row.get::<_, DatabaseModel>(4)?.0,
               ..settings.clone()
             },
             title: row.get(5)?,

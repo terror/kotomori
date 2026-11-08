@@ -31,16 +31,15 @@ impl App {
       directory: settings.directory.clone(),
     }))?;
 
-    Ok(Some(Agent {
-      config: AgentConfig {
+    Ok(Some(Agent::new(
+      AgentConfig {
         model: settings.model.clone(),
         tools,
         yolo: settings.yolo,
       },
-      provider: provider::build(&settings.model)?,
-      system: Self::system_prompt(&settings.directory)?,
-      task: None,
-    }))
+      provider::build(&settings.model)?,
+      Self::system_prompt(&settings.directory)?,
+    )))
   }
 
   fn drain_pending_events(&mut self) -> Result {

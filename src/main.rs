@@ -1,17 +1,9 @@
 use {
   action::Action,
-  agent::Agent,
   agent_activity::AgentActivity,
-  agent_config::AgentConfig,
-  agent_event::AgentEvent,
-  agent_message::AgentMessage,
   anyhow::{Context, Error, bail},
   app::App,
-  approval_policy::ApprovalPolicy,
-  approval_request::ApprovalRequest,
   arguments::Arguments,
-  assistant_content::AssistantContent,
-  call_id::CallId,
   changed_range::ChangedRange,
   clap::{Args, Parser},
   clipboard::Clipboard,
@@ -22,7 +14,6 @@ use {
   component::{LineComponent, ViewComponent},
   composer::Composer,
   config::Config,
-  conversation::Conversation,
   crossterm::{
     cursor::{Hide, MoveDown, MoveTo, MoveToColumn, MoveUp},
     event::{
@@ -36,6 +27,7 @@ use {
     },
   },
   database::Database,
+  database_model::DatabaseModel,
   dimensions::Dimensions,
   directory_display::DirectoryDisplay,
   duration_ext::DurationExt,
@@ -47,24 +39,22 @@ use {
   history::History,
   history_navigation::HistoryNavigation,
   indoc::formatdoc,
+  kotomori_core::{
+    Agent, AgentConfig, AgentEvent, AgentMessage, ApprovalPolicy,
+    ApprovalRequest, AssistantContent, CallId, Conversation, Message,
+    MessageBuffer, MessageDraft, MessageUpdate, Model, Provider, ProviderSink,
+    Reasoning, ReasoningContent, Request, Tool, ToolApproval, ToolCall,
+    ToolDefinition, ToolFunction, ToolInvocation, ToolName, ToolOutcome,
+    ToolRegistry, ToolRequest, ToolResult, UserMessageContent,
+  },
   loader::Loader,
-  message::Message,
-  message_buffer::MessageBuffer,
-  message_draft::MessageDraft,
-  message_update::MessageUpdate,
-  model::Model,
   options::Options,
   patch::Patch,
   path_ext::PathExt,
   process_wrap::tokio::{ChildWrapper, CommandWrap, KillOnDrop},
-  provider::Provider,
-  provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
-  reasoning::Reasoning,
-  reasoning_content::ReasoningContent,
   render_plan::RenderPlan,
   renderer::Renderer,
-  request::Request,
   resume_picker::ResumePicker,
   resume_picker_action::ResumePickerAction,
   run::Run,
@@ -88,7 +78,7 @@ use {
   std::{
     backtrace::BacktraceStatus,
     borrow::Cow,
-    collections::{BTreeMap, VecDeque, btree_map::Entry},
+    collections::VecDeque,
     env,
     fmt::{self, Debug, Display, Formatter},
     fs,
@@ -98,7 +88,7 @@ use {
     ops::Range,
     path::{Component, Path, PathBuf},
     process::{self, Stdio},
-    str::{self, FromStr},
+    str,
     sync::{Arc, LazyLock, OnceLock},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -107,35 +97,19 @@ use {
   strum::{EnumIter, IntoEnumIterator},
   style::Style,
   subcommand::Subcommand,
-  text::Text,
   tokio::{
     io::{AsyncRead, AsyncReadExt},
     runtime::Runtime,
-    sync::{
-      mpsc::{self, UnboundedReceiver, UnboundedSender},
-      oneshot,
-    },
-    task,
+    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     time::{interval, sleep, timeout},
   },
-  tool::{CommandTool, Tool},
+  tool::CommandTool,
   tool_action_tense::ToolActionTense,
-  tool_approval::ToolApproval,
-  tool_call::ToolCall,
-  tool_definition::ToolDefinition,
-  tool_function::ToolFunction,
-  tool_invocation::ToolInvocation,
-  tool_name::ToolName,
-  tool_outcome::ToolOutcome,
-  tool_registry::ToolRegistry,
-  tool_request::ToolRequest,
-  tool_result::ToolResult,
   transcript::Transcript,
   transcript_block::TranscriptBlock,
   transcript_entry::TranscriptEntry,
   unicode_segmentation::UnicodeSegmentation,
   unicode_width::UnicodeWidthStr,
-  user_message_content::UserMessageContent,
   write_ext::WriteExt,
 };
 
@@ -163,17 +137,11 @@ macro_rules! assert_matches {
 use {std::sync::Mutex, temptree::temptree};
 
 mod action;
-mod agent;
 mod agent_activity;
-mod agent_config;
-mod agent_event;
-mod agent_message;
+#[cfg(test)]
+mod agent_tests;
 mod app;
-mod approval_policy;
-mod approval_request;
 mod arguments;
-mod assistant_content;
-mod call_id;
 mod changed_range;
 mod clipboard;
 mod command;
@@ -183,8 +151,8 @@ mod command_executor;
 mod component;
 mod composer;
 mod config;
-mod conversation;
 mod database;
+mod database_model;
 mod dimensions;
 mod directory_display;
 mod duration_ext;
@@ -195,21 +163,12 @@ mod frame;
 mod history;
 mod history_navigation;
 mod loader;
-mod message;
-mod message_buffer;
-mod message_draft;
-mod message_update;
-mod model;
 mod options;
 mod patch;
 mod path_ext;
 mod provider;
-mod provider_sink;
-mod reasoning;
-mod reasoning_content;
 mod render_plan;
 mod renderer;
-mod request;
 mod resume_picker;
 mod resume_picker_action;
 mod run;
@@ -225,23 +184,13 @@ mod state;
 mod str_ext;
 mod style;
 mod subcommand;
-mod text;
 mod tool;
 mod tool_action_tense;
-mod tool_approval;
-mod tool_call;
-mod tool_definition;
-mod tool_function;
-mod tool_invocation;
-mod tool_name;
-mod tool_outcome;
-mod tool_registry;
-mod tool_request;
-mod tool_result;
+#[cfg(test)]
+mod tool_invocation_tests;
 mod transcript;
 mod transcript_block;
 mod transcript_entry;
-mod user_message_content;
 mod write_ext;
 
 static FIRST_DRAW_STARTED_AT: OnceLock<Instant> = OnceLock::new();
@@ -289,5 +238,18 @@ fn main() {
     }
 
     process::exit(1);
+  }
+}
+
+#[cfg(test)]
+fn tool_invocation(id: &str, arguments: CommandArguments) -> ToolInvocation {
+  ToolInvocation {
+    protocol: ToolRequest::new(
+      CallId::new(id),
+      ToolFunction {
+        arguments: serde_json::to_value(arguments).unwrap(),
+        name: ToolName::new("command").unwrap(),
+      },
+    ),
   }
 }

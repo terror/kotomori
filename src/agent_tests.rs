@@ -1,0 +1,277 @@
+use {
+  super::*, serde_json::json, std::collections::VecDeque, tempfile::TempDir,
+};
+
+const COMMAND_OUTPUT: &str = if cfg!(windows) { "bar\r\n" } else { "bar\n" };
+
+#[derive(Debug)]
+struct TestProvider {
+  requests: Arc<Mutex<Vec<Vec<Message>>>>,
+  responses: Mutex<VecDeque<TestResponse>>,
+}
+
+#[derive(Debug, Default)]
+struct TestResponse {
+  message: AgentMessage,
+  updates: Vec<MessageUpdate>,
+}
+
+impl Provider for TestProvider {
+  fn stream<'a>(
+    &'a self,
+    request: Request<'a>,
+    sink: &'a ProviderSink,
+  ) -> BoxFuture<'a, Result<AgentMessage>> {
+    Box::pin(async move {
+      assert_eq!(
+        request.tools,
+        [CommandTool {
+          command_executor: CommandExecutor::default(),
+          directory: "foo".into(),
+        }
+        .definition()],
+      );
+
+      self
+        .requests
+        .lock()
+        .unwrap()
+        .push(request.messages.to_vec());
+
+      let response = self.responses.lock().unwrap().pop_front().unwrap();
+
+      sink.update_many(response.updates)?;
+
+      Ok(response.message)
+    })
+  }
+}
+
+struct TestAgent {
+  agent: Agent,
+  directory: TempDir,
+  requests: Arc<Mutex<Vec<Vec<Message>>>>,
+}
+
+impl TestAgent {
+  fn new(responses: Vec<TestResponse>, yolo: bool) -> Self {
+    let directory = tempfile::tempdir().unwrap();
+
+    let requests = Arc::new(Mutex::new(Vec::new()));
+
+    let mut tools = ToolRegistry::default();
+
+    tools
+      .register(Arc::new(CommandTool {
+        command_executor: CommandExecutor::default(),
+        directory: directory.path().into(),
+      }))
+      .unwrap();
+
+    let agent = Agent::new(
+      AgentConfig {
+        model: "mock:local".parse().unwrap(),
+        tools,
+        yolo,
+      },
+      Arc::new(TestProvider {
+        requests: requests.clone(),
+        responses: Mutex::new(responses.into()),
+      }),
+      String::new(),
+    );
+
+    Self {
+      agent,
+      directory,
+      requests,
+    }
+  }
+}
+
+#[tokio::test]
+async fn command_tools_can_be_denied() {
+  let tool_call = AssistantContent::tool_call(
+    "foo",
+    ToolName::new("command").unwrap(),
+    json!({"command": "echo bar"}),
+  );
+
+  let TestAgent {
+    mut agent,
+    directory: _directory,
+    requests,
+  } = TestAgent::new(
+    vec![
+      TestResponse {
+        message: vec![tool_call.clone()].into(),
+        ..Default::default()
+      },
+      TestResponse::default(),
+    ],
+    false,
+  );
+
+  let mut events = agent.spawn(
+    vec![Message::User(vec![UserMessageContent::Text("foo".into())])].into(),
+  );
+
+  assert_eq!(
+    events.recv().await.unwrap(),
+    AgentEvent::Message(Message::Agent(vec![tool_call.clone()].into()))
+  );
+
+  let request = match events.recv().await.unwrap() {
+    AgentEvent::ToolApprovalRequest(request) => request,
+    event => panic!("expected approval request, got {event:?}"),
+  };
+
+  request.respond(ToolApproval::Denied);
+
+  let tool_result = ToolResult {
+    stderr: Some("permission denied".into()),
+    ..Default::default()
+  };
+
+  assert_eq!(
+    events.recv().await.unwrap(),
+    AgentEvent::Message(Message::User(vec![UserMessageContent::ToolResult {
+      call: CallId::new("foo"),
+      name: ToolName::new("command").unwrap(),
+      result: tool_result.clone(),
+    }])),
+  );
+
+  assert_eq!(events.recv().await.unwrap(), AgentEvent::Done);
+
+  let requests = requests.lock().unwrap();
+
+  assert_eq!(
+    *requests,
+    [
+      vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
+      vec![
+        Message::User(vec![UserMessageContent::Text("foo".into())]),
+        Message::Agent(vec![tool_call].into()),
+        Message::User(vec![UserMessageContent::ToolResult {
+          call: CallId::new("foo"),
+          name: ToolName::new("command").unwrap(),
+          result: tool_result.clone(),
+        }]),
+      ],
+    ],
+  );
+}
+
+#[tokio::test]
+async fn loops_until_provider_returns_no_tool_calls() {
+  let reasoning = Reasoning {
+    content: vec![ReasoningContent::Encrypted("foo".into())],
+    id: Some("bar".into()),
+    issuer: "mock".into(),
+  };
+
+  let message = AgentMessage {
+    content: vec![
+      AssistantContent::text("foo"),
+      AssistantContent::Reasoning(Reasoning {
+        content: vec![ReasoningContent::Text {
+          text: "bar".into(),
+          signature: Some("baz".into()),
+        }],
+        id: Some("qux".into()),
+        issuer: "mock".into(),
+      }),
+      AssistantContent::Reasoning(reasoning),
+      AssistantContent::ToolCall(ToolRequest {
+        additional_params: Some(json!({"foo": "bar"})),
+        function: ToolFunction {
+          arguments: json!({"command": "echo bar", "cwd": null}),
+          name: ToolName::new("command").unwrap(),
+        },
+        id: CallId::Provider {
+          call_id: "qux".into(),
+          item_id: Some("baz".into()),
+        },
+        signature: Some("quux".into()),
+      }),
+      AssistantContent::text("baz"),
+    ],
+    id: Some("quuz".into()),
+  };
+
+  let update = |delta: &str| MessageUpdate::Text {
+    delta: delta.into(),
+    index: 0,
+  };
+
+  let complete = AgentMessage::from(vec![AssistantContent::text("bar")]);
+
+  let mut test_agent = TestAgent::new(
+    vec![
+      TestResponse {
+        message: message.clone(),
+        updates: vec![update("quux")],
+      },
+      TestResponse {
+        message: complete.clone(),
+        updates: vec![update("bar")],
+      },
+    ],
+    true,
+  );
+
+  let user = Message::User(vec![UserMessageContent::Text("foo".into())]);
+
+  let mut events = test_agent.agent.spawn(vec![user].into());
+
+  let mut received = Vec::new();
+
+  while events.recv_many(&mut received, usize::MAX).await != 0 {}
+
+  let result = ToolResult {
+    exit_status: Some(0),
+    outcome: ToolOutcome::Success,
+    stdout: Some(COMMAND_OUTPUT.into()),
+    ..Default::default()
+  };
+
+  let tool_result = Message::User(vec![UserMessageContent::ToolResult {
+    call: CallId::Provider {
+      call_id: "qux".into(),
+      item_id: Some("baz".into()),
+    },
+    name: ToolName::new("command").unwrap(),
+    result: result.clone(),
+  }]);
+
+  let requests = test_agent.requests.lock().unwrap();
+
+  assert_eq!(requests.len(), 2);
+
+  let messages = serde_json::from_str::<Vec<Message>>(
+    &serde_json::to_string(&requests[1]).unwrap(),
+  )
+  .unwrap();
+
+  assert_eq!(
+    messages,
+    vec![
+      Message::User(vec![UserMessageContent::Text("foo".into())]),
+      Message::Agent(message.clone()),
+      tool_result.clone(),
+    ]
+  );
+
+  assert_eq!(
+    received,
+    [
+      AgentEvent::Update(update("quux")),
+      AgentEvent::Message(Message::Agent(message)),
+      AgentEvent::Message(tool_result),
+      AgentEvent::Update(update("bar")),
+      AgentEvent::Message(Message::Agent(complete)),
+      AgentEvent::Done,
+    ],
+  );
+}

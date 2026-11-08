@@ -289,7 +289,7 @@ mod tests {
 
   #[test]
   fn render_tool_entry_after_user() {
-    let invocation = ToolInvocation::new(
+    let invocation = tool_invocation(
       "bar",
       CommandArguments {
         command: "rg --files".into(),
@@ -352,7 +352,7 @@ mod tests {
 
   #[test]
   fn render_tool_results_are_scoped_to_the_agent_message() {
-    let invocation = ToolInvocation::new(
+    let invocation = tool_invocation(
       "foo",
       CommandArguments {
         command: "bar".into(),

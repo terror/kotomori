@@ -3327,6 +3327,7 @@ dependencies = [
  "crossterm",
  "futures-util",
  "indoc",
+ "kotomori-core",
  "portable-pty",
  "process-wrap",
  "ratatui-core",
@@ -3352,6 +3353,17 @@ name = "kotomori-changelog"
 version = "0.0.0"
 dependencies = [
  "regex",
+]
+
+[[package]]
+name = "kotomori-core"
+version = "0.4.1"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

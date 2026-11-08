@@ -122,7 +122,7 @@ mod tests {
   fn renders_limited_non_empty_lines() {
     #[track_caller]
     fn case(output: &str, expected: &[LineComponent]) {
-      let invocation = ToolInvocation::new(
+      let invocation = tool_invocation(
         "foo",
         CommandArguments {
           command: "bar".into(),
@@ -190,7 +190,7 @@ mod tests {
 
   #[test]
   fn wraps_details_inside_gutter() {
-    let invocation = ToolInvocation::new(
+    let invocation = tool_invocation(
       "foo",
       CommandArguments {
         command: "bar".into(),
