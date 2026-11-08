@@ -226,8 +226,13 @@ fn provider_malformed_tool_arguments_recovers() -> Result {
 
       │ foo
 
-      ● Error
+      ● Failed running echo bar>foo
+        │ batch skipped: another tool call is invalid
+
+      ● Failed running command {}
         │ failed to decode `command` arguments: missing field `command`
+
+      queued for mock:malformed-tool-arguments: foo
 
       │
 
@@ -240,8 +245,13 @@ fn provider_malformed_tool_arguments_recovers() -> Result {
 
       │ foo
 
-      ● Error
+      ● Failed running echo bar>foo
+        │ batch skipped: another tool call is invalid
+
+      ● Failed running command {}
         │ failed to decode `command` arguments: missing field `command`
+
+      queued for mock:malformed-tool-arguments: foo
 
       │ bar
 
@@ -269,8 +279,10 @@ fn provider_unknown_tool_recovers() -> Result {
 
       │ foo
 
-      ● Error
+      ● Failed running unknown {}
         │ unknown tool `unknown`
+
+      queued for mock:unknown-tool: foo
 
       │
 
@@ -283,8 +295,10 @@ fn provider_unknown_tool_recovers() -> Result {
 
       │ foo
 
-      ● Error
+      ● Failed running unknown {}
         │ unknown tool `unknown`
+
+      queued for mock:unknown-tool: foo
 
       │ bar
 
