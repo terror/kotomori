@@ -1,7 +1,7 @@
 [package]
 name = "kotomori-wasm"
 version = "0.0.0"
-edition = "2024"
+edition.workspace = true
 publish = false
 
 [lints]

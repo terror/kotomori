@@ -1,12 +1,12 @@
 [package]
 name = "kotomori"
-version = "0.4.1"
+version.workspace = true
 description = "A coding agent"
-authors = ["Liam <liam@scalzulli.com>"]
-license = "CC0-1.0"
-homepage = "https://github.com/terror/kotomori"
-repository = "https://github.com/terror/kotomori"
-edition = "2024"
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
 autotests = false
 categories = ["command-line-utilities", "development-tools"]
 keywords = ["ai", "agent", "coding", "terminal", "cli"]
@@ -30,6 +30,46 @@ default-members = [
 members = [".", "crates/*"]
 resolver = "2"
 
+[workspace.package]
+version = "0.4.1"
+authors = ["Liam <liam@scalzulli.com>"]
+license = "CC0-1.0"
+homepage = "https://github.com/terror/kotomori"
+repository = "https://github.com/terror/kotomori"
+edition = "2024"
+
+[workspace.dependencies]
+anstyle = "1.0.14"
+anyhow = "1.0.102"
+arboard = { version = "3.6.1", default-features = false }
+clap = "4.6.1"
+confy = "2.0.0"
+crossterm = "0.29.0"
+futures-util = { version = "0.3.32", default-features = false }
+indoc = "2.0.7"
+kotomori-core = { version = "0.4.1", path = "crates/kotomori-core" }
+kotomori-rig = { version = "0.4.1", path = "crates/kotomori-rig" }
+kotomori-tools = { version = "0.4.1", path = "crates/kotomori-tools" }
+portable-pty = "0.9.0"
+process-wrap = { version = "10.0.1", default-features = false }
+ratatui-core = { version = "0.1.0", default-features = false }
+ratatui-textarea = "0.9.1"
+regex = "1.12.3"
+rig = { version = "0.43.0", default-features = false }
+rusqlite = "0.40.1"
+schemars = "1.2.1"
+serde = "1.0.228"
+serde_json = "1.0.150"
+smallvec = "1.15.1"
+strum = "0.27.2"
+tempfile = "3.27.0"
+temptree = "0.2.0"
+tokio = { version = "1.52.3", default-features = false }
+tui-markdown = { version = "0.3.10", default-features = false }
+unicode-segmentation = "1.13.2"
+unicode-width = "0.2.2"
+vt100 = "0.16.2"
+
 [workspace.lints.rust]
 unreachable_pub = "deny"
 
@@ -51,32 +91,32 @@ lto = true
 codegen-units = 1
 
 [dependencies]
-anstyle = "1.0.14"
-anyhow = "1.0.102"
-arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
-clap = { version = "4.6.1", features = ["derive"] }
-confy = "2.0.0"
-crossterm = "0.29.0"
-futures-util = "0.3.32"
-indoc = "2.0.7"
-kotomori-core = { version = "0.4.1", path = "crates/kotomori-core" }
-kotomori-rig = { version = "0.4.1", path = "crates/kotomori-rig" }
-kotomori-tools = { version = "0.4.1", path = "crates/kotomori-tools" }
-ratatui-core = { version = "0.1.0", default-features = false, features = ["anstyle"] }
-ratatui-textarea = "0.9.1"
-rusqlite = { version = "0.40.1", features = ["bundled", "fallible_uint"] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.150"
-smallvec = "1.15.1"
-strum = { version = "0.27.2", features = ["derive"] }
-tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "sync", "time"] }
-tui-markdown = { version = "0.3.10", default-features = false }
-unicode-segmentation = "1.13.2"
-unicode-width = "0.2.2"
+anstyle.workspace = true
+anyhow.workspace = true
+arboard = { workspace = true, features = ["wayland-data-control"] }
+clap = { workspace = true, features = ["derive"] }
+confy.workspace = true
+crossterm.workspace = true
+futures-util = { workspace = true, default-features = true }
+indoc.workspace = true
+kotomori-core.workspace = true
+kotomori-rig.workspace = true
+kotomori-tools.workspace = true
+ratatui-core = { workspace = true, features = ["anstyle"] }
+ratatui-textarea.workspace = true
+rusqlite = { workspace = true, features = ["bundled", "fallible_uint"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+smallvec.workspace = true
+strum = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, default-features = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tui-markdown.workspace = true
+unicode-segmentation.workspace = true
+unicode-width.workspace = true
 
 [dev-dependencies]
-portable-pty = "0.9.0"
-tempfile = "3.27.0"
-temptree = "0.2.0"
-tokio = { version = "1.52.3", features = ["process"] }
-vt100 = "0.16.2"
+portable-pty.workspace = true
+tempfile.workspace = true
+temptree.workspace = true
+tokio = { workspace = true, default-features = true, features = ["process"] }
+vt100.workspace = true
