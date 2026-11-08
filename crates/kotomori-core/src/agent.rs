@@ -76,6 +76,8 @@ impl Agent {
   ) -> Result {
     let tools = self.config.tools.definitions();
 
+    let mut usage = Usage::default();
+
     for message in conversation.interrupt_pending_calls() {
       event_sender.send(AgentEvent::Message(message))?;
     }
@@ -92,7 +94,27 @@ impl Agent {
         tools: &tools,
       };
 
-      let message = self.provider.stream(request, &sink).await?;
+      let response = self.provider.stream(request, &sink).await?;
+
+      usage += response.usage;
+
+      event_sender.send(AgentEvent::Usage(usage))?;
+
+      let message = response.message;
+
+      if !message.content.is_empty() {
+        sink.update(MessageUpdate::Complete(message.clone()))?;
+      }
+
+      match response.finish_reason {
+        Some(FinishReason::Length) => {
+          bail!("completion truncated: output token limit reached");
+        }
+        Some(FinishReason::ContentFilter) => {
+          bail!("completion filtered by the provider");
+        }
+        _ => {}
+      }
 
       if message.content.is_empty() {
         break;
@@ -178,7 +200,7 @@ mod tests {
       &'a self,
       request: Request<'a>,
       sink: &'a ProviderSink,
-    ) -> BoxFuture<'a, Result<AgentMessage>> {
+    ) -> BoxFuture<'a, Result<ProviderResponse>> {
       Box::pin(async move {
         assert_eq!(request.tools, [TestTool.definition().unwrap()]);
 
@@ -192,7 +214,10 @@ mod tests {
 
         sink.update_many(response.updates)?;
 
-        Ok(response.message)
+        Ok(ProviderResponse {
+          message: response.message,
+          ..Default::default()
+        })
       })
     }
   }
@@ -289,6 +314,16 @@ mod tests {
 
     assert_eq!(
       events.recv().await.unwrap(),
+      AgentEvent::Usage(Usage::default()),
+    );
+
+    assert_eq!(
+      events.recv().await.unwrap(),
+      AgentEvent::Update(MessageUpdate::Complete(AgentMessage::default())),
+    );
+
+    assert_eq!(
+      events.recv().await.unwrap(),
       AgentEvent::Message(Message::Agent(vec![tool_call.clone()].into()))
     );
 
@@ -313,6 +348,11 @@ mod tests {
           result: tool_result.clone(),
         }
       ])),
+    );
+
+    assert_eq!(
+      events.recv().await.unwrap(),
+      AgentEvent::Usage(Usage::default()),
     );
 
     assert_eq!(events.recv().await.unwrap(), AgentEvent::Done);
@@ -435,13 +475,21 @@ mod tests {
       ]
     );
 
+    let mut preview = message.clone();
+
+    preview.content.remove(3);
+
     assert_eq!(
       received,
       [
         AgentEvent::Update(update("quux")),
+        AgentEvent::Usage(Usage::default()),
+        AgentEvent::Update(MessageUpdate::Complete(preview)),
         AgentEvent::Message(Message::Agent(message)),
         AgentEvent::Message(tool_result),
         AgentEvent::Update(update("bar")),
+        AgentEvent::Usage(Usage::default()),
+        AgentEvent::Update(MessageUpdate::Complete(complete.clone())),
         AgentEvent::Message(Message::Agent(complete)),
         AgentEvent::Done,
       ],

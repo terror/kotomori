@@ -8,6 +8,7 @@ pub(crate) struct Run {
   pub(crate) frame: usize,
   pub(crate) id: u64,
   pub(crate) message: MessageBuffer,
+  pub(crate) usage: Usage,
 }
 
 impl Run {
@@ -31,6 +32,7 @@ impl Run {
       frame: 0,
       id,
       message: MessageBuffer::default(),
+      usage: Usage::default(),
     }
   }
 
@@ -84,6 +86,25 @@ impl Run {
     for update in updates {
       self.update(update.clone());
     }
+  }
+
+  pub(crate) fn usage_summary(&self) -> Option<String> {
+    let counters = [
+      ("input", self.usage.input_tokens),
+      ("output", self.usage.output_tokens),
+      ("total", self.usage.total_tokens),
+      ("cache read", self.usage.cached_input_tokens),
+      ("cache write", self.usage.cache_creation_input_tokens),
+      ("tool prompt", self.usage.tool_use_prompt_tokens),
+      ("reasoning", self.usage.reasoning_tokens),
+    ]
+    .into_iter()
+    .filter_map(|(name, tokens)| {
+      tokens.map(|tokens| format!("{tokens} {name}"))
+    })
+    .collect::<Vec<_>>();
+
+    (!counters.is_empty()).then(|| format!("Tokens: {}.", counters.join(", ")))
   }
 }
 

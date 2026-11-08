@@ -109,6 +109,37 @@ impl Rig {
     }
   }
 
+  fn decode_response(
+    response: completion::CompletionResponse,
+  ) -> Result<ProviderResponse> {
+    Ok(ProviderResponse {
+      finish_reason: response.finish_reason().map(|reason| match reason {
+        completion::FinishReason::ContentFilter => FinishReason::ContentFilter,
+        completion::FinishReason::Length => FinishReason::Length,
+        completion::FinishReason::Other(reason) => FinishReason::Other(reason),
+        completion::FinishReason::Stop => FinishReason::Stop,
+        completion::FinishReason::ToolCalls => FinishReason::ToolCalls,
+      }),
+      message: AgentMessage {
+        content: response
+          .choice
+          .into_iter()
+          .map(Self::decode_content)
+          .collect::<Result<Vec<_>>>()?,
+        id: response.message_id,
+      },
+      usage: Usage {
+        cache_creation_input_tokens: response.usage.cache_creation_input_tokens,
+        cached_input_tokens: response.usage.cached_input_tokens,
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+        reasoning_tokens: response.usage.reasoning_tokens,
+        tool_use_prompt_tokens: response.usage.tool_use_prompt_tokens,
+        total_tokens: response.usage.total_tokens,
+      },
+    })
+  }
+
   fn encode_call_id(id: &CallId) -> Result<message::CallId> {
     Ok(match id {
       CallId::Local(id) => message::CallId::Local(
@@ -311,7 +342,7 @@ impl Provider for Rig {
     &'a self,
     request: Request<'a>,
     sink: &'a ProviderSink,
-  ) -> BoxFuture<'a, Result<AgentMessage>> {
+  ) -> BoxFuture<'a, Result<ProviderResponse>> {
     Box::pin(async move {
       let mut stream = self.model.stream(Self::request(&request)?)?;
 
@@ -351,20 +382,7 @@ impl Provider for Rig {
         })?;
       }
 
-      let response = stream.finish().await?;
-
-      let message = AgentMessage {
-        content: response
-          .choice
-          .into_iter()
-          .map(Self::decode_content)
-          .collect::<Result<Vec<_>>>()?,
-        id: response.message_id,
-      };
-
-      sink.update(MessageUpdate::Complete(message.clone()))?;
-
-      Ok(message)
+      Self::decode_response(stream.finish().await?)
     })
   }
 }
