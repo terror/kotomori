@@ -12,7 +12,9 @@ impl Component for ApprovalPromptComponent<'_> {
         LineComponent::from([
           Span::styled("?", Style::Accent),
           Span::raw(" Approve "),
-          Span::raw(self.request.invocation.to_string()),
+          Span::raw(ToolInvocationComponent::description(
+            &self.request.invocation,
+          )),
           Span::raw("?"),
         ]),
         LineComponent::from([

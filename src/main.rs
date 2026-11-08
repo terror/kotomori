@@ -14,6 +14,7 @@ use {
   clap::{Args, Parser},
   clipboard::Clipboard,
   command::Command,
+  command_arguments::CommandArguments,
   command_child::CommandChild,
   command_executor::CommandExecutor,
   component::{LineComponent, ViewComponent},
@@ -82,7 +83,8 @@ use {
   screen::Screen,
   scroll::Scroll,
   selection::Selection,
-  serde::{Deserialize, Serialize, de::DeserializeOwned},
+  serde::{Deserialize, Serialize},
+  serde_json::Value,
   session::Session,
   session_summary::SessionSummary,
   settings::Settings,
@@ -92,7 +94,7 @@ use {
   std::{
     backtrace::BacktraceStatus,
     borrow::Cow,
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, VecDeque, btree_map::Entry},
     env,
     fmt::{self, Debug, Display, Formatter},
     fs,
@@ -121,13 +123,13 @@ use {
     task,
     time::{interval, sleep, timeout},
   },
-  tool::ToolInvocationKind,
+  tool::{CommandTool, Tool},
   tool_action_tense::ToolActionTense,
   tool_approval::ToolApproval,
   tool_call::ToolCall,
-  tool_executor::ToolExecutor,
   tool_invocation::ToolInvocation,
   tool_outcome::ToolOutcome,
+  tool_registry::ToolRegistry,
   tool_result::ToolResult,
   transcript::Transcript,
   transcript_block::TranscriptBlock,
@@ -159,9 +161,7 @@ macro_rules! assert_matches {
 }
 
 #[cfg(test)]
-use {
-  serde_json::Value, std::sync::Mutex, temptree::temptree, tool::CommandTool,
-};
+use {std::sync::Mutex, temptree::temptree};
 
 mod action;
 mod agent;
@@ -176,6 +176,7 @@ mod arguments;
 mod changed_range;
 mod clipboard;
 mod command;
+mod command_arguments;
 mod command_child;
 mod command_executor;
 mod component;
@@ -225,9 +226,9 @@ mod tool;
 mod tool_action_tense;
 mod tool_approval;
 mod tool_call;
-mod tool_executor;
 mod tool_invocation;
 mod tool_outcome;
+mod tool_registry;
 mod tool_result;
 mod transcript;
 mod transcript_block;

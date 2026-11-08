@@ -13,8 +13,9 @@ impl Agent {
     &self,
     event_sender: &UnboundedSender<AgentEvent>,
     tool_call: &ToolInvocation,
+    policy: ApprovalPolicy,
   ) -> Result<ToolApproval> {
-    if self.config.yolo || tool_call.kind.approval() == ApprovalPolicy::None {
+    if self.config.yolo || policy == ApprovalPolicy::None {
       return Ok(ToolApproval::Approved);
     }
 
@@ -60,7 +61,7 @@ impl Agent {
     event_sender: &UnboundedSender<AgentEvent>,
     mut messages: Vec<Message>,
   ) -> Result {
-    let tools = ToolInvocationKind::definitions();
+    let tools = self.config.tools.definitions();
 
     loop {
       let sink = ProviderSink {
@@ -85,7 +86,7 @@ impl Agent {
         .iter()
         .filter_map(|content| match content {
           AssistantContent::ToolCall(call) => {
-            Some(ToolInvocationKind::decode(call.clone()))
+            Some(self.config.tools.prepare(call.clone()))
           }
           _ => None,
         })
@@ -101,11 +102,12 @@ impl Agent {
         break;
       }
 
-      for tool_call in tool_calls {
-        let result = match self.approval(event_sender, &tool_call).await? {
-          ToolApproval::Approved => {
-            self.config.tool_executor.execute(&tool_call.kind).await
-          }
+      for (tool_call, tool) in tool_calls {
+        let result = match self
+          .approval(event_sender, &tool_call, tool.approval)
+          .await?
+        {
+          ToolApproval::Approved => tool.future.await,
           ToolApproval::Denied => ToolResult {
             stderr: Some("permission denied".into()),
             ..Default::default()
@@ -163,7 +165,14 @@ mod tests {
       sink: &'a ProviderSink,
     ) -> BoxFuture<'a, Result<AgentMessage>> {
       Box::pin(async move {
-        assert_eq!(request.tools, ToolInvocationKind::definitions());
+        assert_eq!(
+          request.tools,
+          [CommandTool {
+            command_executor: CommandExecutor::default(),
+            directory: "foo".into(),
+          }
+          .definition()],
+        );
 
         self
           .requests
@@ -192,13 +201,19 @@ mod tests {
 
       let requests = Arc::new(Mutex::new(Vec::new()));
 
+      let mut tools = ToolRegistry::default();
+
+      tools
+        .register(Arc::new(CommandTool {
+          command_executor: CommandExecutor::default(),
+          directory: directory.path().into(),
+        }))
+        .unwrap();
+
       let agent = Agent {
         config: AgentConfig {
           model: "mock:local".parse().unwrap(),
-          tool_executor: ToolExecutor {
-            command_executor: CommandExecutor::default(),
-            directory: directory.path().into(),
-          },
+          tools,
           yolo,
         },
         provider: Arc::new(TestProvider {

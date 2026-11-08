@@ -2,32 +2,21 @@ use super::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ToolInvocation {
-  pub(crate) kind: ToolInvocationKind,
   pub(crate) protocol: ::rig::message::ToolCall,
 }
 
 impl ToolInvocation {
   #[cfg(test)]
-  pub(crate) fn new(id: &str, kind: ToolInvocationKind) -> Self {
+  pub(crate) fn new(id: &str, arguments: CommandArguments) -> Self {
     let protocol = ::rig::message::ToolCall::from_wire(
       id,
       ToolFunction {
-        arguments: kind.arguments(),
-        name: ToolName::new(kind.name()).unwrap(),
+        arguments: serde_json::to_value(arguments).unwrap(),
+        name: ToolName::new("command").unwrap(),
       },
     );
 
-    Self { kind, protocol }
-  }
-
-  pub(crate) fn title(&self, tense: ToolActionTense) -> String {
-    format!("{} {}", self.kind.action(tense), self.kind)
-  }
-}
-
-impl Display for ToolInvocation {
-  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-    Display::fmt(&self.kind, f)
+    Self { protocol }
   }
 }
 
@@ -48,17 +37,17 @@ mod tests {
     .with_signature(Some("quux".into()))
     .with_additional_params(Some(json!({"foo": "baz"})));
 
-    let invocation = ToolInvocationKind::decode(protocol.clone()).unwrap();
+    let mut tools = ToolRegistry::default();
 
-    assert_eq!(
-      invocation,
-      ToolInvocation {
-        kind: ToolInvocationKind::Command(CommandTool {
-          command: "bar baz".into(),
-          cwd: None,
-        }),
-        protocol,
-      },
-    );
+    tools
+      .register(Arc::new(CommandTool {
+        command_executor: CommandExecutor::default(),
+        directory: "foo".into(),
+      }))
+      .unwrap();
+
+    let (invocation, _tool) = tools.prepare(protocol.clone()).unwrap();
+
+    assert_eq!(invocation, ToolInvocation { protocol });
   }
 }

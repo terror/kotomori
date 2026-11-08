@@ -8,6 +8,44 @@ pub(crate) struct ToolInvocationComponent<'a> {
 
 impl ToolInvocationComponent<'_> {
   const OUTPUT_LIMIT: usize = 3;
+
+  fn command(invocation: &ToolInvocation) -> Option<CommandArguments> {
+    (invocation.protocol.function.name.as_str() == "command")
+      .then(|| {
+        serde_json::from_value(invocation.protocol.function.arguments.clone())
+          .ok()
+      })
+      .flatten()
+  }
+
+  pub(crate) fn description(invocation: &ToolInvocation) -> String {
+    match Self::command(invocation) {
+      Some(command) => command.command,
+      None => format!(
+        "{} {}",
+        invocation.protocol.function.name,
+        invocation.protocol.function.arguments
+      ),
+    }
+  }
+
+  fn details(&self) -> Vec<(&'static str, String)> {
+    Self::command(&self.invocation)
+      .and_then(|command| command.cwd)
+      .map(|cwd| ("cwd", cwd.display().to_string()))
+      .into_iter()
+      .collect()
+  }
+
+  fn title(&self, tense: ToolActionTense) -> String {
+    let action = match tense {
+      ToolActionTense::Completed => "Ran",
+      ToolActionTense::Failed => "Failed running",
+      ToolActionTense::Progressive => "Running",
+    };
+
+    format!("{action} {}", Self::description(&self.invocation))
+  }
 }
 
 impl Component for ToolInvocationComponent<'_> {
@@ -25,7 +63,7 @@ impl Component for ToolInvocationComponent<'_> {
     let output_width =
       width.saturating_sub(u16::try_from(gutter.width()).unwrap_or(u16::MAX));
 
-    let mut details = self.invocation.kind.details();
+    let mut details = self.details();
 
     let exit_status = self.result.and_then(|result| result.exit_status);
 
@@ -37,7 +75,7 @@ impl Component for ToolInvocationComponent<'_> {
       .push(LineComponent::from([
         Span::styled(symbol, symbol_style),
         Span::raw(" "),
-        Span::raw(self.invocation.title(tense)),
+        Span::raw(self.title(tense)),
       ]))
       .extend(details.into_iter().map(|(label, value)| {
         LineComponent::from([
@@ -86,10 +124,10 @@ mod tests {
     fn case(output: &str, expected: &[LineComponent]) {
       let invocation = ToolInvocation::new(
         "foo",
-        ToolInvocationKind::Command(CommandTool {
+        CommandArguments {
           command: "bar".into(),
           cwd: None,
-        }),
+        },
       );
 
       let result = ToolResult {
@@ -154,10 +192,10 @@ mod tests {
   fn wraps_details_inside_gutter() {
     let invocation = ToolInvocation::new(
       "foo",
-      ToolInvocationKind::Command(CommandTool {
+      CommandArguments {
         command: "bar".into(),
         cwd: Some("foobar".into()),
-      }),
+      },
     );
 
     let result = ToolResult {
