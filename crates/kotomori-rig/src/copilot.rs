@@ -48,7 +48,7 @@ impl Provider for GithubCopilot {
     &'a self,
     request: Request<'a>,
     sink: &'a ProviderSink,
-  ) -> BoxFuture<'a, Result<AgentMessage>> {
+  ) -> BoxFuture<'a, Result<ProviderResponse>> {
     Box::pin(async move {
       let client = Copilot::new("").authenticate(&self.authenticator).await?;
 

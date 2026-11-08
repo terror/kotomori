@@ -9,6 +9,7 @@ use {
     collections::{BTreeMap, btree_map::Entry},
     fmt::{self, Debug, Display, Formatter},
     iter::once,
+    ops::AddAssign,
     str::FromStr,
     sync::Arc,
   },
@@ -28,15 +29,15 @@ pub use {
   agent::Agent, agent_config::AgentConfig, agent_event::AgentEvent,
   agent_message::AgentMessage, approval_policy::ApprovalPolicy,
   approval_request::ApprovalRequest, assistant_content::AssistantContent,
-  call_id::CallId, conversation::Conversation, message::Message,
-  message_buffer::MessageBuffer, message_draft::MessageDraft,
+  call_id::CallId, conversation::Conversation, finish_reason::FinishReason,
+  message::Message, message_buffer::MessageBuffer, message_draft::MessageDraft,
   message_update::MessageUpdate, model::Model, provider::Provider,
-  provider_sink::ProviderSink, reasoning::Reasoning,
-  reasoning_content::ReasoningContent, request::Request, text::Text,
-  tool::Tool, tool_approval::ToolApproval, tool_call::ToolCall,
+  provider_response::ProviderResponse, provider_sink::ProviderSink,
+  reasoning::Reasoning, reasoning_content::ReasoningContent, request::Request,
+  text::Text, tool::Tool, tool_approval::ToolApproval, tool_call::ToolCall,
   tool_definition::ToolDefinition, tool_function::ToolFunction,
   tool_name::ToolName, tool_outcome::ToolOutcome, tool_registry::ToolRegistry,
-  tool_request::ToolRequest, tool_result::ToolResult,
+  tool_request::ToolRequest, tool_result::ToolResult, usage::Usage,
   user_message_content::UserMessageContent,
 };
 
@@ -49,12 +50,14 @@ mod approval_request;
 mod assistant_content;
 mod call_id;
 mod conversation;
+mod finish_reason;
 mod message;
 mod message_buffer;
 mod message_draft;
 mod message_update;
 mod model;
 mod provider;
+mod provider_response;
 mod provider_sink;
 mod reasoning;
 mod reasoning_content;
@@ -70,6 +73,7 @@ mod tool_outcome;
 mod tool_registry;
 mod tool_request;
 mod tool_result;
+mod usage;
 mod user_message_content;
 
 pub type Result<T = (), E = Error> = std::result::Result<T, E>;

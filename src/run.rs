@@ -8,6 +8,7 @@ pub(crate) struct Run {
   pub(crate) frame: usize,
   pub(crate) id: u64,
   pub(crate) message: MessageBuffer,
+  pub(crate) usage: Usage,
 }
 
 impl Run {
@@ -31,6 +32,7 @@ impl Run {
       frame: 0,
       id,
       message: MessageBuffer::default(),
+      usage: Usage::default(),
     }
   }
 

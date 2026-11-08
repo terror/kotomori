@@ -199,6 +199,9 @@ impl State {
           AgentEvent::ToolApprovalRequest(request) => {
             run.approval = Some(request);
           }
+          AgentEvent::Usage(usage) => {
+            run.usage = usage;
+          }
         }
       }
       Event::ClipboardCopied(result) => match result {

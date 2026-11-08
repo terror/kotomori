@@ -9,15 +9,15 @@ impl Provider for Mock {
     &'a self,
     request: Request<'a>,
     sink: &'a ProviderSink,
-  ) -> BoxFuture<'a, Result<AgentMessage>> {
+  ) -> BoxFuture<'a, Result<ProviderResponse>> {
     Box::pin(async move {
       let content = match request.model.name.as_str() {
         "approval-required-command" => {
           if request.messages.iter().any(Message::has_tool_result) {
             AssistantContent::text("done")
           } else {
-            return Ok(
-              vec![
+            return Ok(ProviderResponse {
+              message: vec![
                 AssistantContent::text("baz"),
                 AssistantContent::ToolCall(ToolRequest::new(
                   CallId::new("foo"),
@@ -31,7 +31,8 @@ impl Provider for Mock {
                 AssistantContent::text("qux"),
               ]
               .into(),
-            );
+              ..Default::default()
+            });
           }
         }
         "command-output" if request.messages.len() == 1 => {
@@ -90,7 +91,10 @@ impl Provider for Mock {
             |(index, content)| MessageUpdate::Content { index, content },
           ))?;
 
-          return Ok(content.into());
+          return Ok(ProviderResponse {
+            message: content.into(),
+            ..Default::default()
+          });
         }
         "reasoning" => {
           let mut reasoning = Reasoning::new(
@@ -109,14 +113,15 @@ impl Provider for Mock {
             },
           ]);
 
-          return Ok(
-            vec![
+          return Ok(ProviderResponse {
+            message: vec![
               AssistantContent::text("corge"),
               AssistantContent::Reasoning(reasoning),
               AssistantContent::text("grault"),
             ]
             .into(),
-          );
+            ..Default::default()
+          });
         }
         "unfinished-reasoning" => {
           sink.update_many([
@@ -177,7 +182,10 @@ impl Provider for Mock {
         }
       }
 
-      Ok(vec![content].into())
+      Ok(ProviderResponse {
+        message: vec![content].into(),
+        ..Default::default()
+      })
     })
   }
 }

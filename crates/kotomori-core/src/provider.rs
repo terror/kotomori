@@ -5,5 +5,5 @@ pub trait Provider: fmt::Debug + Send + Sync {
     &'a self,
     request: Request<'a>,
     sink: &'a ProviderSink,
-  ) -> BoxFuture<'a, Result<AgentMessage>>;
+  ) -> BoxFuture<'a, Result<ProviderResponse>>;
 }
