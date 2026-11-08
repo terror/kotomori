@@ -787,10 +787,7 @@ mod tests {
 
     let (event_sender, mut events) = mpsc::unbounded_channel();
 
-    let sink = ProviderSink {
-      event_sender,
-      run_id: 0,
-    };
+    let sink = ProviderSink { event_sender };
 
     let reasoning = Reasoning::new_with_signature("foo", Some("bar".into()))
       .with_id("baz".into())
@@ -822,7 +819,7 @@ mod tests {
     }
 
     while let Ok(event) = events.try_recv() {
-      state.handle_event(event);
+      state.handle_event(Event::Agent { event, run_id: 0 });
     }
 
     let content = vec![

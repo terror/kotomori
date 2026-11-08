@@ -2,30 +2,25 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct Agent {
-  event_sender: UnboundedSender<Event>,
-  loader: Loader,
-  provider: Arc<dyn Provider>,
-  settings: Settings,
-  task: Option<task::JoinHandle<()>>,
-  tool_executor: ToolExecutor,
+  pub(crate) config: AgentConfig,
+  pub(crate) provider: Arc<dyn Provider>,
+  pub(crate) system: String,
+  pub(crate) task: Option<task::JoinHandle<()>>,
 }
 
 impl Agent {
   async fn approval(
     &self,
-    run_id: u64,
+    event_sender: &UnboundedSender<AgentEvent>,
     tool_call: &ToolInvocation,
   ) -> Result<ToolApproval> {
-    if self.settings.yolo || tool_call.kind.approval() == ApprovalPolicy::None {
+    if self.config.yolo || tool_call.kind.approval() == ApprovalPolicy::None {
       return Ok(ToolApproval::Approved);
     }
 
     let (request, response_receiver) = ApprovalRequest::new(tool_call.clone());
 
-    self.event_sender.send(Event::Agent {
-      event: AgentEvent::ToolApprovalRequest(request),
-      run_id,
-    })?;
+    event_sender.send(AgentEvent::ToolApprovalRequest(request))?;
 
     Ok(response_receiver.await.unwrap_or(ToolApproval::Denied))
   }
@@ -36,62 +31,46 @@ impl Agent {
     }
   }
 
-  pub(crate) fn new(
-    event_sender: UnboundedSender<Event>,
-    settings: &Settings,
-  ) -> Result<Self> {
-    let provider = Arc::<dyn Provider>::try_from(settings.model.clone())?;
-
-    Ok(Self {
-      event_sender,
-      loader: Loader::new(&settings.directory),
-      provider,
-      settings: settings.clone(),
-      task: None,
-      tool_executor: ToolExecutor {
-        command_executor: CommandExecutor::default(),
-        directory: settings.directory.clone(),
-      },
-    })
-  }
-
-  pub(crate) fn spawn(&mut self, run_id: u64, messages: Vec<Message>) {
+  pub(crate) fn spawn(
+    &mut self,
+    messages: Vec<Message>,
+  ) -> UnboundedReceiver<AgentEvent> {
     self.interrupt();
 
+    let (event_sender, event_receiver) = mpsc::unbounded_channel();
+
     let agent = Self {
-      event_sender: self.event_sender.clone(),
-      loader: self.loader.clone(),
+      config: self.config.clone(),
       provider: self.provider.clone(),
-      settings: self.settings.clone(),
+      system: self.system.clone(),
       task: None,
-      tool_executor: self.tool_executor.clone(),
     };
 
     self.task = Some(tokio::spawn(async move {
-      if let Err(error) = agent.stream(run_id, messages).await {
-        let _ = agent.event_sender.send(Event::Agent {
-          event: AgentEvent::Error(error.to_string()),
-          run_id,
-        });
+      if let Err(error) = agent.stream(&event_sender, messages).await {
+        let _ = event_sender.send(AgentEvent::Error(error.to_string()));
       }
     }));
+
+    event_receiver
   }
 
-  async fn stream(&self, run_id: u64, mut messages: Vec<Message>) -> Result {
-    let system = self.system_prompt()?;
-
+  async fn stream(
+    &self,
+    event_sender: &UnboundedSender<AgentEvent>,
+    mut messages: Vec<Message>,
+  ) -> Result {
     let tools = ToolInvocationKind::definitions();
 
     loop {
       let sink = ProviderSink {
-        event_sender: self.event_sender.clone(),
-        run_id,
+        event_sender: event_sender.clone(),
       };
 
       let request = Request {
         messages: &messages,
-        model: &self.settings.model,
-        system: (!system.is_empty()).then_some(system.as_str()),
+        model: &self.config.model,
+        system: (!self.system.is_empty()).then_some(self.system.as_str()),
         tools: &tools,
       };
 
@@ -114,10 +93,7 @@ impl Agent {
 
       let message = Message::Agent(message);
 
-      self.event_sender.send(Event::Agent {
-        event: AgentEvent::Message(message.clone()),
-        run_id,
-      })?;
+      event_sender.send(AgentEvent::Message(message.clone()))?;
 
       messages.push(message);
 
@@ -126,9 +102,9 @@ impl Agent {
       }
 
       for tool_call in tool_calls {
-        let result = match self.approval(run_id, &tool_call).await? {
+        let result = match self.approval(event_sender, &tool_call).await? {
           ToolApproval::Approved => {
-            self.tool_executor.execute(&tool_call.kind).await
+            self.config.tool_executor.execute(&tool_call.kind).await
           }
           ToolApproval::Denied => ToolResult {
             stderr: Some("permission denied".into()),
@@ -142,47 +118,15 @@ impl Agent {
           result,
         }]);
 
-        self.event_sender.send(Event::Agent {
-          event: AgentEvent::Message(message.clone()),
-          run_id,
-        })?;
+        event_sender.send(AgentEvent::Message(message.clone()))?;
 
         messages.push(message);
       }
     }
 
-    self.event_sender.send(Event::Agent {
-      event: AgentEvent::Done,
-      run_id,
-    })?;
+    event_sender.send(AgentEvent::Done)?;
 
     Ok(())
-  }
-
-  fn system_prompt(&self) -> Result<String> {
-    let agents = self.loader.load()?;
-
-    let context = formatdoc! {
-      "
-      Current working directory: {}
-
-      The command tool runs commands using the platform's system shell. Omit
-      `cwd` to use the current working directory. Do not invent absolute paths.
-      ",
-      self.loader.cwd.display(),
-    };
-
-    Ok(
-      [
-        SYSTEM_PROMPT.as_str(),
-        context.trim_end(),
-        agents.trim_end(),
-      ]
-      .into_iter()
-      .filter(|section| !section.is_empty())
-      .collect::<Vec<_>>()
-      .join("\n\n"),
-    )
   }
 }
 
@@ -239,42 +183,35 @@ mod tests {
   struct TestAgent {
     agent: Agent,
     directory: TempDir,
-    events: UnboundedReceiver<Event>,
     requests: Arc<Mutex<Vec<Vec<Message>>>>,
   }
 
   impl TestAgent {
     fn new(responses: Vec<TestResponse>, yolo: bool) -> Self {
-      let (event_sender, events) = mpsc::unbounded_channel();
-
       let directory = tempfile::tempdir().unwrap();
 
       let requests = Arc::new(Mutex::new(Vec::new()));
 
       let agent = Agent {
-        event_sender,
-        loader: Loader::new(directory.path()),
+        config: AgentConfig {
+          model: "mock:local".parse().unwrap(),
+          tool_executor: ToolExecutor {
+            command_executor: CommandExecutor::default(),
+            directory: directory.path().into(),
+          },
+          yolo,
+        },
         provider: Arc::new(TestProvider {
           requests: requests.clone(),
           responses: Mutex::new(responses.into()),
         }),
-        settings: Settings {
-          directory: directory.path().into(),
-          model: "mock:local".parse().unwrap(),
-          prompt: None,
-          yolo,
-        },
+        system: String::new(),
         task: None,
-        tool_executor: ToolExecutor {
-          command_executor: CommandExecutor::default(),
-          directory: directory.path().into(),
-        },
       };
 
       Self {
         agent,
         directory,
-        events,
         requests,
       }
     }
@@ -289,9 +226,8 @@ mod tests {
     );
 
     let TestAgent {
-      agent,
+      mut agent,
       directory: _directory,
-      mut events,
       requests,
     } = TestAgent::new(
       vec![
@@ -304,37 +240,22 @@ mod tests {
       false,
     );
 
-    let task = tokio::spawn(async move {
-      agent
-        .stream(
-          0,
-          vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-        )
-        .await
-        .unwrap();
-    });
+    let mut events =
+      agent.spawn(vec![Message::User(vec![UserMessageContent::Text(
+        "foo".into(),
+      )])]);
 
     assert_eq!(
       events.recv().await.unwrap(),
-      Event::Agent {
-        event: AgentEvent::Message(Message::Agent(
-          vec![tool_call.clone()].into(),
-        )),
-        run_id: 0,
-      }
+      AgentEvent::Message(Message::Agent(vec![tool_call.clone()].into()))
     );
 
     let request = match events.recv().await.unwrap() {
-      Event::Agent {
-        event: AgentEvent::ToolApprovalRequest(request),
-        run_id: 0,
-      } => request,
+      AgentEvent::ToolApprovalRequest(request) => request,
       event => panic!("expected approval request, got {event:?}"),
     };
 
     request.respond(ToolApproval::Denied);
-
-    task.await.unwrap();
 
     let tool_result = ToolResult {
       stderr: Some("permission denied".into()),
@@ -343,25 +264,16 @@ mod tests {
 
     assert_eq!(
       events.recv().await.unwrap(),
-      Event::Agent {
-        event: AgentEvent::Message(Message::User(vec![
-          UserMessageContent::ToolResult {
-            call: CallId::from_wire("foo"),
-            name: ToolName::new("command").unwrap(),
-            result: tool_result.clone(),
-          }
-        ])),
-        run_id: 0,
-      },
+      AgentEvent::Message(Message::User(vec![
+        UserMessageContent::ToolResult {
+          call: CallId::from_wire("foo"),
+          name: ToolName::new("command").unwrap(),
+          result: tool_result.clone(),
+        }
+      ])),
     );
 
-    assert_eq!(
-      events.recv().await.unwrap(),
-      Event::Agent {
-        event: AgentEvent::Done,
-        run_id: 0,
-      },
-    );
+    assert_eq!(events.recv().await.unwrap(), AgentEvent::Done);
 
     let requests = requests.lock().unwrap();
 
@@ -437,7 +349,11 @@ mod tests {
 
     let user = Message::User(vec![UserMessageContent::Text("foo".into())]);
 
-    test_agent.agent.stream(0, vec![user]).await.unwrap();
+    let mut events = test_agent.agent.spawn(vec![user]);
+
+    let mut received = Vec::new();
+
+    while events.recv_many(&mut received, usize::MAX).await != 0 {}
 
     let result = ToolResult {
       exit_status: Some(0),
@@ -484,11 +400,8 @@ mod tests {
       ]
     );
 
-    let events = std::iter::from_fn(|| test_agent.events.try_recv().ok())
-      .collect::<Vec<_>>();
-
     assert_eq!(
-      events,
+      received,
       [
         AgentEvent::Update(update("quux")),
         AgentEvent::Message(Message::Agent(message)),
@@ -496,57 +409,7 @@ mod tests {
         AgentEvent::Update(update("bar")),
         AgentEvent::Message(Message::Agent(complete)),
         AgentEvent::Done,
-      ]
-      .map(|event| Event::Agent { event, run_id: 0 }),
+      ],
     );
-  }
-
-  #[test]
-  fn system_prompt() {
-    fn context(directory: &Path) -> String {
-      formatdoc! {
-        "
-        Current working directory: {}
-
-        The command tool runs commands using the platform's system shell. Omit
-        `cwd` to use the current working directory. Do not invent absolute paths.
-        ",
-        directory.display(),
-      }
-      .trim_end()
-      .to_string()
-    }
-
-    #[track_caller]
-    fn case<F>(agents: Option<&str>, expected: F)
-    where
-      F: FnOnce(&Path, &Path) -> String,
-    {
-      let test_agent = TestAgent::new(Vec::new(), true);
-
-      let agents_path = test_agent.directory.path().join("AGENTS.md");
-
-      if let Some(agents) = agents {
-        fs::write(&agents_path, agents).unwrap();
-      }
-
-      assert_eq!(
-        test_agent.agent.system_prompt().unwrap(),
-        expected(test_agent.directory.path(), &agents_path)
-      );
-    }
-
-    case(None, |directory, _| {
-      format!("{}\n\n{}", SYSTEM_PROMPT.as_str(), context(directory))
-    });
-
-    case(Some("foo\n"), |directory, agents_path| {
-      format!(
-        "{}\n\n{}\n\n{}:\nfoo",
-        SYSTEM_PROMPT.as_str(),
-        context(directory),
-        agents_path.display()
-      )
-    });
   }
 }

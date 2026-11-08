@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct CommandExecutor {
-  limits: ExecutionLimit,
+  pub(crate) limits: ExecutionLimit,
 }
 
 impl CommandExecutor {

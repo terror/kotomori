@@ -1,5 +1,8 @@
 use super::*;
 
+static SYSTEM_PROMPT: LazyLock<String> =
+  LazyLock::new(|| include_str!("../etc/system.md").trim_end().to_string());
+
 #[derive(Debug)]
 pub(crate) struct App {
   agent: Option<Agent>,
@@ -13,6 +16,28 @@ pub(crate) struct App {
 
 impl App {
   const TICK_INTERVAL: Duration = Duration::from_millis(120);
+
+  fn agent(screen: &Screen) -> Result<Option<Agent>> {
+    let Screen::Session(state) = screen else {
+      return Ok(None);
+    };
+
+    let settings = &state.session.settings;
+
+    Ok(Some(Agent {
+      config: AgentConfig {
+        model: settings.model.clone(),
+        tool_executor: ToolExecutor {
+          command_executor: CommandExecutor::default(),
+          directory: settings.directory.clone(),
+        },
+        yolo: settings.yolo,
+      },
+      provider: Arc::<dyn Provider>::try_from(settings.model.clone())?,
+      system: Self::system_prompt(&settings.directory)?,
+      task: None,
+    }))
+  }
 
   fn drain_pending_events(&mut self) -> Result {
     while !self.screen.should_quit() {
@@ -52,7 +77,17 @@ impl App {
       }
       Effect::RunAgent { messages, run_id } => {
         if let Some(agent) = &mut self.agent {
-          agent.spawn(run_id, messages);
+          let mut events = agent.spawn(messages);
+
+          let event_sender = self.event_sender.clone();
+
+          tokio::spawn(async move {
+            while let Some(event) = events.recv().await {
+              if event_sender.send(Event::Agent { event, run_id }).is_err() {
+                break;
+              }
+            }
+          });
         }
       }
       Effect::SaveSession => {
@@ -147,7 +182,7 @@ impl App {
       Screen::Session(Box::new(State::new(Session::new(settings, now()?))));
 
     Ok(Self {
-      agent: screen.agent(event_sender.clone())?,
+      agent: Self::agent(&screen)?,
       clipboard: Clipboard::default(),
       database,
       event_receiver,
@@ -207,10 +242,90 @@ impl App {
   }
 
   pub(crate) fn set_screen(&mut self, screen: Screen) -> Result {
-    self.agent = screen.agent(self.event_sender.clone())?;
+    self.agent = Self::agent(&screen)?;
 
     self.screen = screen;
 
     Ok(())
+  }
+
+  fn system_prompt(directory: &Path) -> Result<String> {
+    let agents = Loader::new(directory).load()?;
+
+    let context = formatdoc! {
+      "
+      Current working directory: {}
+
+      The command tool runs commands using the platform's system shell. Omit
+      `cwd` to use the current working directory. Do not invent absolute paths.
+      ",
+      directory.display(),
+    };
+
+    Ok(
+      [
+        SYSTEM_PROMPT.as_str(),
+        context.trim_end(),
+        agents.trim_end(),
+      ]
+      .into_iter()
+      .filter(|section| !section.is_empty())
+      .collect::<Vec<_>>()
+      .join("\n\n"),
+    )
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn system_prompt() {
+    fn context(directory: &Path) -> String {
+      formatdoc! {
+        "
+        Current working directory: {}
+
+        The command tool runs commands using the platform's system shell. Omit
+        `cwd` to use the current working directory. Do not invent absolute paths.
+        ",
+        directory.display(),
+      }
+      .trim_end()
+      .to_string()
+    }
+
+    #[track_caller]
+    fn case<F>(agents: Option<&str>, expected: F)
+    where
+      F: FnOnce(&Path, &Path) -> String,
+    {
+      let directory = tempfile::tempdir().unwrap();
+
+      let agents_path = directory.path().join("AGENTS.md");
+
+      if let Some(agents) = agents {
+        fs::write(&agents_path, agents).unwrap();
+      }
+
+      assert_eq!(
+        App::system_prompt(directory.path()).unwrap(),
+        expected(directory.path(), &agents_path)
+      );
+    }
+
+    case(None, |directory, _| {
+      format!("{}\n\n{}", SYSTEM_PROMPT.as_str(), context(directory))
+    });
+
+    case(Some("foo\n"), |directory, agents_path| {
+      format!(
+        "{}\n\n{}\n\n{}:\nfoo",
+        SYSTEM_PROMPT.as_str(),
+        context(directory),
+        agents_path.display()
+      )
+    });
   }
 }
