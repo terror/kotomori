@@ -21,6 +21,9 @@ use {
   },
 };
 
+#[cfg(test)]
+use std::{collections::VecDeque, sync::Mutex};
+
 pub use {
   agent::Agent, agent_config::AgentConfig, agent_event::AgentEvent,
   agent_message::AgentMessage, approval_policy::ApprovalPolicy,

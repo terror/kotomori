@@ -403,13 +403,15 @@ mod tests {
       0,
     ));
 
-    let invocation = tool_invocation(
-      "foo",
-      CommandArguments {
-        command: "bar".into(),
-        cwd: None,
-      },
-    );
+    let invocation = ToolInvocation {
+      protocol: ToolRequest::new(
+        CallId::new("foo"),
+        ToolFunction {
+          arguments: serde_json::json!({"command": "bar"}),
+          name: ToolName::new("command").unwrap(),
+        },
+      ),
+    };
 
     for event in [
       AgentEvent::Message(Message::Agent(
@@ -446,13 +448,15 @@ mod tests {
       0,
     ));
 
-    let (request, response_receiver) = ApprovalRequest::new(tool_invocation(
-      "foo",
-      CommandArguments {
-        command: "bar".into(),
-        cwd: None,
-      },
-    ));
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      protocol: ToolRequest::new(
+        CallId::new("foo"),
+        ToolFunction {
+          arguments: serde_json::json!({"command": "bar"}),
+          name: ToolName::new("command").unwrap(),
+        },
+      ),
+    });
 
     state.run = Some(Run {
       approval: Some(request),
@@ -489,13 +493,15 @@ mod tests {
       0,
     ));
 
-    let (request, response_receiver) = ApprovalRequest::new(tool_invocation(
-      "foo",
-      CommandArguments {
-        command: "bar".into(),
-        cwd: None,
-      },
-    ));
+    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
+      protocol: ToolRequest::new(
+        CallId::new("foo"),
+        ToolFunction {
+          arguments: serde_json::json!({"command": "bar"}),
+          name: ToolName::new("command").unwrap(),
+        },
+      ),
+    });
 
     state.run = Some(Run {
       approval: Some(request),
@@ -545,27 +551,21 @@ mod tests {
         vec![
           AssistantContent::reasoning("foo", "foo"),
           AssistantContent::text("bar"),
-          AssistantContent::ToolCall(
-            tool_invocation(
-              "foo",
-              CommandArguments {
-                command: "bar".into(),
-                cwd: None,
-              },
-            )
-            .protocol,
-          ),
+          AssistantContent::ToolCall(ToolRequest::new(
+            CallId::new("foo"),
+            ToolFunction {
+              arguments: serde_json::json!({"command": "bar"}),
+              name: ToolName::new("command").unwrap(),
+            },
+          )),
           AssistantContent::text("baz"),
-          AssistantContent::ToolCall(
-            tool_invocation(
-              "bar",
-              CommandArguments {
-                command: "qux".into(),
-                cwd: None,
-              },
-            )
-            .protocol,
-          ),
+          AssistantContent::ToolCall(ToolRequest::new(
+            CallId::new("bar"),
+            ToolFunction {
+              arguments: serde_json::json!({"command": "qux"}),
+              name: ToolName::new("command").unwrap(),
+            },
+          )),
         ]
         .into(),
       ),
@@ -870,13 +870,15 @@ mod tests {
       [Effect::SaveSession, Effect::RunAgent { run_id: 1, .. }]
     );
 
-    let invocation = tool_invocation(
-      "stale",
-      CommandArguments {
-        command: "echo".into(),
-        cwd: None,
-      },
-    );
+    let invocation = ToolInvocation {
+      protocol: ToolRequest::new(
+        CallId::new("stale"),
+        ToolFunction {
+          arguments: serde_json::json!({"command": "echo"}),
+          name: ToolName::new("command").unwrap(),
+        },
+      ),
+    };
 
     let (request, response_receiver) = ApprovalRequest::new(invocation.clone());
 

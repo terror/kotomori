@@ -289,13 +289,15 @@ mod tests {
 
   #[test]
   fn render_tool_entry_after_user() {
-    let invocation = tool_invocation(
-      "bar",
-      CommandArguments {
-        command: "rg --files".into(),
-        cwd: None,
-      },
-    );
+    let invocation = ToolInvocation {
+      protocol: ToolRequest::new(
+        CallId::new("bar"),
+        ToolFunction {
+          arguments: serde_json::json!({"command": "rg --files"}),
+          name: ToolName::new("command").unwrap(),
+        },
+      ),
+    };
 
     let transcript = Transcript::new(vec![
       TranscriptEntry::Message(Message::User(vec![
@@ -352,13 +354,15 @@ mod tests {
 
   #[test]
   fn render_tool_results_are_scoped_to_the_agent_message() {
-    let invocation = tool_invocation(
-      "foo",
-      CommandArguments {
-        command: "bar".into(),
-        cwd: None,
-      },
-    );
+    let invocation = ToolInvocation {
+      protocol: ToolRequest::new(
+        CallId::new("foo"),
+        ToolFunction {
+          arguments: serde_json::json!({"command": "bar"}),
+          name: ToolName::new("command").unwrap(),
+        },
+      ),
+    };
 
     let message = Message::Agent(
       vec![AssistantContent::ToolCall(invocation.protocol)].into(),

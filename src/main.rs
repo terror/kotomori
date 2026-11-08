@@ -134,12 +134,10 @@ macro_rules! assert_matches {
 }
 
 #[cfg(test)]
-use {std::sync::Mutex, temptree::temptree};
+use temptree::temptree;
 
 mod action;
 mod agent_activity;
-#[cfg(test)]
-mod agent_tests;
 mod app;
 mod arguments;
 mod changed_range;
@@ -186,8 +184,6 @@ mod style;
 mod subcommand;
 mod tool;
 mod tool_action_tense;
-#[cfg(test)]
-mod tool_invocation_tests;
 mod transcript;
 mod transcript_block;
 mod transcript_entry;
@@ -238,18 +234,5 @@ fn main() {
     }
 
     process::exit(1);
-  }
-}
-
-#[cfg(test)]
-fn tool_invocation(id: &str, arguments: CommandArguments) -> ToolInvocation {
-  ToolInvocation {
-    protocol: ToolRequest::new(
-      CallId::new(id),
-      ToolFunction {
-        arguments: serde_json::to_value(arguments).unwrap(),
-        name: ToolName::new("command").unwrap(),
-      },
-    ),
   }
 }
