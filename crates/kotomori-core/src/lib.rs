@@ -27,10 +27,11 @@ use std::{collections::VecDeque, sync::Mutex};
 
 pub use {
   agent::Agent, agent_config::AgentConfig, agent_event::AgentEvent,
-  agent_message::AgentMessage, approval_policy::ApprovalPolicy,
-  approval_request::ApprovalRequest, assistant_content::AssistantContent,
-  call_id::CallId, conversation::Conversation, finish_reason::FinishReason,
-  message::Message, message_buffer::MessageBuffer, message_draft::MessageDraft,
+  agent_message::AgentMessage, agent_run::AgentRun,
+  approval_policy::ApprovalPolicy, approval_request::ApprovalRequest,
+  assistant_content::AssistantContent, call_id::CallId,
+  conversation::Conversation, finish_reason::FinishReason, message::Message,
+  message_buffer::MessageBuffer, message_draft::MessageDraft,
   message_update::MessageUpdate, model::Model, provider::Provider,
   provider_response::ProviderResponse, provider_sink::ProviderSink,
   reasoning::Reasoning, reasoning_content::ReasoningContent, request::Request,
@@ -45,6 +46,7 @@ mod agent;
 mod agent_config;
 mod agent_event;
 mod agent_message;
+mod agent_run;
 mod approval_policy;
 mod approval_request;
 mod assistant_content;

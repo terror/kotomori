@@ -22,9 +22,11 @@ impl Resume {
     let mut app = App::new(database, &settings)?;
 
     if self.last {
-      app.resume(last_id)?;
+      app.resume(last_id).await?;
     } else {
-      app.set_screen(Screen::Resume(ResumePicker::new(sessions)))?;
+      app
+        .set_screen(Screen::Resume(ResumePicker::new(sessions)))
+        .await?;
     }
 
     app.run().await

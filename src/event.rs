@@ -4,6 +4,7 @@ use super::*;
 pub(crate) enum Event {
   Action(Action),
   Agent { event: AgentEvent, run_id: u64 },
+  AgentInterrupted(Result<(), String>),
   ClipboardCopied(Result<(), String>),
   Error(String),
   SessionForked(Result<Session, String>),

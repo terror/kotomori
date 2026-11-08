@@ -204,6 +204,13 @@ impl State {
           }
         }
       }
+      Event::AgentInterrupted(result) => {
+        if let Err(error) = result {
+          self.session.push(TranscriptEntry::Error(error));
+
+          return vec![Effect::SaveSession];
+        }
+      }
       Event::ClipboardCopied(result) => match result {
         Ok(()) => self.session.push(TranscriptEntry::Notice(
           "Copied last assistant response to clipboard.".into(),
