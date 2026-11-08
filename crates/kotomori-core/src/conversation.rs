@@ -10,12 +10,18 @@ impl Conversation {
     self.messages.clear();
   }
 
-  pub fn interrupt_pending_calls(&mut self) -> Vec<Message> {
+  pub fn interrupt_pending_calls(&mut self) -> Result<Vec<Message>> {
     let mut pending = Vec::<&ToolRequest>::new();
 
     for message in &self.messages {
       match message {
         Message::Agent(message) => {
+          if !pending.is_empty() {
+            bail!(
+              "cannot recover unfinished tool calls from an earlier assistant turn"
+            );
+          }
+
           pending.extend(message.content.iter().filter_map(|content| {
             match content {
               AssistantContent::ToolCall(call) => Some(call),
@@ -48,7 +54,7 @@ impl Conversation {
 
     self.messages.extend(messages.iter().cloned());
 
-    messages
+    Ok(messages)
   }
 
   #[must_use]

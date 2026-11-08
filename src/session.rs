@@ -37,14 +37,16 @@ impl Session {
       })
   }
 
-  pub(crate) fn interrupt_pending_calls(&mut self) {
+  pub(crate) fn interrupt_pending_calls(&mut self) -> Result {
     self.transcript.extend(
       self
         .conversation
-        .interrupt_pending_calls()
+        .interrupt_pending_calls()?
         .into_iter()
         .map(TranscriptEntry::Message),
     );
+
+    Ok(())
   }
 
   pub(crate) fn new(settings: &Settings, now: u64) -> Self {
