@@ -4,7 +4,7 @@ use super::*;
 pub(crate) struct TranscriptComponent<'a> {
   pub(crate) reasoning_expanded: bool,
   pub(crate) run: Option<&'a Run>,
-  pub(crate) state: &'a Transcript,
+  pub(crate) state: &'a [TranscriptEntry],
 }
 
 impl<'a> TranscriptComponent<'a> {
@@ -78,7 +78,6 @@ impl<'a> TranscriptComponent<'a> {
   fn entries(&self) -> StackComponent<'a> {
     self
       .state
-      .entries
       .chunk_by(|left, right| {
         matches!(
           (left, right),
@@ -97,7 +96,7 @@ impl<'a> TranscriptComponent<'a> {
               TranscriptEntry::Draft(buffer) => {
                 stack.push(self.agent_content(TranscriptBlock::draft(
                   buffer,
-                  &self.state.entries[index + offset + 1..],
+                  &self.state[index + offset + 1..],
                 )))
               }
               TranscriptEntry::Error(error) => {
@@ -112,7 +111,7 @@ impl<'a> TranscriptComponent<'a> {
               TranscriptEntry::Message(Message::Agent(message)) => {
                 stack.push(self.agent_content(TranscriptBlock::content(
                   &message.content,
-                  &self.state.entries[index + offset + 1..],
+                  &self.state[index + offset + 1..],
                 )))
               }
               TranscriptEntry::Message(Message::User(content)) => {
@@ -153,10 +152,9 @@ mod tests {
   fn render_active_activity_is_separated_from_user_entry() {
     let run = Run::new(0);
 
-    let transcript =
-      Transcript::new(vec![TranscriptEntry::Message(Message::User(vec![
-        UserMessageContent::Text("foo".into()),
-      ]))]);
+    let transcript = [TranscriptEntry::Message(Message::User(vec![
+      UserMessageContent::Text("foo".into()),
+    ]))];
 
     assert_eq!(
       TranscriptComponent {
@@ -198,7 +196,7 @@ mod tests {
         TranscriptComponent {
           reasoning_expanded: false,
           run: Some(&run),
-          state: &Transcript::default()
+          state: &[]
         }
         .render(80),
         [
@@ -231,7 +229,7 @@ mod tests {
         TranscriptComponent {
           reasoning_expanded: false,
           run: Some(&run),
-          state: &Transcript::default()
+          state: &[]
         }
         .render(80),
         expected,
@@ -247,7 +245,7 @@ mod tests {
           TranscriptComponent {
             reasoning_expanded: false,
             run: None,
-            state: &Transcript::new(vec![entry])
+            state: &[entry]
           }
           .render(80),
           expected,
@@ -265,9 +263,7 @@ mod tests {
 
   #[test]
   fn render_notice_entry_handles_multiline_content() {
-    let transcript = Transcript::new(vec![TranscriptEntry::Notice(
-      "\nfoo\n\n\nbar\n\n".into(),
-    )]);
+    let transcript = [TranscriptEntry::Notice("\nfoo\n\n\nbar\n\n".into())];
 
     assert_eq!(
       TranscriptComponent {
@@ -297,7 +293,7 @@ mod tests {
       },
     );
 
-    let transcript = Transcript::new(vec![
+    let transcript = [
       TranscriptEntry::Message(Message::User(vec![
         UserMessageContent::Text("foo".into()),
         UserMessageContent::Text("bar".into()),
@@ -318,7 +314,7 @@ mod tests {
           },
         },
       ])),
-    ]);
+    ];
 
     assert_eq!(
       TranscriptComponent {
@@ -363,7 +359,7 @@ mod tests {
     let message =
       Message::Agent(vec![AssistantContent::ToolCall(invocation)].into());
 
-    let transcript = Transcript::new(vec![
+    let transcript = [
       TranscriptEntry::Message(message.clone()),
       TranscriptEntry::Message(message),
       TranscriptEntry::Message(Message::User(vec![
@@ -381,7 +377,7 @@ mod tests {
           },
         },
       ])),
-    ]);
+    ];
 
     assert_eq!(
       TranscriptComponent {
@@ -408,17 +404,16 @@ mod tests {
 
   #[test]
   fn render_unknown_tool() {
-    let transcript =
-      Transcript::new(vec![TranscriptEntry::Message(Message::Agent(
-        vec![AssistantContent::ToolCall(ToolRequest::new(
-          CallId::new("foo"),
-          ToolFunction {
-            arguments: serde_json::json!({"bar": "baz"}),
-            name: ToolName::new("foo").unwrap(),
-          },
-        ))]
-        .into(),
-      ))]);
+    let transcript = [TranscriptEntry::Message(Message::Agent(
+      vec![AssistantContent::ToolCall(ToolRequest::new(
+        CallId::new("foo"),
+        ToolFunction {
+          arguments: serde_json::json!({"bar": "baz"}),
+          name: ToolName::new("foo").unwrap(),
+        },
+      ))]
+      .into(),
+    ))];
 
     assert_eq!(
       TranscriptComponent {

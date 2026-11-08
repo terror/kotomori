@@ -431,7 +431,7 @@ mod tests {
     }
 
     assert_eq!(state.run, None);
-    assert_eq!(state.session.transcript.entries, []);
+    assert_eq!(state.session.transcript, []);
   }
 
   #[tokio::test]
@@ -719,7 +719,7 @@ mod tests {
       })
     );
     assert_eq!(
-      state.session.transcript.entries,
+      state.session.transcript,
       [TranscriptEntry::Error("failed to save session: foo".into())]
     );
   }
@@ -829,7 +829,7 @@ mod tests {
     let session = state.session;
 
     assert_eq!(
-      session.transcript.entries,
+      session.transcript,
       [
         TranscriptEntry::Message(Message::Agent(content.into())),
         TranscriptEntry::Interrupted,
@@ -974,9 +974,9 @@ mod tests {
         id: Some(2),
         settings,
         title: Some("bar".into()),
-        transcript: Transcript::new(vec![TranscriptEntry::Message(
-          Message::User(vec![UserMessageContent::Text("bar".into())]),
-        )]),
+        transcript: vec![TranscriptEntry::Message(Message::User(vec![
+          UserMessageContent::Text("bar".into())
+        ]))],
         updated_at: 3,
       }
     );
@@ -1003,7 +1003,7 @@ mod tests {
     );
     assert_eq!(state.run, None);
     assert_eq!(
-      state.session.transcript.entries,
+      state.session.transcript,
       [TranscriptEntry::Error("foo".into())]
     );
   }
@@ -1026,7 +1026,7 @@ mod tests {
     );
     assert_eq!(state.run, None);
     assert_eq!(
-      state.session.transcript.entries,
+      state.session.transcript,
       [TranscriptEntry::Error("foo".into())]
     );
   }
@@ -1076,10 +1076,7 @@ mod tests {
 
       let session = state.session;
 
-      assert_eq!(
-        session.transcript.entries,
-        [TranscriptEntry::Draft(draft), entry]
-      );
+      assert_eq!(session.transcript, [TranscriptEntry::Draft(draft), entry]);
 
       let mut state = State::new(session);
 
