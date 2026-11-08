@@ -33,6 +33,7 @@ impl App {
 
     Ok(Some(Agent::new(
       AgentConfig {
+        max_rounds: settings.max_rounds,
         model: settings.model.clone(),
         tools,
         yolo: settings.yolo,

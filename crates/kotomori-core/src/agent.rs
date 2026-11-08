@@ -76,6 +76,8 @@ impl Agent {
   ) -> Result {
     let tools = self.config.tools.definitions();
 
+    let mut rounds = 0;
+
     let mut usage = Usage::default();
 
     for message in conversation.interrupt_pending_calls() {
@@ -83,6 +85,13 @@ impl Agent {
     }
 
     loop {
+      if rounds >= self.config.max_rounds {
+        bail!(
+          "agent round limit reached: maximum of {} provider requests per run",
+          self.config.max_rounds
+        );
+      }
+
       let sink = ProviderSink {
         event_sender: event_sender.clone(),
       };
@@ -93,6 +102,8 @@ impl Agent {
         system: (!self.system.is_empty()).then_some(self.system.as_str()),
         tools: &tools,
       };
+
+      rounds += 1;
 
       let response = self.provider.stream(request, &sink).await?;
 
@@ -271,6 +282,7 @@ mod tests {
 
       let agent = Agent::new(
         AgentConfig {
+          max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
           model: "mock:local".parse().unwrap(),
           tools,
           yolo,

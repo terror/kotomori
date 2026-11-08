@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Settings {
   pub(crate) directory: PathBuf,
+  pub(crate) max_rounds: usize,
   pub(crate) model: Model,
   pub(crate) prompt: Option<String>,
   pub(crate) yolo: bool,
@@ -39,6 +40,10 @@ impl Settings {
 
     Ok(Self {
       directory,
+      max_rounds: options
+        .max_rounds
+        .or(config.max_rounds)
+        .unwrap_or(AgentConfig::DEFAULT_MAX_ROUNDS),
       model,
       prompt: options.prompt,
       yolo: options.yolo,

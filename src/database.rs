@@ -286,6 +286,7 @@ mod tests {
         id,
         settings: Settings {
           directory: "foo".into(),
+          max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
           model: "mock:foo".parse().unwrap(),
           prompt: None,
           yolo: false,
@@ -322,6 +323,7 @@ mod tests {
       id: None,
       settings: Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:foo".parse().unwrap(),
         prompt: Some("bar".into()),
         yolo: true,
@@ -372,6 +374,7 @@ mod tests {
 
     let settings = Settings {
       directory: "bar".into(),
+      max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
       model: "mock:baz".parse().unwrap(),
       prompt: Some("qux".into()),
       yolo: false,
@@ -412,6 +415,7 @@ mod tests {
 
     let settings = Settings {
       directory: "foo".into(),
+      max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
       model: "mock:foo".parse().unwrap(),
       prompt: None,
       yolo: false,
@@ -445,6 +449,7 @@ mod tests {
   fn session_reads_reject_negative_timestamps() {
     let settings = Settings {
       directory: "foo".into(),
+      max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
       model: "mock:foo".parse().unwrap(),
       prompt: None,
       yolo: false,

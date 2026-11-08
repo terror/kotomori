@@ -399,6 +399,7 @@ mod tests {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
@@ -442,6 +443,7 @@ mod tests {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:local".parse().unwrap(),
         prompt: Some(String::new()),
         yolo: false,
@@ -485,6 +487,7 @@ mod tests {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
@@ -518,6 +521,7 @@ mod tests {
   fn completed_messages_survive_resumption() {
     let settings = Settings {
       directory: "foo".into(),
+      max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
       model: "mock:local".parse().unwrap(),
       prompt: Some("foo".into()),
       yolo: false,
@@ -628,6 +632,7 @@ mod tests {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:local".parse().unwrap(),
         prompt: Some("foo".into()),
         yolo: false,
@@ -687,6 +692,7 @@ mod tests {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
@@ -732,6 +738,7 @@ mod tests {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
@@ -768,6 +775,7 @@ mod tests {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:foo".parse().unwrap(),
         prompt: None,
         yolo: false,
@@ -845,6 +853,7 @@ mod tests {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:local".parse().unwrap(),
         prompt: Some("old".into()),
         yolo: false,
@@ -945,6 +954,7 @@ mod tests {
   fn successful_save_updates_metadata_without_saving_again() {
     let settings = Settings {
       directory: "foo".into(),
+      max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
       model: "mock:foo".parse().unwrap(),
       prompt: None,
       yolo: false,
@@ -991,6 +1001,7 @@ mod tests {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
@@ -1016,6 +1027,7 @@ mod tests {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:local".parse().unwrap(),
         prompt: None,
         yolo: false,
@@ -1040,6 +1052,7 @@ mod tests {
     fn case(event: Event, entry: TranscriptEntry) {
       let settings = Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:foo".parse().unwrap(),
         prompt: Some("qux".into()),
         yolo: false,
