@@ -11,40 +11,28 @@ impl Conversation {
   }
 
   pub fn interrupt_pending_calls(&mut self) -> Vec<Message> {
-    self.interrupt_pending_calls_with(&[])
-  }
+    let mut pending = Vec::<&ToolRequest>::new();
 
-  fn interrupt_pending_calls_with(
-    &mut self,
-    content: &[UserMessageContent],
-  ) -> Vec<Message> {
-    let Some((index, Message::Agent(message))) = self
-      .messages
-      .iter()
-      .enumerate()
-      .rfind(|(_, message)| matches!(message, Message::Agent(_)))
-    else {
-      return Vec::new();
-    };
+    for message in &self.messages {
+      match message {
+        Message::Agent(message) => {
+          pending.extend(message.content.iter().filter_map(|content| {
+            match content {
+              AssistantContent::ToolCall(call) => Some(call),
+              _ => None,
+            }
+          }));
+        }
+        Message::User(content) => pending.retain(|call| {
+          !content
+            .iter()
+            .any(|content| content.is_tool_result_for(&call.id))
+        }),
+      }
+    }
 
-    let messages = message
-      .content
-      .iter()
-      .filter_map(|content| match content {
-        AssistantContent::ToolCall(call) => Some(call),
-        _ => None,
-      })
-      .filter(|call| {
-        !self.messages[index + 1..]
-          .iter()
-          .filter_map(|message| match message {
-            Message::User(content) => Some(content.as_slice()),
-            Message::Agent(_) => None,
-          })
-          .flatten()
-          .chain(content)
-          .any(|content| content.is_tool_result_for(&call.id))
-      })
+    let messages = pending
+      .into_iter()
       .map(|call| {
         Message::User(vec![UserMessageContent::ToolResult {
           call: call.id.clone(),
@@ -79,48 +67,14 @@ impl Conversation {
     &self.messages
   }
 
-  pub fn push(&mut self, message: Message) -> Vec<Message> {
-    let messages = match &message {
-      Message::Agent(_) => self.interrupt_pending_calls(),
-      Message::User(content)
-        if content
-          .iter()
-          .any(|content| matches!(content, UserMessageContent::Text(_))) =>
-      {
-        self.interrupt_pending_calls_with(content)
-      }
-      Message::User(_) => Vec::new(),
-    };
-
+  pub fn push(&mut self, message: Message) {
     self.messages.push(message);
-
-    messages
-  }
-
-  pub fn push_partial(&mut self, buffer: &MessageBuffer) -> Vec<Message> {
-    if buffer.is_empty() {
-      return Vec::new();
-    }
-
-    let message = buffer.message();
-
-    if message.content.is_empty() {
-      self.interrupt_pending_calls()
-    } else {
-      self.push(Message::Agent(message))
-    }
   }
 }
 
 impl From<Vec<Message>> for Conversation {
   fn from(messages: Vec<Message>) -> Self {
-    let mut conversation = Self::default();
-
-    for message in messages {
-      conversation.push(message);
-    }
-
-    conversation
+    Self { messages }
   }
 }
 
@@ -156,21 +110,5 @@ mod tests {
     let conversation = Conversation::from(messages.clone());
 
     assert_eq!(conversation.messages(), messages);
-  }
-
-  #[test]
-  fn messages_skip_unfinished_reasoning() {
-    let mut buffer = MessageBuffer::default();
-
-    buffer.apply(MessageUpdate::ReasoningDelta {
-      delta: "foo".into(),
-      index: 0,
-    });
-
-    let mut conversation = Conversation::default();
-
-    conversation.push_partial(&buffer);
-
-    assert_eq!(conversation.messages(), []);
   }
 }

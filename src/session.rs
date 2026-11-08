@@ -60,19 +60,21 @@ impl Session {
   }
 
   pub(crate) fn push(&mut self, entry: TranscriptEntry) {
-    let messages = match &entry {
+    match &entry {
       TranscriptEntry::Message(message) => {
-        self.conversation.push(message.clone())
+        self.conversation.push(message.clone());
       }
-      TranscriptEntry::Draft(buffer) => self.conversation.push_partial(buffer),
+      TranscriptEntry::Draft(buffer) => {
+        let message = buffer.message();
+
+        if !message.content.is_empty() {
+          self.conversation.push(Message::Agent(message));
+        }
+      }
       TranscriptEntry::Error(_)
       | TranscriptEntry::Interrupted
-      | TranscriptEntry::Notice(_) => Vec::new(),
-    };
-
-    self
-      .transcript
-      .extend(messages.into_iter().map(TranscriptEntry::Message));
+      | TranscriptEntry::Notice(_) => {}
+    }
 
     self.transcript.push(entry);
   }
@@ -117,5 +119,30 @@ mod tests {
       session.conversation.messages(),
       [Message::User(vec![UserMessageContent::Text("foo".into())])]
     );
+  }
+
+  #[test]
+  fn messages_skip_unfinished_reasoning() {
+    let mut buffer = MessageBuffer::default();
+
+    buffer.apply(MessageUpdate::ReasoningDelta {
+      delta: "foo".into(),
+      index: 0,
+    });
+
+    let mut session = Session::new(
+      &Settings {
+        directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
+        model: "mock:foo".parse().unwrap(),
+        prompt: None,
+        yolo: false,
+      },
+      0,
+    );
+
+    session.push(TranscriptEntry::Draft(buffer));
+
+    assert_eq!(session.conversation.messages(), []);
   }
 }

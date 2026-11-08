@@ -317,6 +317,8 @@ impl State {
   }
 
   fn run(&mut self, input: String) -> Effect {
+    self.session.interrupt_pending_calls();
+
     self
       .session
       .push(TranscriptEntry::Message(Message::User(vec![
