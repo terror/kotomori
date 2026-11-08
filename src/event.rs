@@ -3,18 +3,8 @@ use super::*;
 #[derive(Debug, PartialEq)]
 pub(crate) enum Event {
   Action(Action),
-  Agent {
-    event: AgentEvent,
-    run_id: u64,
-  },
-  AgentCompleted {
-    result: Result<(), String>,
-    run_id: u64,
-  },
-  AgentInterrupted {
-    result: Result<(), String>,
-    run_id: u64,
-  },
+  Agent { event: AgentEvent, run_id: u64 },
+  AgentCompleted { result: RunResult, run_id: u64 },
   ClipboardCopied(Result<(), String>),
   Error(String),
   SessionForked(Result<Session, String>),

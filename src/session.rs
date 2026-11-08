@@ -62,25 +62,22 @@ impl Session {
   }
 
   pub(crate) fn push(&mut self, entry: TranscriptEntry) {
-    match &entry {
-      TranscriptEntry::Message(Message::Agent(message))
-        if message.content.is_empty() =>
-      {
-        return;
-      }
+    let message = match &entry {
       TranscriptEntry::Message(message) => {
-        self.conversation.push(message.clone());
+        RunEntry::Message(message.clone()).into_message()
       }
       TranscriptEntry::Draft(buffer) => {
-        let message = buffer.message();
-
-        if !message.content.is_empty() {
-          self.conversation.push(Message::Agent(message));
-        }
+        RunEntry::Draft(buffer.clone()).into_message()
       }
       TranscriptEntry::Error(_)
       | TranscriptEntry::Interrupted
-      | TranscriptEntry::Notice(_) => {}
+      | TranscriptEntry::Notice(_) => None,
+    };
+
+    if let Some(message) = message {
+      self.conversation.push(message);
+    } else if matches!(entry, TranscriptEntry::Message(_)) {
+      return;
     }
 
     self.transcript.push(entry);

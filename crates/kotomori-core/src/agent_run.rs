@@ -3,8 +3,9 @@ use super::*;
 #[derive(Debug)]
 #[must_use]
 pub struct AgentRun {
-  event_receiver: UnboundedReceiver<AgentEvent>,
-  task: task::JoinHandle<Result>,
+  pub(super) event_receiver: UnboundedReceiver<AgentEvent>,
+  pub(super) state: RunState,
+  pub(super) task: task::JoinHandle<Result<RunOutcome>>,
 }
 
 impl AgentRun {
@@ -12,36 +13,30 @@ impl AgentRun {
     self.task.abort();
   }
 
-  pub async fn cancel_and_join(mut self) -> (Vec<AgentEvent>, Result) {
+  pub async fn cancel_and_join(self) -> RunResult {
     self.cancel();
-
-    let result = match (&mut self.task).await {
-      Ok(result) => result,
-      Err(error) if error.is_cancelled() => Ok(()),
-      Err(error) => Err(error).context("agent task failed"),
-    };
-
-    let mut events = Vec::new();
-
-    while let Ok(event) = self.event_receiver.try_recv() {
-      events.push(event);
-    }
-
-    (events, result)
+    self.join().await
   }
 
-  pub(super) fn new(
-    event_receiver: UnboundedReceiver<AgentEvent>,
-    task: task::JoinHandle<Result>,
-  ) -> Self {
-    Self {
-      event_receiver,
-      task,
-    }
+  pub async fn join(mut self) -> RunResult {
+    while self.recv().await.is_some() {}
+
+    let outcome = match (&mut self.task).await {
+      Ok(Ok(outcome)) => outcome,
+      Ok(Err(error)) => RunOutcome::Failed(format!("{error:#}")),
+      Err(error) if error.is_cancelled() => RunOutcome::Cancelled,
+      Err(error) => RunOutcome::Failed(format!("agent task failed: {error}")),
+    };
+
+    mem::take(&mut self.state).finish(outcome)
   }
 
   pub async fn recv(&mut self) -> Option<AgentEvent> {
-    self.event_receiver.recv().await
+    let event = self.event_receiver.recv().await?;
+
+    self.state.apply(&event);
+
+    Some(event)
   }
 }
 

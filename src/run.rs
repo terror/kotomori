@@ -9,23 +9,11 @@ pub(crate) struct Run {
   pub(crate) id: u64,
   pub(crate) interruption: Option<Interruption>,
   pub(crate) message: MessageBuffer,
+  pub(crate) received_entries: usize,
   pub(crate) running_tool: Option<CallId>,
-  pub(crate) usage: Usage,
 }
 
 impl Run {
-  pub(crate) fn finish(self) -> Option<TranscriptEntry> {
-    if self.message.is_empty() {
-      None
-    } else if self.message.has_pending_reasoning() {
-      Some(TranscriptEntry::Draft(self.message))
-    } else {
-      Some(TranscriptEntry::Message(Message::Agent(
-        self.message.finish(),
-      )))
-    }
-  }
-
   pub(crate) fn new(id: u64) -> Self {
     Self {
       activity: AgentActivity::Waiting,
@@ -35,8 +23,8 @@ impl Run {
       id,
       interruption: None,
       message: MessageBuffer::default(),
+      received_entries: 0,
       running_tool: None,
-      usage: Usage::default(),
     }
   }
 
