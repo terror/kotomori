@@ -79,9 +79,12 @@ impl App {
           agent.interrupt();
         }
       }
-      Effect::RunAgent { messages, run_id } => {
+      Effect::RunAgent {
+        conversation,
+        run_id,
+      } => {
         if let Some(agent) = &mut self.agent {
-          let mut events = agent.spawn(messages);
+          let mut events = agent.spawn(conversation);
 
           let event_sender = self.event_sender.clone();
 

@@ -34,7 +34,7 @@ impl Agent {
 
   pub(crate) fn spawn(
     &mut self,
-    messages: Vec<Message>,
+    conversation: Conversation,
   ) -> UnboundedReceiver<AgentEvent> {
     self.interrupt();
 
@@ -48,7 +48,7 @@ impl Agent {
     };
 
     self.task = Some(tokio::spawn(async move {
-      if let Err(error) = agent.stream(&event_sender, messages).await {
+      if let Err(error) = agent.stream(&event_sender, conversation).await {
         let _ = event_sender.send(AgentEvent::Error(error.to_string()));
       }
     }));
@@ -59,9 +59,13 @@ impl Agent {
   async fn stream(
     &self,
     event_sender: &UnboundedSender<AgentEvent>,
-    mut messages: Vec<Message>,
+    mut conversation: Conversation,
   ) -> Result {
     let tools = self.config.tools.definitions();
+
+    for message in conversation.interrupt_pending_calls() {
+      event_sender.send(AgentEvent::Message(message))?;
+    }
 
     loop {
       let sink = ProviderSink {
@@ -69,7 +73,7 @@ impl Agent {
       };
 
       let request = Request {
-        messages: &messages,
+        messages: conversation.messages(),
         model: &self.config.model,
         system: (!self.system.is_empty()).then_some(self.system.as_str()),
         tools: &tools,
@@ -94,9 +98,13 @@ impl Agent {
 
       let message = Message::Agent(message);
 
-      event_sender.send(AgentEvent::Message(message.clone()))?;
-
-      messages.push(message);
+      for message in conversation
+        .push(message.clone())
+        .into_iter()
+        .chain(once(message))
+      {
+        event_sender.send(AgentEvent::Message(message))?;
+      }
 
       if tool_calls.is_empty() {
         break;
@@ -120,9 +128,13 @@ impl Agent {
           result,
         }]);
 
-        event_sender.send(AgentEvent::Message(message.clone()))?;
-
-        messages.push(message);
+        for message in conversation
+          .push(message.clone())
+          .into_iter()
+          .chain(once(message))
+        {
+          event_sender.send(AgentEvent::Message(message))?;
+        }
       }
     }
 
@@ -255,10 +267,9 @@ mod tests {
       false,
     );
 
-    let mut events =
-      agent.spawn(vec![Message::User(vec![UserMessageContent::Text(
-        "foo".into(),
-      )])]);
+    let mut events = agent.spawn(
+      vec![Message::User(vec![UserMessageContent::Text("foo".into())])].into(),
+    );
 
     assert_eq!(
       events.recv().await.unwrap(),
@@ -364,7 +375,7 @@ mod tests {
 
     let user = Message::User(vec![UserMessageContent::Text("foo".into())]);
 
-    let mut events = test_agent.agent.spawn(vec![user]);
+    let mut events = test_agent.agent.spawn(vec![user].into());
 
     let mut received = Vec::new();
 
