@@ -225,10 +225,19 @@ impl State {
           AgentEvent::ToolApprovalRequest(request) => {
             run.approval = Some(request);
           }
-          AgentEvent::ToolStarted(call) => {
+          AgentEvent::ResponseStarted(_) => {
+            run.activity = AgentActivity::Waiting;
+          }
+          AgentEvent::ToolFinished { call, .. } => {
+            if run.running_tool.as_ref() == Some(&call) {
+              run.running_tool = None;
+            }
+          }
+          AgentEvent::ToolStarted { call, .. } => {
             run.running_tool = Some(call);
           }
-          AgentEvent::Usage(_) => {}
+          AgentEvent::ResponseFinished(_) | AgentEvent::ToolProgress { .. } => {
+          }
         }
       }
       Event::AgentCompleted { result, run_id } => {

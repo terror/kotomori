@@ -6,6 +6,32 @@ pub struct CommandTool {
   pub directory: PathBuf,
 }
 
+impl CommandTool {
+  async fn execute(&self, arguments: CommandArguments) -> ToolResult {
+    #[cfg(unix)]
+    let mut command = {
+      let mut command = AsyncCommand::new("/bin/sh");
+      command.arg("-c").arg(&arguments.command);
+      command
+    };
+
+    #[cfg(windows)]
+    let mut command = {
+      let mut command = AsyncCommand::new("cmd.exe");
+      command.arg("/C").arg(&arguments.command);
+      command
+    };
+
+    command.current_dir(
+      self
+        .directory
+        .join(arguments.cwd.as_deref().unwrap_or(Path::new("."))),
+    );
+
+    self.command_executor.execute(command).await
+  }
+}
+
 impl Tool for CommandTool {
   fn definition(&self) -> Result<ToolDefinition> {
     Ok(ToolDefinition {
@@ -22,32 +48,10 @@ impl Tool for CommandTool {
 
     let tool = self.clone();
 
-    Ok(ToolCall {
-      approval: ApprovalPolicy::Required,
-      future: Box::pin(async move {
-        #[cfg(unix)]
-        let mut command = {
-          let mut command = AsyncCommand::new("/bin/sh");
-          command.arg("-c").arg(&arguments.command);
-          command
-        };
-
-        #[cfg(windows)]
-        let mut command = {
-          let mut command = AsyncCommand::new("cmd.exe");
-          command.arg("/C").arg(&arguments.command);
-          command
-        };
-
-        command.current_dir(
-          tool
-            .directory
-            .join(arguments.cwd.as_deref().unwrap_or(Path::new("."))),
-        );
-
-        tool.command_executor.execute(command).await
-      }),
-    })
+    Ok(ToolCall::new(
+      ApprovalPolicy::Required,
+      move |_| async move { tool.execute(arguments).await },
+    ))
   }
 }
 
@@ -103,12 +107,10 @@ mod tests {
     ] {
       assert_eq!(
         tool
-          .prepare(json!({
-            "command": if cfg!(windows) { "type bar" } else { "cat bar" },
-            "cwd": cwd,
-          }))
-          .unwrap()
-          .future
+          .execute(CommandArguments {
+            command: if cfg!(windows) { "type bar" } else { "cat bar" }.into(),
+            cwd,
+          })
           .await,
         ToolResult {
           exit_status: Some(0),

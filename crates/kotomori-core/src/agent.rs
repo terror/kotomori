@@ -27,19 +27,26 @@ impl Agent {
 
   async fn execute(
     &self,
-    event_sender: &UnboundedSender<AgentEvent>,
+    run: &RunContext,
+    response: ResponseId,
     tool_call: &ToolRequest,
     tool: ToolCall,
   ) -> Result<ToolResult> {
     Ok(
       match self
-        .approval(event_sender, tool_call, tool.approval)
+        .approval(&run.event_sender, tool_call, tool.approval)
         .await?
       {
         ToolApproval::Approved => {
-          event_sender.send(AgentEvent::ToolStarted(tool_call.id.clone()))?;
+          let context = ToolContext::new(run, response, tool_call);
 
-          tool.future.await
+          let guard = ToolGuard::new(context.clone())?;
+
+          let result = tool.execute(context).await;
+
+          guard.finish(&result);
+
+          result
         }
         ToolApproval::Denied => ToolResult {
           outcome: ToolOutcome::Denied,
@@ -63,34 +70,63 @@ impl Agent {
   }
 
   pub fn spawn(&self, conversation: Conversation) -> AgentRun {
+    self.spawn_inner(conversation, None)
+  }
+
+  fn spawn_inner(
+    &self,
+    conversation: Conversation,
+    deadline: Option<Instant>,
+  ) -> AgentRun {
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
+
+    let run = RunContext::new(event_sender, deadline);
+
+    let cancellation = run.cancellation.clone();
+
+    let id = run.id;
 
     let state = RunState::new(conversation.clone());
 
     let agent = self.clone();
 
-    let task =
-      tokio::spawn(
-        async move { agent.stream(&event_sender, conversation).await },
-      );
+    let task = tokio::spawn(async move {
+      let _guard = run.cancellation.clone().drop_guard();
+
+      tokio::select! {
+        biased;
+        outcome = run.interrupted() => Ok(outcome),
+        result = agent.stream(&run, conversation) => result,
+      }
+    });
 
     AgentRun {
+      cancellation,
       event_receiver,
+      id,
       state,
       task,
     }
   }
 
+  pub fn spawn_with_deadline(
+    &self,
+    conversation: Conversation,
+    deadline: Instant,
+  ) -> AgentRun {
+    self.spawn_inner(conversation, Some(deadline))
+  }
+
   async fn stream(
     &self,
-    event_sender: &UnboundedSender<AgentEvent>,
+    run: &RunContext,
     mut conversation: Conversation,
   ) -> Result<RunOutcome> {
+    let event_sender = &run.event_sender;
+
     let tools = self.config.tools.definitions();
 
     let mut rounds = 0;
-
-    let mut usage = Usage::default();
 
     for message in conversation.interrupt_pending_calls()? {
       event_sender.send(AgentEvent::Message(message))?;
@@ -114,11 +150,15 @@ impl Agent {
 
       rounds += 1;
 
-      let response = self.provider.stream(request, &sink).await?;
+      let id = run.response(rounds);
 
-      usage += response.usage;
+      let guard = ResponseGuard::new(event_sender, id)?;
 
-      event_sender.send(AgentEvent::Usage(usage))?;
+      let response = self.provider.stream(request, &sink).await;
+
+      guard.finish(&response);
+
+      let response = response?;
 
       let message = response.message;
 
@@ -181,7 +221,7 @@ impl Agent {
       for (tool_call, tool) in tool_calls {
         let result = match tool {
           Ok(tool) if !invalid => {
-            self.execute(event_sender, &tool_call, tool).await?
+            self.execute(run, id, &tool_call, tool).await?
           }
           Ok(_) => ToolResult {
             outcome: ToolOutcome::Skipped,
@@ -275,16 +315,13 @@ mod tests {
     fn prepare(&self, arguments: Value) -> Result<ToolCall> {
       let content = serde_json::from_value::<String>(arguments)?;
 
-      Ok(ToolCall {
-        approval: ApprovalPolicy::Required,
-        future: Box::pin(async move {
-          ToolResult {
-            content: Some(content),
-            outcome: ToolOutcome::Success,
-            ..Default::default()
-          }
-        }),
-      })
+      Ok(ToolCall::new(ApprovalPolicy::Required, |_| async move {
+        ToolResult {
+          content: Some(content),
+          outcome: ToolOutcome::Success,
+          ..Default::default()
+        }
+      }))
     }
   }
 
@@ -422,6 +459,12 @@ mod tests {
 
     let mut run = test_agent.agent.spawn(Conversation::default());
 
+    let id = ResponseId {
+      round: 1,
+      run: run.id(),
+    };
+
+    assert_eq!(run.recv().await, Some(AgentEvent::ResponseStarted(id)));
     assert_eq!(run.recv().await, Some(AgentEvent::Update(update)));
 
     let message = Message::Agent(
@@ -439,6 +482,12 @@ mod tests {
         conversation: vec![message.clone()].into(),
         entries: vec![RunEntry::Message(message)],
         outcome: RunOutcome::Cancelled,
+        responses: vec![ResponseResult {
+          finish_reason: None,
+          id,
+          outcome: ResponseOutcome::Interrupted,
+          usage: Usage::default(),
+        }],
         usage: Usage::default(),
       },
     );
@@ -518,6 +567,14 @@ mod tests {
 
     let mut events = test_agent.agent.spawn(vec![user].into());
 
+    let response = |round| ResponseId {
+      round,
+      run: events.id(),
+    };
+
+    let first = response(1);
+    let second = response(2);
+
     let mut received = Vec::new();
 
     while let Some(event) = events.recv().await {
@@ -534,10 +591,10 @@ mod tests {
       ..Default::default()
     };
 
-    let tool_result = Message::User(vec![UserMessageContent::ToolResult {
+    let tool_message = Message::User(vec![UserMessageContent::ToolResult {
       call: call.clone(),
       name: ToolName::new("foo").unwrap(),
-      result: tool_result,
+      result: tool_result.clone(),
     }]);
 
     let requests = test_agent.requests.lock().unwrap();
@@ -564,20 +621,41 @@ mod tests {
       vec![
         Message::User(vec![UserMessageContent::Text("foo".into())]),
         Message::Agent(message.clone()),
-        tool_result.clone(),
+        tool_message.clone(),
       ]
     );
 
     assert_eq!(
       received,
       [
+        AgentEvent::ResponseStarted(first),
         AgentEvent::Update(update("quux")),
-        AgentEvent::Usage(usage(2)),
+        AgentEvent::ResponseFinished(ResponseResult {
+          finish_reason: None,
+          id: first,
+          outcome: ResponseOutcome::Completed,
+          usage: usage(2),
+        }),
         AgentEvent::Message(Message::Agent(message)),
-        AgentEvent::ToolStarted(call),
-        AgentEvent::Message(tool_result),
+        AgentEvent::ToolStarted {
+          call: call.clone(),
+          name: ToolName::new("foo").unwrap(),
+          response: first
+        },
+        AgentEvent::ToolFinished {
+          call,
+          response: first,
+          result: tool_result
+        },
+        AgentEvent::Message(tool_message),
+        AgentEvent::ResponseStarted(second),
         AgentEvent::Update(update("bar")),
-        AgentEvent::Usage(usage(5)),
+        AgentEvent::ResponseFinished(ResponseResult {
+          finish_reason: None,
+          id: second,
+          outcome: ResponseOutcome::Completed,
+          usage: usage(3),
+        }),
         AgentEvent::Message(Message::Agent(complete)),
       ],
     );
