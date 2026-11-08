@@ -48,13 +48,18 @@ impl App {
     while !self.screen.should_quit() {
       if let Ok(event) = self.event_receiver.try_recv() {
         self.handle_event(event).await?;
-      } else if let Some((_, run)) = &mut self.agent_run
-        && let Some(event) = run.recv().now_or_never()
-      {
-        self.handle_agent_event(event).await?;
-      } else {
-        break;
+        continue;
       }
+
+      let Some((_, run)) = &mut self.agent_run else {
+        break;
+      };
+
+      let Some(event) = run.recv().now_or_never() else {
+        break;
+      };
+
+      self.handle_agent_event(event).await?;
     }
 
     Ok(())
