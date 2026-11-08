@@ -1,8 +1,8 @@
 use super::*;
 
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct CommandExecutor {
-  pub(crate) limits: ExecutionLimit,
+pub struct CommandExecutor {
+  pub limits: ExecutionLimit,
 }
 
 impl CommandExecutor {

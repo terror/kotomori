@@ -3328,13 +3328,12 @@ dependencies = [
  "futures-util",
  "indoc",
  "kotomori-core",
+ "kotomori-tools",
  "portable-pty",
- "process-wrap",
  "ratatui-core",
  "ratatui-textarea",
  "rig",
  "rusqlite",
- "schemars 1.2.1",
  "serde",
  "serde_json",
  "smallvec",
@@ -3363,6 +3362,19 @@ dependencies = [
  "futures-util",
  "serde",
  "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "kotomori-tools"
+version = "0.4.1"
+dependencies = [
+ "kotomori-core",
+ "process-wrap",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tokio",
 ]
 

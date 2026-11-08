@@ -1,9 +1,9 @@
 use super::*;
 
 #[derive(Clone, Debug)]
-pub(crate) struct CommandTool {
-  pub(crate) command_executor: CommandExecutor,
-  pub(crate) directory: PathBuf,
+pub struct CommandTool {
+  pub command_executor: CommandExecutor,
+  pub directory: PathBuf,
 }
 
 impl Tool for CommandTool {
