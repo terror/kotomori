@@ -5,7 +5,10 @@ use super::*;
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ToolOutcome {
+  Denied,
   #[default]
   Failure,
+  Interrupted,
+  Skipped,
   Success,
 }

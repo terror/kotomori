@@ -226,7 +226,7 @@ fn provider_malformed_tool_arguments_recovers() -> Result {
 
       │ foo
 
-      ● Failed running echo bar>foo
+      ● Skipped running echo bar>foo
         │ batch skipped: another tool call is invalid
 
       ● Failed running command {}
@@ -245,7 +245,7 @@ fn provider_malformed_tool_arguments_recovers() -> Result {
 
       │ foo
 
-      ● Failed running echo bar>foo
+      ● Skipped running echo bar>foo
         │ batch skipped: another tool call is invalid
 
       ● Failed running command {}

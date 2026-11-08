@@ -38,6 +38,7 @@ impl Agent {
       {
         ToolApproval::Approved => tool.future.await,
         ToolApproval::Denied => ToolResult {
+          outcome: ToolOutcome::Denied,
           stderr: Some("permission denied".into()),
           ..Default::default()
         },
@@ -168,11 +169,13 @@ impl Agent {
           Ok(tool) if !invalid => {
             self.execute(event_sender, &tool_call, tool).await?
           }
-          tool => ToolResult {
-            stderr: Some(match tool {
-              Ok(_) => "batch skipped: another tool call is invalid".into(),
-              Err(error) => format!("{error:#}"),
-            }),
+          Ok(_) => ToolResult {
+            outcome: ToolOutcome::Skipped,
+            stderr: Some("batch skipped: another tool call is invalid".into()),
+            ..Default::default()
+          },
+          Err(error) => ToolResult {
+            stderr: Some(format!("{error:#}")),
             ..Default::default()
           },
         };
@@ -336,6 +339,7 @@ mod tests {
     request.respond(ToolApproval::Denied);
 
     let tool_result = ToolResult {
+      outcome: ToolOutcome::Denied,
       stderr: Some("permission denied".into()),
       ..Default::default()
     };

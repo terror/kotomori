@@ -38,8 +38,11 @@ impl ToolInvocationComponent<'_> {
   fn title(&self, tense: ToolActionTense) -> String {
     let action = match tense {
       ToolActionTense::Completed => "Ran",
+      ToolActionTense::Denied => "Denied running",
       ToolActionTense::Failed => "Failed running",
+      ToolActionTense::Interrupted => "Interrupted running",
       ToolActionTense::Progressive => "Running",
+      ToolActionTense::Skipped => "Skipped running",
     };
 
     format!("{action} {}", Self::description(self.invocation))
@@ -48,11 +51,23 @@ impl ToolInvocationComponent<'_> {
 
 impl Component for ToolInvocationComponent<'_> {
   fn render(&self, width: u16) -> Vec<LineComponent> {
-    let (symbol, symbol_style, tense) = match self.result {
-      Some(result) if result.outcome == ToolOutcome::Failure => {
+    let (symbol, symbol_style, tense) = match self
+      .result
+      .map(|result| result.outcome)
+    {
+      Some(ToolOutcome::Denied) => ("●", Style::Muted, ToolActionTense::Denied),
+      Some(ToolOutcome::Failure) => {
         ("●", Style::Danger, ToolActionTense::Failed)
       }
-      Some(_) => ("●", Style::Success, ToolActionTense::Completed),
+      Some(ToolOutcome::Interrupted) => {
+        ("●", Style::Muted, ToolActionTense::Interrupted)
+      }
+      Some(ToolOutcome::Skipped) => {
+        ("●", Style::Muted, ToolActionTense::Skipped)
+      }
+      Some(ToolOutcome::Success) => {
+        ("●", Style::Success, ToolActionTense::Completed)
+      }
       None => ("●", Style::Accent, ToolActionTense::Progressive),
     };
 
