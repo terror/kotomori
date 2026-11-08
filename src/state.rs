@@ -13,8 +13,6 @@ pub(crate) struct State {
 
 impl State {
   fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
-    let usage = self.run.as_ref().and_then(Run::usage_summary);
-
     self
       .session
       .push_many(self.run.take().and_then(Run::finish));
@@ -22,8 +20,6 @@ impl State {
     self.session.interrupt_pending_calls();
 
     self.session.push_many(entry);
-
-    self.session.push_many(usage.map(TranscriptEntry::Notice));
   }
 
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
