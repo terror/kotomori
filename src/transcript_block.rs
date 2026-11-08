@@ -78,13 +78,15 @@ mod tests {
   fn tool_results() {
     #[track_caller]
     fn case(following: &[TranscriptEntry], result: Option<&ToolResult>) {
-      let invocation = ToolInvocation::new(
-        "foo",
-        CommandArguments {
-          command: "bar".into(),
-          cwd: None,
-        },
-      );
+      let invocation = ToolInvocation {
+        protocol: ToolRequest::new(
+          CallId::new("foo"),
+          ToolFunction {
+            arguments: serde_json::json!({"command": "bar"}),
+            name: ToolName::new("command").unwrap(),
+          },
+        ),
+      };
 
       let (content, expected) = (
         [AssistantContent::ToolCall(invocation.protocol.clone())],

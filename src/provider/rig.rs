@@ -340,7 +340,7 @@ mod tests {
       index,
     };
 
-    buffer.apply_many(&[
+    for update in [
       MessageUpdate::ReasoningDelta {
         delta: "foo".into(),
         index: 0,
@@ -352,7 +352,9 @@ mod tests {
         index: 0,
       },
       update(2, "qux"),
-    ]);
+    ] {
+      buffer.apply(update);
+    }
 
     assert_eq!(
       buffer.preview().cloned().collect::<Vec<_>>(),
@@ -394,9 +396,8 @@ mod tests {
       message
         .content
         .iter()
-        .map(Rig::encode_content)
-        .collect::<Result<Vec<_>>>()
-        .unwrap(),
+        .map(|content| Rig::encode_content(content).unwrap())
+        .collect::<Vec<_>>(),
       expected,
     );
   }
