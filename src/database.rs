@@ -19,6 +19,7 @@ impl Database {
     self.save_session(session, now)?;
 
     let session = Session {
+      conversation: session.conversation.clone(),
       title: session.title.clone(),
       transcript: Transcript::new(session.transcript.entries.clone()),
       ..Session::new(&session.settings, now)
@@ -76,7 +77,8 @@ impl Database {
          WHERE id = ?1",
         [id],
         |row| {
-          Ok(Session {
+          let mut session = Session {
+            conversation: Conversation::default(),
             created_at: row.get(1)?,
             id: Some(row.get(0)?),
             settings: Settings {
@@ -85,17 +87,24 @@ impl Database {
               ..settings.clone()
             },
             title: row.get(5)?,
-            transcript: serde_json::from_str(&row.get::<_, String>(6)?)
-              .map(Transcript::new)
-              .map_err(|error| {
-                rusqlite::Error::FromSqlConversionFailure(
-                  6,
-                  rusqlite::types::Type::Text,
-                  Box::new(error),
-                )
-              })?,
+            transcript: Transcript::default(),
             updated_at: row.get(2)?,
-          })
+          };
+
+          session.push_many(
+            serde_json::from_str::<Vec<TranscriptEntry>>(
+              &row.get::<_, String>(6)?,
+            )
+            .map_err(|error| {
+              rusqlite::Error::FromSqlConversionFailure(
+                6,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+              )
+            })?,
+          );
+
+          Ok(session)
         },
       )
       .with_context(|| format!("failed to load session `{id}`"))
@@ -272,6 +281,7 @@ mod tests {
       (Some(1), 0, timestamp),
     ] {
       let session = Session {
+        conversation: Conversation::default(),
         created_at,
         id,
         settings: Settings {
@@ -307,6 +317,7 @@ mod tests {
     let timestamp = u64::try_from(i64::MAX).unwrap();
 
     let session = Session {
+      conversation: Conversation::default(),
       created_at: timestamp,
       id: None,
       settings: Settings {
@@ -337,17 +348,18 @@ mod tests {
       session.settings,
     );
 
-    let session = Session {
+    let mut session = Session {
       id: Some(1),
       settings: Settings {
         model: "mock:bar".parse().unwrap(),
         ..session.settings
       },
-      transcript: Transcript::new(vec![TranscriptEntry::Message(
-        Message::User(vec![UserMessageContent::Text("foo".into())]),
-      )]),
       ..session
     };
+
+    session.push(TranscriptEntry::Message(Message::User(vec![
+      UserMessageContent::Text("foo".into()),
+    ])));
 
     assert_eq!(
       database.save_session(&session, timestamp).unwrap(),

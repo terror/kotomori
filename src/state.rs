@@ -13,11 +13,13 @@ pub(crate) struct State {
 
 impl State {
   fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
-    let transcript = &mut self.session.transcript;
+    self
+      .session
+      .push_many(self.run.take().and_then(Run::finish));
 
-    transcript.push_many(self.run.take().and_then(Run::finish));
-    transcript.interrupt_pending_calls();
-    transcript.push_many(entry);
+    self.session.interrupt_pending_calls();
+
+    self.session.push_many(entry);
   }
 
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
@@ -98,7 +100,7 @@ impl State {
       Command::Clear => {
         let interrupt_agent = self.run.take().is_some();
 
-        self.session.transcript.clear();
+        self.session.clear();
         self.composer.clear_history();
         self.queued_inputs.clear();
 
@@ -113,12 +115,12 @@ impl State {
           .run
           .as_ref()
           .and_then(|run| run.message.message().text())
-          .or_else(|| self.session.transcript.last_response());
+          .or_else(|| self.session.conversation.last_response());
 
         if let Some(response) = response {
           vec![Effect::CopyToClipboard(response)]
         } else {
-          self.session.transcript.push(TranscriptEntry::Notice(
+          self.session.push(TranscriptEntry::Notice(
             "No assistant response to copy.".into(),
           ));
 
@@ -138,7 +140,6 @@ impl State {
         if arguments.is_empty() {
           self
             .session
-            .transcript
             .push(TranscriptEntry::Notice("Usage: /rename <title>".into()));
 
           Vec::new()
@@ -146,12 +147,9 @@ impl State {
           let title =
             arguments.split_whitespace().collect::<Vec<_>>().join(" ");
 
-          self
-            .session
-            .transcript
-            .push(TranscriptEntry::Notice(format!(
-              "Session renamed to '{title}'."
-            )));
+          self.session.push(TranscriptEntry::Notice(format!(
+            "Session renamed to '{title}'."
+          )));
 
           self.session.title = Some(title);
 
@@ -187,10 +185,7 @@ impl State {
           AgentEvent::Message(message) => {
             run.reset_message();
 
-            self
-              .session
-              .transcript
-              .push(TranscriptEntry::Message(message));
+            self.session.push(TranscriptEntry::Message(message));
 
             return vec![Effect::SaveSession];
           }
@@ -207,12 +202,12 @@ impl State {
         }
       }
       Event::ClipboardCopied(result) => match result {
-        Ok(()) => self.session.transcript.push(TranscriptEntry::Notice(
+        Ok(()) => self.session.push(TranscriptEntry::Notice(
           "Copied last assistant response to clipboard.".into(),
         )),
-        Err(error) => self.session.transcript.push(TranscriptEntry::Error(
-          format!("failed to copy response to clipboard: {error}"),
-        )),
+        Err(error) => self.session.push(TranscriptEntry::Error(format!(
+          "failed to copy response to clipboard: {error}"
+        ))),
       },
       Event::Error(error) => {
         let effects = if self.run.is_some() {
@@ -234,14 +229,13 @@ impl State {
 
           self
             .session
-            .transcript
             .push(TranscriptEntry::Notice("Forked conversation.".into()));
 
           self.queued_inputs.clear();
         }
-        Err(error) => self.session.transcript.push(TranscriptEntry::Error(
-          format!("failed to fork session: {error}"),
-        )),
+        Err(error) => self.session.push(TranscriptEntry::Error(format!(
+          "failed to fork session: {error}"
+        ))),
       },
       Event::SessionSaved(result) => match result {
         Ok(saved) => {
@@ -249,9 +243,9 @@ impl State {
           self.session.title = saved.title;
           self.session.updated_at = saved.updated_at;
         }
-        Err(error) => self.session.transcript.push(TranscriptEntry::Error(
-          format!("failed to save session: {error}"),
-        )),
+        Err(error) => self.session.push(TranscriptEntry::Error(format!(
+          "failed to save session: {error}"
+        ))),
       },
       Event::Tick(elapsed) => {
         if let Some(run) = &mut self.run {
@@ -274,13 +268,12 @@ impl State {
   }
 
   pub(crate) fn new(mut session: Session) -> Self {
-    session.transcript.interrupt_pending_calls();
+    session.interrupt_pending_calls();
 
     let history = session
-      .transcript
-      .entries
+      .conversation
+      .messages()
       .iter()
-      .filter_map(TranscriptEntry::message)
       .filter_map(Message::user_content)
       .map(str::to_owned)
       .collect();
@@ -316,12 +309,11 @@ impl State {
   fn run(&mut self, input: String) -> Effect {
     self
       .session
-      .transcript
       .push(TranscriptEntry::Message(Message::User(vec![
         UserMessageContent::Text(input),
       ])));
 
-    let messages = self.session.transcript.messages();
+    let conversation = self.session.conversation.clone();
 
     let run_id = self.next_run_id;
 
@@ -332,7 +324,10 @@ impl State {
 
     self.run = Some(Run::new(run_id));
 
-    Effect::RunAgent { messages, run_id }
+    Effect::RunAgent {
+      conversation,
+      run_id,
+    }
   }
 
   fn run_next_queued(&mut self) -> Vec<Effect> {
@@ -360,7 +355,7 @@ impl State {
 
     if trimmed.starts_with('/') {
       if trimmed.len() > 1 {
-        self.session.transcript.push(TranscriptEntry::Notice(format!(
+        self.session.push(TranscriptEntry::Notice(format!(
           "Unrecognized command '{trimmed}'. Type \"/\" for a list of supported commands."
         )));
 
@@ -619,14 +614,14 @@ mod tests {
         .chain(once(Message::User(vec![UserMessageContent::Text(
           "foo".into(),
         )])))
-        .collect();
+        .collect::<Vec<_>>();
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
       [
         Effect::SaveSession,
         Effect::RunAgent {
-          messages,
+          conversation: messages.into(),
           run_id: 0
         }
       ]
@@ -650,9 +645,10 @@ mod tests {
       vec![
         Effect::SaveSession,
         Effect::RunAgent {
-          messages: vec![Message::User(vec![UserMessageContent::Text(
+          conversation: vec![Message::User(vec![UserMessageContent::Text(
             "foo".into()
-          )])],
+          )])]
+          .into(),
           run_id: 0,
         }
       ]
@@ -664,7 +660,7 @@ mod tests {
     });
 
     assert_eq!(
-      state.session.transcript.messages(),
+      state.session.conversation.messages(),
       [Message::User(vec![UserMessageContent::Text("foo".into())])]
     );
 
@@ -680,10 +676,11 @@ mod tests {
       vec![
         Effect::SaveSession,
         Effect::RunAgent {
-          messages: vec![
+          conversation: vec![
             Message::User(vec![UserMessageContent::Text("foo".into())]),
             Message::User(vec![UserMessageContent::Text("baz".into())]),
-          ],
+          ]
+          .into(),
           run_id: 1,
         }
       ]
@@ -766,7 +763,7 @@ mod tests {
 
     assert_eq!(state.run, None);
     assert_eq!(
-      state.session.transcript.messages(),
+      state.session.conversation.messages(),
       [Message::Agent(vec![AssistantContent::text("foo")].into())]
     );
   }
@@ -933,7 +930,7 @@ mod tests {
     });
 
     assert_eq!(
-      state.session.transcript.messages(),
+      state.session.conversation.messages(),
       [
         Message::User(vec![UserMessageContent::Text("old".into())]),
         Message::User(vec![UserMessageContent::Text("new".into())]),
@@ -955,7 +952,6 @@ mod tests {
 
     state
       .session
-      .transcript
       .push(TranscriptEntry::Message(Message::User(vec![
         UserMessageContent::Text("bar".into()),
       ])));
@@ -971,6 +967,10 @@ mod tests {
     assert_eq!(
       state.session,
       Session {
+        conversation: vec![Message::User(vec![UserMessageContent::Text(
+          "bar".into()
+        )])]
+        .into(),
         created_at: 1,
         id: Some(2),
         settings,
@@ -1084,7 +1084,7 @@ mod tests {
         [
           Effect::SaveSession,
           Effect::RunAgent {
-            messages: vec![
+            conversation: vec![
               Message::Agent(
                 vec![
                   AssistantContent::Reasoning(reasoning),
@@ -1093,7 +1093,8 @@ mod tests {
                 .into(),
               ),
               Message::User(vec![UserMessageContent::Text("qux".into())]),
-            ],
+            ]
+            .into(),
             run_id: 0,
           }
         ]

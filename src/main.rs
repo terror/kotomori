@@ -20,6 +20,7 @@ use {
   component::{LineComponent, ViewComponent},
   composer::Composer,
   config::Config,
+  conversation::Conversation,
   crossterm::{
     cursor::{Hide, MoveDown, MoveTo, MoveToColumn, MoveUp},
     event::{
@@ -182,6 +183,7 @@ mod command_executor;
 mod component;
 mod composer;
 mod config;
+mod conversation;
 mod database;
 mod dimensions;
 mod directory_display;

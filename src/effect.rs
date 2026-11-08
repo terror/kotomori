@@ -5,6 +5,9 @@ pub(crate) enum Effect {
   CopyToClipboard(String),
   ForkSession,
   InterruptAgent,
-  RunAgent { messages: Vec<Message>, run_id: u64 },
+  RunAgent {
+    conversation: Conversation,
+    run_id: u64,
+  },
   SaveSession,
 }
