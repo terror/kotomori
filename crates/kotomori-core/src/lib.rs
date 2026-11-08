@@ -35,8 +35,7 @@ pub use {
   reasoning_content::ReasoningContent, request::Request, text::Text,
   tool::Tool, tool_approval::ToolApproval, tool_call::ToolCall,
   tool_definition::ToolDefinition, tool_function::ToolFunction,
-  tool_invocation::ToolInvocation, tool_name::ToolName,
-  tool_outcome::ToolOutcome, tool_registry::ToolRegistry,
+  tool_name::ToolName, tool_outcome::ToolOutcome, tool_registry::ToolRegistry,
   tool_request::ToolRequest, tool_result::ToolResult,
   user_message_content::UserMessageContent,
 };
@@ -66,7 +65,6 @@ mod tool_approval;
 mod tool_call;
 mod tool_definition;
 mod tool_function;
-mod tool_invocation;
 mod tool_name;
 mod tool_outcome;
 mod tool_registry;

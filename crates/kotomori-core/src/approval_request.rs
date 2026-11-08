@@ -1,14 +1,14 @@
 use super::*;
 
 pub struct ApprovalRequest {
-  pub invocation: ToolInvocation,
+  pub invocation: ToolRequest,
   response_sender: oneshot::Sender<ToolApproval>,
 }
 
 impl ApprovalRequest {
   #[must_use]
   pub fn new(
-    invocation: ToolInvocation,
+    invocation: ToolRequest,
   ) -> (Self, oneshot::Receiver<ToolApproval>) {
     let (response_sender, response_receiver) = oneshot::channel();
 
