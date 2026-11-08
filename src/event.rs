@@ -7,6 +7,10 @@ pub(crate) enum Event {
     event: AgentEvent,
     run_id: u64,
   },
+  AgentCompleted {
+    result: Result<(), String>,
+    run_id: u64,
+  },
   AgentInterrupted {
     result: Result<(), String>,
     run_id: u64,

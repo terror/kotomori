@@ -71,19 +71,19 @@ impl App {
     let run_id = *run_id;
 
     let event = if let Some(event) = event {
-      event
+      Event::Agent { event, run_id }
     } else {
       let (_, run) = self.agent_run.take().unwrap();
 
-      let (_, result) = run.join().await;
+      let (_, result) = run.cancel_and_join().await;
 
-      match result {
-        Ok(()) => AgentEvent::Done,
-        Err(error) => AgentEvent::Error(format!("{error:#}")),
+      Event::AgentCompleted {
+        result: result.map_err(|error| format!("{error:#}")),
+        run_id,
       }
     };
 
-    self.handle_event(Event::Agent { event, run_id }).await
+    self.handle_event(event).await
   }
 
   async fn handle_effect(&mut self, effect: Effect) -> Vec<Event> {
@@ -177,6 +177,7 @@ impl App {
         }
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
         Event::Agent { .. }
+        | Event::AgentCompleted { .. }
         | Event::AgentInterrupted { .. }
         | Event::ClipboardCopied(_)
         | Event::SessionForked(_)
@@ -198,9 +199,7 @@ impl App {
       return Vec::new();
     };
 
-    run.cancel();
-
-    let (events, result) = run.join().await;
+    let (events, result) = run.cancel_and_join().await;
 
     events
       .into_iter()

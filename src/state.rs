@@ -203,13 +203,6 @@ impl State {
         };
 
         match event {
-          AgentEvent::Done => {
-            self.finish_run(None);
-
-            return once(Effect::SaveSession)
-              .chain(self.run_next_queued())
-              .collect();
-          }
           AgentEvent::Update(update) => {
             run.update(update);
           }
@@ -220,13 +213,6 @@ impl State {
 
             return vec![Effect::SaveSession];
           }
-          AgentEvent::Error(error) => {
-            self.finish_run(Some(TranscriptEntry::Error(error)));
-
-            return once(Effect::SaveSession)
-              .chain(self.run_next_queued())
-              .collect();
-          }
           AgentEvent::ToolApprovalRequest(request) => {
             run.approval = Some(request);
           }
@@ -234,6 +220,17 @@ impl State {
             run.usage = usage;
           }
         }
+      }
+      Event::AgentCompleted { result, run_id } => {
+        if self.run.as_ref().is_none_or(|run| run.id != run_id) {
+          return Vec::new();
+        }
+
+        self.finish_run(result.err().map(TranscriptEntry::Error));
+
+        return once(Effect::SaveSession)
+          .chain(self.run_next_queued())
+          .collect();
       }
       Event::AgentInterrupted { result, run_id } => {
         return self.finish_interruption(run_id, result);
@@ -456,13 +453,20 @@ mod tests {
           result: ToolResult::default(),
         },
       ])),
-      AgentEvent::Done,
     ] {
       assert_eq!(
         state.handle_event(Event::Agent { event, run_id: 0 }),
         Vec::new(),
       );
     }
+
+    assert_eq!(
+      state.handle_event(Event::AgentCompleted {
+        result: Ok(()),
+        run_id: 0,
+      }),
+      Vec::new(),
+    );
 
     assert_eq!(state.run, None);
     assert_eq!(state.session.transcript, []);
@@ -538,8 +542,8 @@ mod tests {
       ..Run::new(0)
     });
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Error("bar".into()),
+    state.handle_event(Event::AgentCompleted {
+      result: Err("bar".into()),
       run_id: 0,
     });
 
@@ -628,8 +632,8 @@ mod tests {
       });
     }
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
+    state.handle_event(Event::AgentCompleted {
+      result: Ok(()),
       run_id: 0,
     });
 
@@ -684,8 +688,8 @@ mod tests {
       ]
     );
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Error("bar".into()),
+    state.handle_event(Event::AgentCompleted {
+      result: Err("bar".into()),
       run_id: 0,
     });
 
@@ -786,8 +790,8 @@ mod tests {
     });
 
     assert_eq!(
-      state.handle_event(Event::Agent {
-        event: AgentEvent::Done,
+      state.handle_event(Event::AgentCompleted {
+        result: Ok(()),
         run_id: 0
       }),
       [Effect::SaveSession]
@@ -949,10 +953,12 @@ mod tests {
         },
       ])),
       AgentEvent::ToolApprovalRequest(request),
-      AgentEvent::Error("stale".into()),
-      AgentEvent::Done,
     ] {
       state.handle_event(Event::Agent { event, run_id: 0 });
+    }
+
+    for result in [Err("stale".into()), Ok(())] {
+      state.handle_event(Event::AgentCompleted { result, run_id: 0 });
     }
 
     assert_eq!(
@@ -975,8 +981,8 @@ mod tests {
       run_id: 1,
     });
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
+    state.handle_event(Event::AgentCompleted {
+      result: Ok(()),
       run_id: 1,
     });
 
@@ -1183,8 +1189,8 @@ mod tests {
     );
 
     case(
-      Event::Agent {
-        event: AgentEvent::Error("foo".into()),
+      Event::AgentCompleted {
+        result: Err("foo".into()),
         run_id: 0,
       },
       TranscriptEntry::Error("foo".into()),
