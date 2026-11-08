@@ -5,7 +5,7 @@ pub(crate) enum TranscriptBlock<'a> {
   Markdown(&'a str),
   Reasoning(Cow<'a, str>),
   Tool {
-    invocation: ToolInvocation,
+    invocation: &'a ToolRequest,
     result: Option<&'a ToolResult>,
   },
 }
@@ -42,9 +42,7 @@ impl<'a> TranscriptBlock<'a> {
       }
       AssistantContent::Text(text) => Some(Self::Markdown(&text.text)),
       AssistantContent::ToolCall(call) => Some(Self::Tool {
-        invocation: ToolInvocation {
-          protocol: call.clone(),
-        },
+        invocation: call,
         result: following
           .iter()
           .map_while(|entry| match entry {
@@ -78,19 +76,20 @@ mod tests {
   fn tool_results() {
     #[track_caller]
     fn case(following: &[TranscriptEntry], result: Option<&ToolResult>) {
-      let invocation = ToolInvocation {
-        protocol: ToolRequest::new(
-          CallId::new("foo"),
-          ToolFunction {
-            arguments: serde_json::json!({"command": "bar"}),
-            name: ToolName::new("command").unwrap(),
-          },
-        ),
-      };
+      let invocation = ToolRequest::new(
+        CallId::new("foo"),
+        ToolFunction {
+          arguments: serde_json::json!({"command": "bar"}),
+          name: ToolName::new("command").unwrap(),
+        },
+      );
 
       let (content, expected) = (
-        [AssistantContent::ToolCall(invocation.protocol.clone())],
-        [TranscriptBlock::Tool { invocation, result }],
+        [AssistantContent::ToolCall(invocation.clone())],
+        [TranscriptBlock::Tool {
+          invocation: &invocation,
+          result,
+        }],
       );
 
       assert_eq!(
@@ -172,15 +171,13 @@ mod tests {
     ];
 
     let expected = [TranscriptBlock::Tool {
-      invocation: ToolInvocation {
-        protocol: ToolRequest::new(
-          CallId::new("foo"),
-          ToolFunction {
-            arguments: serde_json::json!({"bar": "baz"}),
-            name: ToolName::new("command").unwrap(),
-          },
-        ),
-      },
+      invocation: &ToolRequest::new(
+        CallId::new("foo"),
+        ToolFunction {
+          arguments: serde_json::json!({"bar": "baz"}),
+          name: ToolName::new("command").unwrap(),
+        },
+      ),
       result: None,
     }];
 

@@ -289,15 +289,13 @@ mod tests {
 
   #[test]
   fn render_tool_entry_after_user() {
-    let invocation = ToolInvocation {
-      protocol: ToolRequest::new(
-        CallId::new("bar"),
-        ToolFunction {
-          arguments: serde_json::json!({"command": "rg --files"}),
-          name: ToolName::new("command").unwrap(),
-        },
-      ),
-    };
+    let invocation = ToolRequest::new(
+      CallId::new("bar"),
+      ToolFunction {
+        arguments: serde_json::json!({"command": "rg --files"}),
+        name: ToolName::new("command").unwrap(),
+      },
+    );
 
     let transcript = Transcript::new(vec![
       TranscriptEntry::Message(Message::User(vec![
@@ -308,12 +306,12 @@ mod tests {
         "baz".into(),
       )])),
       TranscriptEntry::Message(Message::Agent(
-        vec![AssistantContent::ToolCall(invocation.protocol.clone())].into(),
+        vec![AssistantContent::ToolCall(invocation.clone())].into(),
       )),
       TranscriptEntry::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          call: invocation.protocol.id.clone(),
-          name: invocation.protocol.function.name.clone(),
+          call: invocation.id.clone(),
+          name: invocation.function.name.clone(),
           result: ToolResult {
             outcome: ToolOutcome::Success,
             ..Default::default()
@@ -354,19 +352,16 @@ mod tests {
 
   #[test]
   fn render_tool_results_are_scoped_to_the_agent_message() {
-    let invocation = ToolInvocation {
-      protocol: ToolRequest::new(
-        CallId::new("foo"),
-        ToolFunction {
-          arguments: serde_json::json!({"command": "bar"}),
-          name: ToolName::new("command").unwrap(),
-        },
-      ),
-    };
-
-    let message = Message::Agent(
-      vec![AssistantContent::ToolCall(invocation.protocol)].into(),
+    let invocation = ToolRequest::new(
+      CallId::new("foo"),
+      ToolFunction {
+        arguments: serde_json::json!({"command": "bar"}),
+        name: ToolName::new("command").unwrap(),
+      },
     );
+
+    let message =
+      Message::Agent(vec![AssistantContent::ToolCall(invocation)].into());
 
     let transcript = Transcript::new(vec![
       TranscriptEntry::Message(message.clone()),

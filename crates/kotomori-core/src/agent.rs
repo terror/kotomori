@@ -12,7 +12,7 @@ impl Agent {
   async fn approval(
     &self,
     event_sender: &UnboundedSender<AgentEvent>,
-    tool_call: &ToolInvocation,
+    tool_call: &ToolRequest,
     policy: ApprovalPolicy,
   ) -> Result<ToolApproval> {
     if self.config.yolo || policy == ApprovalPolicy::None {
@@ -136,8 +136,8 @@ impl Agent {
         };
 
         let message = Message::User(vec![UserMessageContent::ToolResult {
-          call: tool_call.protocol.id,
-          name: tool_call.protocol.function.name,
+          call: tool_call.id,
+          name: tool_call.function.name,
           result,
         }]);
 

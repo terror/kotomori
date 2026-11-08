@@ -2,35 +2,33 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ToolInvocationComponent<'a> {
-  pub(crate) invocation: ToolInvocation,
+  pub(crate) invocation: &'a ToolRequest,
   pub(crate) result: Option<&'a ToolResult>,
 }
 
 impl ToolInvocationComponent<'_> {
   const OUTPUT_LIMIT: usize = 3;
 
-  fn command(invocation: &ToolInvocation) -> Option<CommandArguments> {
-    (invocation.protocol.function.name.as_str() == "command")
+  fn command(invocation: &ToolRequest) -> Option<CommandArguments> {
+    (invocation.function.name.as_str() == "command")
       .then(|| {
-        serde_json::from_value(invocation.protocol.function.arguments.clone())
-          .ok()
+        serde_json::from_value(invocation.function.arguments.clone()).ok()
       })
       .flatten()
   }
 
-  pub(crate) fn description(invocation: &ToolInvocation) -> String {
+  pub(crate) fn description(invocation: &ToolRequest) -> String {
     match Self::command(invocation) {
       Some(command) => command.command,
       None => format!(
         "{} {}",
-        invocation.protocol.function.name,
-        invocation.protocol.function.arguments
+        invocation.function.name, invocation.function.arguments
       ),
     }
   }
 
   fn details(&self) -> Vec<(&'static str, String)> {
-    Self::command(&self.invocation)
+    Self::command(self.invocation)
       .and_then(|command| command.cwd)
       .map(|cwd| ("cwd", cwd.display().to_string()))
       .into_iter()
@@ -44,7 +42,7 @@ impl ToolInvocationComponent<'_> {
       ToolActionTense::Progressive => "Running",
     };
 
-    format!("{action} {}", Self::description(&self.invocation))
+    format!("{action} {}", Self::description(self.invocation))
   }
 }
 
@@ -122,15 +120,13 @@ mod tests {
   fn renders_limited_non_empty_lines() {
     #[track_caller]
     fn case(output: &str, expected: &[LineComponent]) {
-      let invocation = ToolInvocation {
-        protocol: ToolRequest::new(
-          CallId::new("foo"),
-          ToolFunction {
-            arguments: serde_json::json!({"command": "bar"}),
-            name: ToolName::new("command").unwrap(),
-          },
-        ),
-      };
+      let invocation = ToolRequest::new(
+        CallId::new("foo"),
+        ToolFunction {
+          arguments: serde_json::json!({"command": "bar"}),
+          name: ToolName::new("command").unwrap(),
+        },
+      );
 
       let result = ToolResult {
         outcome: ToolOutcome::Success,
@@ -140,7 +136,7 @@ mod tests {
 
       assert_eq!(
         ToolInvocationComponent {
-          invocation,
+          invocation: &invocation,
           result: Some(&result)
         }
         .render(9),
@@ -192,15 +188,13 @@ mod tests {
 
   #[test]
   fn wraps_details_inside_gutter() {
-    let invocation = ToolInvocation {
-      protocol: ToolRequest::new(
-        CallId::new("foo"),
-        ToolFunction {
-          arguments: serde_json::json!({"command": "bar", "cwd": "foobar"}),
-          name: ToolName::new("command").unwrap(),
-        },
-      ),
-    };
+    let invocation = ToolRequest::new(
+      CallId::new("foo"),
+      ToolFunction {
+        arguments: serde_json::json!({"command": "bar", "cwd": "foobar"}),
+        name: ToolName::new("command").unwrap(),
+      },
+    );
 
     let result = ToolResult {
       outcome: ToolOutcome::Success,
@@ -209,7 +203,7 @@ mod tests {
 
     assert_eq!(
       ToolInvocationComponent {
-        invocation,
+        invocation: &invocation,
         result: Some(&result)
       }
       .render(10),

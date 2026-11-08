@@ -82,7 +82,7 @@ mod tests {
 
     let (invocation, _tool) = tools.prepare(protocol.clone()).unwrap();
 
-    assert_eq!(invocation, ToolInvocation { protocol });
+    assert_eq!(invocation, protocol);
   }
 
   #[tokio::test]

@@ -28,9 +28,7 @@ use process_wrap::tokio::JobObject;
 
 #[cfg(test)]
 use {
-  kotomori_core::{
-    CallId, ToolFunction, ToolInvocation, ToolName, ToolRegistry, ToolRequest,
-  },
+  kotomori_core::{CallId, ToolFunction, ToolName, ToolRegistry, ToolRequest},
   std::{fs, sync::Arc},
 };
 
