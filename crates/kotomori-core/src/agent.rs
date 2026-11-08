@@ -173,6 +173,30 @@ mod tests {
     responses: Mutex<VecDeque<TestResponse>>,
   }
 
+  impl Provider for TestProvider {
+    fn stream<'a>(
+      &'a self,
+      request: Request<'a>,
+      sink: &'a ProviderSink,
+    ) -> BoxFuture<'a, Result<AgentMessage>> {
+      Box::pin(async move {
+        assert_eq!(request.tools, [TestTool.definition()]);
+
+        self
+          .requests
+          .lock()
+          .unwrap()
+          .push(request.messages.to_vec());
+
+        let response = self.responses.lock().unwrap().pop_front().unwrap();
+
+        sink.update_many(response.updates)?;
+
+        Ok(response.message)
+      })
+    }
+  }
+
   #[derive(Debug, Default)]
   struct TestResponse {
     message: AgentMessage,
@@ -203,30 +227,6 @@ mod tests {
             ..Default::default()
           }
         }),
-      })
-    }
-  }
-
-  impl Provider for TestProvider {
-    fn stream<'a>(
-      &'a self,
-      request: Request<'a>,
-      sink: &'a ProviderSink,
-    ) -> BoxFuture<'a, Result<AgentMessage>> {
-      Box::pin(async move {
-        assert_eq!(request.tools, [TestTool.definition()]);
-
-        self
-          .requests
-          .lock()
-          .unwrap()
-          .push(request.messages.to_vec());
-
-        let response = self.responses.lock().unwrap().pop_front().unwrap();
-
-        sink.update_many(response.updates)?;
-
-        Ok(response.message)
       })
     }
   }
