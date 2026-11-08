@@ -31,7 +31,7 @@ use {
   effect::Effect,
   event::Event,
   frame::Frame,
-  futures_util::{StreamExt, future::BoxFuture},
+  futures_util::future::BoxFuture,
   history::History,
   history_navigation::HistoryNavigation,
   indoc::formatdoc,
@@ -43,6 +43,7 @@ use {
     ToolName, ToolOutcome, ToolRegistry, ToolRequest, ToolResult,
     UserMessageContent,
   },
+  kotomori_rig::{ChatGpt, GithubCopilot, Rig},
   kotomori_tools::{CommandArguments, CommandExecutor, CommandTool},
   loader::Loader,
   options::Options,
@@ -122,7 +123,7 @@ macro_rules! assert_matches {
 }
 
 #[cfg(test)]
-use {kotomori_core::ToolDefinition, temptree::temptree};
+use temptree::temptree;
 
 mod action;
 mod agent_activity;

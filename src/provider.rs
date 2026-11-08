@@ -1,21 +1,6 @@
-use {
-  super::*,
-  ::rig::{
-    client::env::EnvError,
-    providers::{
-      cohere::Cohere,
-      ollama::Ollama,
-      openai::{OpenAIConfig, wire::Dialect},
-      registry::ProviderRef,
-    },
-  },
-  rig::Rig,
-};
+use super::*;
 
-mod chatgpt;
-mod copilot;
 mod mock;
-mod rig;
 
 pub(crate) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
   let provider = match model.provider.as_str() {
@@ -30,26 +15,18 @@ pub(crate) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
   };
 
   match provider {
-    "chatgpt" | "chatgpt/openai" => chatgpt::build(model),
-    "cohere" => Ok(Rig::build(Cohere::from_env()?.completion(&model.name))),
-    "copilot" | "copilot/openai" => copilot::build(model),
-    "galadriel" => Ok(Rig::build(
-      OpenAIConfig::from_env_with(&Dialect::gateway(
-        "galadriel",
-        "https://api.galadriel.com/v1/verified",
-        "GALADRIEL_API_KEY",
-      ))?
-      .client()
-      .chat(&model.name),
-    )),
+    "chatgpt" | "chatgpt/openai" => ChatGpt::build(model),
+    "cohere" => Rig::cohere(&model.name),
+    "copilot" | "copilot/openai" => GithubCopilot::build(model),
+    "galadriel" => Rig::gateway(
+      &model.name,
+      "galadriel",
+      "https://api.galadriel.com/v1/verified",
+      "GALADRIEL_API_KEY",
+    ),
     "mock" => Ok(Arc::new(mock::Mock)),
-    "ollama" => Ok(Rig::build(Ollama::from_env()?.completion(&model.name))),
-    "openai" | "openai/openai" => Ok(Rig::build(
-      OpenAIConfig::from_env()?.client().chat(&model.name),
-    )),
-    provider => Ok(Rig::build(
-      ProviderRef::parse(&format!("{provider}:{}", model.name))?
-        .completion_model()?,
-    )),
+    "ollama" => Rig::ollama(&model.name),
+    "openai" | "openai/openai" => Rig::openai(&model.name),
+    provider => Rig::provider(provider, &model.name),
   }
 }
