@@ -417,7 +417,7 @@ mod tests {
       )),
       AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          call: CallId::from_wire("foo"),
+          call: CallId::new("foo"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult::default(),
         },
@@ -463,7 +463,7 @@ mod tests {
     state.handle_event(Event::Agent {
       event: AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          call: CallId::from_wire("foo"),
+          call: CallId::new("foo"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("bar".into()),
@@ -573,7 +573,7 @@ mod tests {
       ),
       Message::User(vec![
         UserMessageContent::ToolResult {
-          call: CallId::from_wire("bar"),
+          call: CallId::new("bar"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("foo".into()),
@@ -581,7 +581,7 @@ mod tests {
           },
         },
         UserMessageContent::ToolResult {
-          call: CallId::from_wire("foo"),
+          call: CallId::new("foo"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("bar".into()),
@@ -786,13 +786,20 @@ mod tests {
 
     let sink = ProviderSink { event_sender };
 
-    let reasoning = Reasoning::new_with_signature("foo", Some("bar".into()))
-      .with_id("baz".into())
-      .sealed("foo");
+    let reasoning = Reasoning {
+      content: vec![ReasoningContent::Text {
+        text: "foo".into(),
+        signature: Some("bar".into()),
+      }],
+      id: Some("baz".into()),
+      issuer: "foo".into(),
+    };
 
-    let encrypted = Reasoning::encrypted("qux")
-      .with_id("quux".into())
-      .sealed("foo");
+    let encrypted = Reasoning {
+      content: vec![ReasoningContent::Encrypted("qux".into())],
+      id: Some("quux".into()),
+      issuer: "foo".into(),
+    };
 
     for update in [
       MessageUpdate::ReasoningDelta {
@@ -889,7 +896,7 @@ mod tests {
       )),
       AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          call: CallId::from_wire("stale"),
+          call: CallId::new("stale"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("stale".into()),
@@ -1045,8 +1052,13 @@ mod tests {
 
       let mut state = State::new(Session::new(&settings, 0));
 
-      let reasoning =
-        Reasoning::new_with_signature("foo", Some("bar".into())).sealed("foo");
+      let reasoning = Reasoning::new(
+        "foo",
+        vec![ReasoningContent::Text {
+          text: "foo".into(),
+          signature: Some("bar".into()),
+        }],
+      );
 
       let mut run = Run::new(0);
 

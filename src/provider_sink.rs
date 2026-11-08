@@ -62,9 +62,13 @@ mod tests {
 
     let sink = ProviderSink { event_sender };
 
-    let reasoning = AssistantContent::Reasoning(
-      Reasoning::new_with_signature("bar", Some("baz".into())).sealed("qux"),
-    );
+    let reasoning = AssistantContent::Reasoning(Reasoning::new(
+      "qux",
+      vec![ReasoningContent::Text {
+        text: "bar".into(),
+        signature: Some("baz".into()),
+      }],
+    ));
 
     let message = AgentMessage {
       content: vec![

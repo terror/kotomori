@@ -25,43 +25,39 @@ pub(crate) trait Provider: fmt::Debug + Send + Sync {
   ) -> BoxFuture<'a, Result<AgentMessage>>;
 }
 
-impl TryFrom<Model> for Arc<dyn Provider> {
-  type Error = Error;
+pub(crate) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
+  let provider = match model.provider.as_str() {
+    "azure" => "azure.openai/openai",
+    "gemini" => "gcp.gemini/gemini",
+    "llamafile" => "llamacpp/openai",
+    "minimax" => "minimax/openai",
+    "moonshot" => "moonshot/openai",
+    "xiaomimimo" => "xiaomimimo/openai",
+    "zai" => "zai/openai",
+    provider => provider,
+  };
 
-  fn try_from(model: Model) -> Result<Self> {
-    let provider = match model.provider.as_str() {
-      "azure" => "azure.openai/openai",
-      "gemini" => "gcp.gemini/gemini",
-      "llamafile" => "llamacpp/openai",
-      "minimax" => "minimax/openai",
-      "moonshot" => "moonshot/openai",
-      "xiaomimimo" => "xiaomimimo/openai",
-      "zai" => "zai/openai",
-      provider => provider,
-    };
-
-    match provider {
-      "chatgpt" | "chatgpt/openai" => chatgpt::build(&model),
-      "cohere" => Ok(Rig::build(Cohere::from_env()?.completion(&model.name))),
-      "copilot" | "copilot/openai" => copilot::build(&model),
-      "galadriel" => Ok(Rig::build(
-        OpenAIConfig::from_env_with(&Dialect::gateway(
-          "galadriel",
-          "https://api.galadriel.com/v1/verified",
-          "GALADRIEL_API_KEY",
-        ))?
-        .client()
-        .chat(&model.name),
-      )),
-      "mock" => Ok(Arc::new(mock::Mock)),
-      "ollama" => Ok(Rig::build(Ollama::from_env()?.completion(&model.name))),
-      "openai" | "openai/openai" => Ok(Rig::build(
-        OpenAIConfig::from_env()?.client().chat(&model.name),
-      )),
-      provider => Ok(Rig::build(
-        ProviderRef::parse(&format!("{provider}:{}", model.name))?
-          .completion_model()?,
-      )),
-    }
+  match provider {
+    "chatgpt" | "chatgpt/openai" => chatgpt::build(model),
+    "cohere" => Ok(Rig::build(Cohere::from_env()?.completion(&model.name))),
+    "copilot" | "copilot/openai" => copilot::build(model),
+    "galadriel" => Ok(Rig::build(
+      OpenAIConfig::from_env_with(&Dialect::gateway(
+        "galadriel",
+        "https://api.galadriel.com/v1/verified",
+        "GALADRIEL_API_KEY",
+      ))?
+      .client()
+      .chat(&model.name),
+    )),
+    "mock" => Ok(Arc::new(mock::Mock)),
+    "ollama" => Ok(Rig::build(Ollama::from_env()?.completion(&model.name))),
+    "openai" | "openai/openai" => Ok(Rig::build(
+      OpenAIConfig::from_env()?.client().chat(&model.name),
+    )),
+    provider => Ok(Rig::build(
+      ProviderRef::parse(&format!("{provider}:{}", model.name))?
+        .completion_model()?,
+    )),
   }
 }

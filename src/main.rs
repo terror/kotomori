@@ -10,6 +10,8 @@ use {
   approval_policy::ApprovalPolicy,
   approval_request::ApprovalRequest,
   arguments::Arguments,
+  assistant_content::AssistantContent,
+  call_id::CallId,
   changed_range::ChangedRange,
   clap::{Args, Parser},
   clipboard::Clipboard,
@@ -58,22 +60,13 @@ use {
   provider::Provider,
   provider_sink::ProviderSink,
   ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
-  reasoning_ext::ReasoningExt,
+  reasoning::Reasoning,
+  reasoning_content::ReasoningContent,
   render_plan::RenderPlan,
   renderer::Renderer,
   request::Request,
   resume_picker::ResumePicker,
   resume_picker_action::ResumePickerAction,
-  rig::{
-    completion::{
-      AssistantContent, CompletionRequest, Message as RigMessage,
-      ToolDefinition,
-    },
-    message::{
-      CallId, Reasoning, ReasoningContent, Sealed, ToolFunction, ToolName,
-      ToolResultContent, UserContent,
-    },
-  },
   run::Run,
   rusqlite::{
     Connection, TransactionBehavior, params,
@@ -114,6 +107,7 @@ use {
   strum::{EnumIter, IntoEnumIterator},
   style::Style,
   subcommand::Subcommand,
+  text::Text,
   tokio::{
     io::{AsyncRead, AsyncReadExt},
     runtime::Runtime,
@@ -128,9 +122,13 @@ use {
   tool_action_tense::ToolActionTense,
   tool_approval::ToolApproval,
   tool_call::ToolCall,
+  tool_definition::ToolDefinition,
+  tool_function::ToolFunction,
   tool_invocation::ToolInvocation,
+  tool_name::ToolName,
   tool_outcome::ToolOutcome,
   tool_registry::ToolRegistry,
+  tool_request::ToolRequest,
   tool_result::ToolResult,
   transcript::Transcript,
   transcript_block::TranscriptBlock,
@@ -174,6 +172,8 @@ mod app;
 mod approval_policy;
 mod approval_request;
 mod arguments;
+mod assistant_content;
+mod call_id;
 mod changed_range;
 mod clipboard;
 mod command;
@@ -205,7 +205,8 @@ mod patch;
 mod path_ext;
 mod provider;
 mod provider_sink;
-mod reasoning_ext;
+mod reasoning;
+mod reasoning_content;
 mod render_plan;
 mod renderer;
 mod request;
@@ -224,13 +225,18 @@ mod state;
 mod str_ext;
 mod style;
 mod subcommand;
+mod text;
 mod tool;
 mod tool_action_tense;
 mod tool_approval;
 mod tool_call;
+mod tool_definition;
+mod tool_function;
 mod tool_invocation;
+mod tool_name;
 mod tool_outcome;
 mod tool_registry;
+mod tool_request;
 mod tool_result;
 mod transcript;
 mod transcript_block;
