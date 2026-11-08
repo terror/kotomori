@@ -1,10 +1,10 @@
 use super::*;
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct ExecutionLimit {
-  pub(crate) output_limit: usize,
-  pub(crate) timeout: Duration,
-  pub(crate) truncated_marker: &'static str,
+pub struct ExecutionLimit {
+  pub output_limit: usize,
+  pub timeout: Duration,
+  pub truncated_marker: &'static str,
 }
 
 impl Default for ExecutionLimit {

@@ -8,9 +8,6 @@ use {
   clap::{Args, Parser},
   clipboard::Clipboard,
   command::Command,
-  command_arguments::CommandArguments,
-  command_child::CommandChild,
-  command_executor::CommandExecutor,
   component::{LineComponent, ViewComponent},
   composer::Composer,
   config::Config,
@@ -33,25 +30,24 @@ use {
   duration_ext::DurationExt,
   effect::Effect,
   event::Event,
-  execution_limit::ExecutionLimit,
   frame::Frame,
   futures_util::{StreamExt, future::BoxFuture},
   history::History,
   history_navigation::HistoryNavigation,
   indoc::formatdoc,
   kotomori_core::{
-    Agent, AgentConfig, AgentEvent, AgentMessage, ApprovalPolicy,
-    ApprovalRequest, AssistantContent, CallId, Conversation, Message,
-    MessageBuffer, MessageDraft, MessageUpdate, Model, Provider, ProviderSink,
-    Reasoning, ReasoningContent, Request, Tool, ToolApproval, ToolCall,
-    ToolDefinition, ToolFunction, ToolInvocation, ToolName, ToolOutcome,
-    ToolRegistry, ToolRequest, ToolResult, UserMessageContent,
+    Agent, AgentConfig, AgentEvent, AgentMessage, ApprovalRequest,
+    AssistantContent, CallId, Conversation, Message, MessageBuffer,
+    MessageDraft, MessageUpdate, Model, Provider, ProviderSink, Reasoning,
+    ReasoningContent, Request, ToolApproval, ToolFunction, ToolInvocation,
+    ToolName, ToolOutcome, ToolRegistry, ToolRequest, ToolResult,
+    UserMessageContent,
   },
+  kotomori_tools::{CommandArguments, CommandExecutor, CommandTool},
   loader::Loader,
   options::Options,
   patch::Patch,
   path_ext::PathExt,
-  process_wrap::tokio::{ChildWrapper, CommandWrap, KillOnDrop},
   ratatui_textarea::{CursorMove, DataCursor, Input, Key, TextArea},
   render_plan::RenderPlan,
   renderer::Renderer,
@@ -63,12 +59,10 @@ use {
     types::{FromSql, FromSqlError, FromSqlResult, ValueRef},
   },
   saved_session::SavedSession,
-  schemars::JsonSchema,
   screen::Screen,
   scroll::Scroll,
   selection::Selection,
   serde::{Deserialize, Serialize},
-  serde_json::Value,
   session::Session,
   session_summary::SessionSummary,
   settings::Settings,
@@ -87,8 +81,7 @@ use {
     iter::once,
     ops::Range,
     path::{Component, Path, PathBuf},
-    process::{self, Stdio},
-    str,
+    process, str,
     sync::{Arc, LazyLock, OnceLock},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -98,12 +91,10 @@ use {
   style::Style,
   subcommand::Subcommand,
   tokio::{
-    io::{AsyncRead, AsyncReadExt},
     runtime::Runtime,
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    time::{interval, sleep, timeout},
+    time::{interval, sleep},
   },
-  tool::CommandTool,
   tool_action_tense::ToolActionTense,
   transcript::Transcript,
   transcript_block::TranscriptBlock,
@@ -114,10 +105,7 @@ use {
 };
 
 #[cfg(unix)]
-use {process_wrap::tokio::ProcessGroup, std::os::unix::fs::PermissionsExt};
-
-#[cfg(windows)]
-use process_wrap::tokio::JobObject;
+use std::os::unix::fs::PermissionsExt;
 
 #[cfg(test)]
 macro_rules! assert_matches {
@@ -134,7 +122,7 @@ macro_rules! assert_matches {
 }
 
 #[cfg(test)]
-use temptree::temptree;
+use {kotomori_core::ToolDefinition, temptree::temptree};
 
 mod action;
 mod agent_activity;
@@ -143,9 +131,6 @@ mod arguments;
 mod changed_range;
 mod clipboard;
 mod command;
-mod command_arguments;
-mod command_child;
-mod command_executor;
 mod component;
 mod composer;
 mod config;
@@ -156,7 +141,6 @@ mod directory_display;
 mod duration_ext;
 mod effect;
 mod event;
-mod execution_limit;
 mod frame;
 mod history;
 mod history_navigation;
@@ -182,7 +166,6 @@ mod state;
 mod str_ext;
 mod style;
 mod subcommand;
-mod tool;
 mod tool_action_tense;
 mod transcript;
 mod transcript_block;
@@ -191,7 +174,6 @@ mod write_ext;
 
 static FIRST_DRAW_STARTED_AT: OnceLock<Instant> = OnceLock::new();
 
-type AsyncCommand = tokio::process::Command;
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 
 fn now() -> Result<u64> {
