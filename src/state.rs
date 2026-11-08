@@ -3,7 +3,6 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct State {
   pub(crate) composer: Composer,
-  pub(crate) next_run_id: u64,
   pub(crate) queued_inputs: VecDeque<String>,
   pub(crate) reasoning_expanded: bool,
   pub(crate) run: Option<Run>,
@@ -30,19 +29,19 @@ impl State {
     match self.run.as_ref().and_then(|run| run.approval.as_ref()) {
       Some(_) => match action {
         Action::Edit(input) if input.key == Key::Char('y') => {
-          self.resolve_approval(ToolApproval::Approved);
+          return self.resolve_approval(ToolApproval::Approved);
         }
         Action::Edit(input) if input.key == Key::Char('Y') => {
-          self.resolve_approval(ToolApproval::Approved);
+          return self.resolve_approval(ToolApproval::Approved);
         }
         Action::Edit(input) if input.key == Key::Char('n') => {
-          self.resolve_approval(ToolApproval::Denied);
+          return self.resolve_approval(ToolApproval::Denied);
         }
         Action::Edit(input) if input.key == Key::Char('N') => {
-          self.resolve_approval(ToolApproval::Denied);
+          return self.resolve_approval(ToolApproval::Denied);
         }
         Action::Interrupt => {
-          self.resolve_approval(ToolApproval::Denied);
+          return self.resolve_approval(ToolApproval::Denied);
         }
         Action::ToggleReasoning => {
           self.reasoning_expanded = !self.reasoning_expanded;
@@ -86,6 +85,62 @@ impl State {
           self.reasoning_expanded = !self.reasoning_expanded;
         }
       },
+    }
+
+    Vec::new()
+  }
+
+  fn handle_agent_event(&mut self, event: RunEvent) -> Vec<Effect> {
+    let RunEvent { event, run_id } = event;
+
+    let Some(run) = self.run.as_mut().filter(|run| run.id == Some(run_id))
+    else {
+      return Vec::new();
+    };
+
+    match event {
+      AgentEvent::RunCompleted => {
+        self.finish_run(None);
+
+        return once(Effect::SaveSession)
+          .chain(self.run_next_queued())
+          .collect();
+      }
+      AgentEvent::MessagePreview { update, .. } => {
+        run.update(update);
+      }
+      AgentEvent::MessageCommitted { message, .. } => {
+        run.reset_message();
+
+        self.session.push(TranscriptEntry::Message(message));
+
+        return vec![Effect::SaveSession];
+      }
+      AgentEvent::RunFailed(error) => {
+        self.finish_run(Some(TranscriptEntry::Error(error)));
+
+        return once(Effect::SaveSession)
+          .chain(self.run_next_queued())
+          .collect();
+      }
+      AgentEvent::ApprovalRequested(request) if request.run_id == run_id => {
+        run.approval = Some(request);
+      }
+      AgentEvent::ApprovalResolved { tool_id, .. } => {
+        if run
+          .approval
+          .as_ref()
+          .is_some_and(|request| request.tool_id == tool_id)
+        {
+          run.approval = None;
+        }
+      }
+      AgentEvent::ApprovalRequested(_)
+      | AgentEvent::RunStarted
+      | AgentEvent::ToolCompleted { .. }
+      | AgentEvent::ToolDenied { .. }
+      | AgentEvent::ToolRequested { .. }
+      | AgentEvent::ToolStarted { .. } => {}
     }
 
     Vec::new()
@@ -166,41 +221,7 @@ impl State {
   pub(crate) fn handle_event(&mut self, event: Event) -> Vec<Effect> {
     match event {
       Event::Action(action) => return self.handle_action(action),
-      Event::Agent { event, run_id } => {
-        let Some(run) = self.run.as_mut().filter(|run| run.id == run_id) else {
-          return Vec::new();
-        };
-
-        match event {
-          AgentEvent::Done => {
-            self.finish_run(None);
-
-            return once(Effect::SaveSession)
-              .chain(self.run_next_queued())
-              .collect();
-          }
-          AgentEvent::Update(update) => {
-            run.update(update);
-          }
-          AgentEvent::Message(message) => {
-            run.reset_message();
-
-            self.session.push(TranscriptEntry::Message(message));
-
-            return vec![Effect::SaveSession];
-          }
-          AgentEvent::Error(error) => {
-            self.finish_run(Some(TranscriptEntry::Error(error)));
-
-            return once(Effect::SaveSession)
-              .chain(self.run_next_queued())
-              .collect();
-          }
-          AgentEvent::ToolApprovalRequest(request) => {
-            run.approval = Some(request);
-          }
-        }
-      }
+      Event::Agent(event) => return self.handle_agent_event(event),
       Event::ClipboardCopied(result) => match result {
         Ok(()) => self.session.push(TranscriptEntry::Notice(
           "Copied last assistant response to clipboard.".into(),
@@ -222,6 +243,11 @@ impl State {
           .into_iter()
           .chain(once(Effect::SaveSession))
           .collect();
+      }
+      Event::RunSpawned(run_id) => {
+        if let Some(run) = self.run.as_mut().filter(|run| run.id.is_none()) {
+          run.id = Some(run_id);
+        }
       }
       Event::SessionForked(result) => match result {
         Ok(session) => {
@@ -283,7 +309,6 @@ impl State {
         session.settings.prompt.as_deref().unwrap_or_default(),
         history,
       ),
-      next_run_id: 0,
       queued_inputs: VecDeque::new(),
       reasoning_expanded: false,
       run: None,
@@ -300,10 +325,14 @@ impl State {
     self.composer.clear();
   }
 
-  fn resolve_approval(&mut self, approval: ToolApproval) {
-    if let Some(run) = &mut self.run {
-      run.resolve_approval(approval);
-    }
+  fn resolve_approval(&mut self, approval: ToolApproval) -> Vec<Effect> {
+    self
+      .run
+      .as_mut()
+      .and_then(|run| run.resolve_approval(approval))
+      .map(Effect::RespondToApproval)
+      .into_iter()
+      .collect()
   }
 
   fn run(&mut self, input: String) -> Effect {
@@ -315,19 +344,9 @@ impl State {
 
     let conversation = self.session.conversation.clone();
 
-    let run_id = self.next_run_id;
+    self.run = Some(Run::new(None));
 
-    self.next_run_id = self
-      .next_run_id
-      .checked_add(1)
-      .expect("agent run ID overflow");
-
-    self.run = Some(Run::new(run_id));
-
-    Effect::RunAgent {
-      conversation,
-      run_id,
-    }
+    Effect::RunAgent { conversation }
   }
 
   fn run_next_queued(&mut self) -> Vec<Effect> {
@@ -414,20 +433,27 @@ mod tests {
     };
 
     for event in [
-      AgentEvent::Message(Message::Agent(
-        vec![AssistantContent::ToolCall(invocation.protocol)].into(),
-      )),
-      AgentEvent::Message(Message::User(vec![
-        UserMessageContent::ToolResult {
+      AgentEvent::MessageCommitted {
+        message_id: MessageId(0),
+        message: Message::Agent(
+          vec![AssistantContent::ToolCall(invocation.protocol)].into(),
+        ),
+      },
+      AgentEvent::MessageCommitted {
+        message_id: MessageId(0),
+        message: Message::User(vec![UserMessageContent::ToolResult {
           call: CallId::new("foo"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult::default(),
-        },
-      ])),
-      AgentEvent::Done,
+        }]),
+      },
+      AgentEvent::RunCompleted,
     ] {
       assert_eq!(
-        state.handle_event(Event::Agent { event, run_id: 0 }),
+        state.handle_event(Event::Agent(RunEvent {
+          event,
+          run_id: RunId(0)
+        })),
         Vec::new(),
       );
     }
@@ -436,8 +462,8 @@ mod tests {
     assert_eq!(state.session.transcript.entries, []);
   }
 
-  #[tokio::test]
-  async fn approval_terminal_agent_tool_result_drops_pending_request() {
+  #[test]
+  fn approval_terminal_agent_tool_result_drops_pending_request() {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
@@ -448,41 +474,46 @@ mod tests {
       0,
     ));
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      protocol: ToolRequest::new(
-        CallId::new("foo"),
-        ToolFunction {
-          arguments: serde_json::json!({"command": "bar"}),
-          name: ToolName::new("command").unwrap(),
-        },
-      ),
-    });
+    let request = ApprovalRequest {
+      invocation: ToolInvocation {
+        protocol: ToolRequest::new(
+          CallId::new("foo"),
+          ToolFunction {
+            arguments: serde_json::json!({"command": "bar"}),
+            name: ToolName::new("command").unwrap(),
+          },
+        ),
+      },
+      run_id: RunId(0),
+      tool_id: ToolId(0),
+    };
 
     state.run = Some(Run {
       approval: Some(request),
-      ..Run::new(0)
+      ..Run::new(Some(RunId(0)))
     });
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Message(Message::User(vec![
-        UserMessageContent::ToolResult {
+    state.handle_event(Event::Agent(RunEvent {
+      event: AgentEvent::MessageCommitted {
+        message_id: MessageId(0),
+        message: Message::User(vec![UserMessageContent::ToolResult {
           call: CallId::new("foo"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("bar".into()),
             ..Default::default()
           },
-        },
-      ])),
-      run_id: 0,
-    });
+        }]),
+      },
+      run_id: RunId(0),
+    }));
 
-    assert_eq!(state.run, Some(Run::new(0)));
-    assert!(response_receiver.await.is_err());
+    assert_eq!(state.run, Some(Run::new(Some(RunId(0)))));
+    assert_eq!(state.resolve_approval(ToolApproval::Approved), Vec::new());
   }
 
-  #[tokio::test]
-  async fn approval_terminal_error_drops_pending_request() {
+  #[test]
+  fn approval_terminal_error_drops_pending_request() {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
@@ -493,28 +524,32 @@ mod tests {
       0,
     ));
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolInvocation {
-      protocol: ToolRequest::new(
-        CallId::new("foo"),
-        ToolFunction {
-          arguments: serde_json::json!({"command": "bar"}),
-          name: ToolName::new("command").unwrap(),
-        },
-      ),
-    });
+    let request = ApprovalRequest {
+      invocation: ToolInvocation {
+        protocol: ToolRequest::new(
+          CallId::new("foo"),
+          ToolFunction {
+            arguments: serde_json::json!({"command": "bar"}),
+            name: ToolName::new("command").unwrap(),
+          },
+        ),
+      },
+      run_id: RunId(0),
+      tool_id: ToolId(0),
+    };
 
     state.run = Some(Run {
       approval: Some(request),
-      ..Run::new(0)
+      ..Run::new(Some(RunId(0)))
     });
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Error("bar".into()),
-      run_id: 0,
-    });
+    state.handle_event(Event::Agent(RunEvent {
+      event: AgentEvent::RunFailed("bar".into()),
+      run_id: RunId(0),
+    }));
 
     assert_eq!(state.run, None);
-    assert!(response_receiver.await.is_err());
+    assert_eq!(state.resolve_approval(ToolApproval::Approved), Vec::new());
   }
 
   #[test]
@@ -529,22 +564,26 @@ mod tests {
     let mut state = State::new(Session::new(&settings, 0));
 
     state.handle_event(Event::Action(Action::Submit));
+    state.handle_event(Event::RunSpawned(RunId(0)));
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text {
+    for update in [
+      MessageUpdate::Text {
         delta: "bar".into(),
         index: 0,
-      }),
-      run_id: 0,
-    });
-
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::ReasoningDelta {
+      },
+      MessageUpdate::ReasoningDelta {
         delta: "baz".into(),
         index: 1,
-      }),
-      run_id: 0,
-    });
+      },
+    ] {
+      state.handle_event(Event::Agent(RunEvent {
+        event: AgentEvent::MessagePreview {
+          message_id: MessageId(0),
+          update,
+        },
+        run_id: RunId(0),
+      }));
+    }
 
     let messages = vec![
       Message::Agent(
@@ -591,20 +630,21 @@ mod tests {
     ];
 
     for message in &messages {
-      state.handle_event(Event::Agent {
-        event: AgentEvent::Message(message.clone()),
-        run_id: 0,
-      });
+      state.handle_event(Event::Agent(RunEvent {
+        event: AgentEvent::MessageCommitted {
+          message_id: MessageId(0),
+          message: message.clone(),
+        },
+        run_id: RunId(0),
+      }));
     }
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
-      run_id: 0,
-    });
+    state.handle_event(Event::Agent(RunEvent {
+      event: AgentEvent::RunCompleted,
+      run_id: RunId(0),
+    }));
 
-    let session = state.session;
-
-    let mut state = State::new(session);
+    let mut state = State::new(state.session);
 
     let messages =
       once(Message::User(vec![UserMessageContent::Text("foo".into())]))
@@ -620,7 +660,6 @@ mod tests {
         Effect::SaveSession,
         Effect::RunAgent {
           conversation: messages.into(),
-          run_id: 0
         }
       ]
     );
@@ -647,15 +686,16 @@ mod tests {
             "foo".into()
           )])]
           .into(),
-          run_id: 0,
         }
       ]
     );
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Error("bar".into()),
-      run_id: 0,
-    });
+    state.handle_event(Event::RunSpawned(RunId(0)));
+
+    state.handle_event(Event::Agent(RunEvent {
+      event: AgentEvent::RunFailed("bar".into()),
+      run_id: RunId(0),
+    }));
 
     assert_eq!(
       state.session.conversation.messages(),
@@ -679,7 +719,6 @@ mod tests {
             Message::User(vec![UserMessageContent::Text("baz".into())]),
           ]
           .into(),
-          run_id: 1,
         }
       ]
     );
@@ -698,7 +737,7 @@ mod tests {
     ));
 
     state.run = Some({
-      let mut run = Run::new(0);
+      let mut run = Run::new(Some(RunId(0)));
       run.update(MessageUpdate::Text {
         delta: "foo".into(),
         index: 0,
@@ -716,7 +755,7 @@ mod tests {
     assert_eq!(
       state.run,
       Some({
-        let mut run = Run::new(0);
+        let mut run = Run::new(Some(RunId(0)));
         run.update(MessageUpdate::Text {
           delta: "foo".into(),
           index: 0,
@@ -743,7 +782,7 @@ mod tests {
     ));
 
     state.run = Some({
-      let mut run = Run::new(0);
+      let mut run = Run::new(Some(RunId(0)));
       run.update(MessageUpdate::Text {
         delta: "foo".into(),
         index: 0,
@@ -752,10 +791,10 @@ mod tests {
     });
 
     assert_eq!(
-      state.handle_event(Event::Agent {
-        event: AgentEvent::Done,
-        run_id: 0
-      }),
+      state.handle_event(Event::Agent(RunEvent {
+        event: AgentEvent::RunCompleted,
+        run_id: RunId(0)
+      })),
       [Effect::SaveSession]
     );
 
@@ -778,11 +817,11 @@ mod tests {
       0,
     ));
 
-    state.run = Some(Run::new(0));
+    state.run = Some(Run::new(Some(RunId(0))));
 
     let (event_sender, mut events) = mpsc::unbounded_channel();
 
-    let sink = ProviderSink::new(event_sender);
+    let sink = ProviderSink::new(event_sender, RunId(0), MessageId(0));
 
     let reasoning = Reasoning {
       content: vec![ReasoningContent::Text {
@@ -821,7 +860,7 @@ mod tests {
     }
 
     while let Ok(event) = events.try_recv() {
-      state.handle_event(Event::Agent { event, run_id: 0 });
+      state.handle_event(Event::Agent(event));
     }
 
     let content = vec![
@@ -843,8 +882,9 @@ mod tests {
     );
   }
 
-  #[tokio::test]
-  async fn stale_agent_events_do_not_mutate_new_run() {
+  #[allow(clippy::too_many_lines)]
+  #[test]
+  fn stale_agent_events_do_not_mutate_new_run() {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
@@ -856,6 +896,7 @@ mod tests {
     ));
 
     state.handle_event(Event::Action(Action::Submit));
+    state.handle_event(Event::RunSpawned(RunId(0)));
     state.handle_event(Event::Action(Action::Interrupt));
 
     for c in "new".chars() {
@@ -865,10 +906,21 @@ mod tests {
       })));
     }
 
-    assert_matches!(
-      state.handle_event(Event::Action(Action::Submit)).as_slice(),
-      [Effect::SaveSession, Effect::RunAgent { run_id: 1, .. }]
+    assert_eq!(
+      state.handle_event(Event::Action(Action::Submit)),
+      [
+        Effect::SaveSession,
+        Effect::RunAgent {
+          conversation: vec![
+            Message::User(vec![UserMessageContent::Text("old".into())]),
+            Message::User(vec![UserMessageContent::Text("new".into())]),
+          ]
+          .into(),
+        }
+      ]
     );
+
+    state.handle_event(Event::RunSpawned(RunId(1)));
 
     let invocation = ToolInvocation {
       protocol: ToolRequest::new(
@@ -880,61 +932,81 @@ mod tests {
       ),
     };
 
-    let (request, response_receiver) = ApprovalRequest::new(invocation.clone());
+    let request = ApprovalRequest {
+      invocation: invocation.clone(),
+      run_id: RunId(0),
+      tool_id: ToolId(0),
+    };
 
     for event in [
-      AgentEvent::Update(MessageUpdate::Text {
-        delta: "stale".into(),
-        index: 0,
-      }),
-      AgentEvent::Update(MessageUpdate::ReasoningDelta {
-        delta: "stale".into(),
-        index: 0,
-      }),
-      AgentEvent::Message(Message::Agent(
-        vec![AssistantContent::ToolCall(invocation.protocol)].into(),
-      )),
-      AgentEvent::Message(Message::User(vec![
-        UserMessageContent::ToolResult {
+      AgentEvent::MessagePreview {
+        message_id: MessageId(0),
+        update: MessageUpdate::Text {
+          delta: "stale".into(),
+          index: 0,
+        },
+      },
+      AgentEvent::MessagePreview {
+        message_id: MessageId(0),
+        update: MessageUpdate::ReasoningDelta {
+          delta: "stale".into(),
+          index: 0,
+        },
+      },
+      AgentEvent::MessageCommitted {
+        message_id: MessageId(0),
+        message: Message::Agent(
+          vec![AssistantContent::ToolCall(invocation.protocol)].into(),
+        ),
+      },
+      AgentEvent::MessageCommitted {
+        message_id: MessageId(0),
+        message: Message::User(vec![UserMessageContent::ToolResult {
           call: CallId::new("stale"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult {
             content: Some("stale".into()),
             ..Default::default()
           },
-        },
-      ])),
-      AgentEvent::ToolApprovalRequest(request),
-      AgentEvent::Error("stale".into()),
-      AgentEvent::Done,
+        }]),
+      },
+      AgentEvent::ApprovalRequested(request),
+      AgentEvent::RunFailed("stale".into()),
+      AgentEvent::RunCompleted,
     ] {
-      state.handle_event(Event::Agent { event, run_id: 0 });
+      assert_eq!(
+        state.handle_event(Event::Agent(RunEvent {
+          event,
+          run_id: RunId(0)
+        })),
+        Vec::new()
+      );
     }
 
-    assert_eq!(
-      response_receiver.await.unwrap_err().to_string(),
-      "channel closed"
-    );
+    assert_eq!(state.resolve_approval(ToolApproval::Approved), Vec::new());
 
     assert_eq!(
       state.run.as_ref().and_then(|run| run.approval.as_ref()),
       None
     );
 
-    assert_eq!(state.run, Some(Run::new(1)));
+    assert_eq!(state.run, Some(Run::new(Some(RunId(1)))));
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text {
-        delta: "current".into(),
-        index: 0,
-      }),
-      run_id: 1,
-    });
+    state.handle_event(Event::Agent(RunEvent {
+      event: AgentEvent::MessagePreview {
+        message_id: MessageId(0),
+        update: MessageUpdate::Text {
+          delta: "current".into(),
+          index: 0,
+        },
+      },
+      run_id: RunId(1),
+    }));
 
-    state.handle_event(Event::Agent {
-      event: AgentEvent::Done,
-      run_id: 1,
-    });
+    state.handle_event(Event::Agent(RunEvent {
+      event: AgentEvent::RunCompleted,
+      run_id: RunId(1),
+    }));
 
     assert_eq!(
       state.session.conversation.messages(),
@@ -1003,7 +1075,7 @@ mod tests {
       0,
     ));
 
-    state.run = Some(Run::new(0));
+    state.run = Some(Run::new(Some(RunId(0))));
 
     assert_eq!(
       state.handle_event(Event::Error("foo".into())),
@@ -1060,7 +1132,7 @@ mod tests {
         }],
       );
 
-      let mut run = Run::new(0);
+      let mut run = Run::new(Some(RunId(0)));
 
       run.update_many(&[
         MessageUpdate::Content {
@@ -1107,7 +1179,6 @@ mod tests {
               Message::User(vec![UserMessageContent::Text("qux".into())]),
             ]
             .into(),
-            run_id: 0,
           }
         ]
       );
@@ -1119,10 +1190,10 @@ mod tests {
     );
 
     case(
-      Event::Agent {
-        event: AgentEvent::Error("foo".into()),
-        run_id: 0,
-      },
+      Event::Agent(RunEvent {
+        event: AgentEvent::RunFailed("foo".into()),
+        run_id: RunId(0),
+      }),
       TranscriptEntry::Error("foo".into()),
     );
   }

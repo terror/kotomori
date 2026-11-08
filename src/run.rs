@@ -6,7 +6,7 @@ pub(crate) struct Run {
   pub(crate) approval: Option<ApprovalRequest>,
   pub(crate) elapsed: Duration,
   pub(crate) frame: usize,
-  pub(crate) id: u64,
+  pub(crate) id: Option<RunId>,
   pub(crate) message: MessageBuffer,
 }
 
@@ -23,7 +23,7 @@ impl Run {
     }
   }
 
-  pub(crate) fn new(id: u64) -> Self {
+  pub(crate) fn new(id: Option<RunId>) -> Self {
     Self {
       activity: AgentActivity::Waiting,
       approval: None,
@@ -40,12 +40,15 @@ impl Run {
     self.message = MessageBuffer::default();
   }
 
-  pub(crate) fn resolve_approval(&mut self, approval: ToolApproval) {
-    let Some(request) = self.approval.take() else {
-      return;
-    };
-
-    request.respond(approval);
+  pub(crate) fn resolve_approval(
+    &mut self,
+    approval: ToolApproval,
+  ) -> Option<ApprovalResponse> {
+    self.approval.take().map(|request| ApprovalResponse {
+      approval,
+      run_id: request.run_id,
+      tool_id: request.tool_id,
+    })
   }
 
   pub(crate) fn tick(&mut self, elapsed: Duration) {
@@ -96,7 +99,7 @@ mod tests {
     let mut run = Run {
       elapsed: Duration::from_secs(1),
       frame: 1,
-      ..Run::new(0)
+      ..Run::new(Some(RunId(0)))
     };
 
     run.update_many(&[
@@ -117,14 +120,14 @@ mod tests {
       Run {
         elapsed: Duration::from_secs(1),
         frame: 1,
-        ..Run::new(0)
+        ..Run::new(Some(RunId(0)))
       }
     );
   }
 
   #[test]
   fn tick_advances_elapsed_and_frame() {
-    let mut run = Run::new(0);
+    let mut run = Run::new(Some(RunId(0)));
 
     run.tick(Duration::from_secs(1));
 
@@ -133,7 +136,7 @@ mod tests {
       Run {
         elapsed: Duration::from_secs(1),
         frame: 1,
-        ..Run::new(0)
+        ..Run::new(Some(RunId(0)))
       }
     );
   }
@@ -143,7 +146,7 @@ mod tests {
     let mut run = Run {
       elapsed: Duration::MAX,
       frame: usize::MAX,
-      ..Run::new(0)
+      ..Run::new(Some(RunId(0)))
     };
 
     run.tick(Duration::from_secs(1));
@@ -152,7 +155,7 @@ mod tests {
       run,
       Run {
         elapsed: Duration::MAX,
-        ..Run::new(0)
+        ..Run::new(Some(RunId(0)))
       }
     );
   }

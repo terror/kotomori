@@ -37,11 +37,11 @@ use {
   indoc::formatdoc,
   kotomori_core::{
     Agent, AgentConfig, AgentEvent, AgentMessage, ApprovalRequest,
-    AssistantContent, CallId, Conversation, Message, MessageBuffer,
-    MessageDraft, MessageUpdate, Model, Provider, ProviderSink, Reasoning,
-    ReasoningContent, Request, ToolApproval, ToolFunction, ToolInvocation,
-    ToolName, ToolOutcome, ToolRegistry, ToolRequest, ToolResult,
-    UserMessageContent,
+    ApprovalResponse, AssistantContent, CallId, Conversation, Message,
+    MessageBuffer, MessageDraft, MessageUpdate, Model, Provider, ProviderSink,
+    Reasoning, ReasoningContent, Request, RunControl, RunEvent, RunId,
+    ToolApproval, ToolFunction, ToolInvocation, ToolName, ToolOutcome,
+    ToolRegistry, ToolRequest, ToolResult, UserMessageContent,
   },
   kotomori_rig::{ChatGpt, GithubCopilot, Rig},
   kotomori_tools::{CommandArguments, CommandExecutor, CommandTool},
@@ -123,7 +123,10 @@ macro_rules! assert_matches {
 }
 
 #[cfg(test)]
-use temptree::temptree;
+use {
+  kotomori_core::{MessageId, ToolId},
+  temptree::temptree,
+};
 
 mod action;
 mod agent_activity;

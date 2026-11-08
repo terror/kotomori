@@ -151,7 +151,7 @@ mod tests {
 
   #[test]
   fn render_active_activity_is_separated_from_user_entry() {
-    let run = Run::new(0);
+    let run = Run::new(Some(RunId(0)));
 
     let transcript =
       Transcript::new(vec![TranscriptEntry::Message(Message::User(vec![
@@ -185,7 +185,7 @@ mod tests {
     let mut run = Run {
       elapsed: Duration::from_secs(61),
       frame: 1,
-      ..Run::new(0)
+      ..Run::new(Some(RunId(0)))
     };
 
     for delta in ["foo\nbar", "\nbaz"] {
@@ -218,7 +218,7 @@ mod tests {
   fn render_markdown_in_active_draft_and_completed_messages() {
     #[track_caller]
     fn case(text: &str, span: Span) {
-      let mut run = Run::new(0);
+      let mut run = Run::new(Some(RunId(0)));
 
       run.update(MessageUpdate::Text {
         delta: text.into(),

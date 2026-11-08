@@ -7,6 +7,7 @@ static SYSTEM_PROMPT: LazyLock<String> =
 pub(crate) struct App {
   agent: Option<Agent>,
   clipboard: Clipboard,
+  control: Option<RunControl>,
   database: Database,
   event_receiver: UnboundedReceiver<Event>,
   event_sender: UnboundedSender<Event>,
@@ -77,19 +78,29 @@ impl App {
         if let Some(agent) = &mut self.agent {
           agent.interrupt();
         }
+
+        self.control = None;
       }
-      Effect::RunAgent {
-        conversation,
-        run_id,
-      } => {
+      Effect::RespondToApproval(response) => {
+        if let Some(control) = &self.control {
+          let _ = control.respond(response);
+        }
+      }
+      Effect::RunAgent { conversation } => {
         if let Some(agent) = &mut self.agent {
-          let mut events = agent.spawn(conversation);
+          let (control, mut events) = agent.spawn(conversation);
+
+          let run_id = control.run_id();
+
+          self.control = Some(control);
+
+          self.handle_event(Event::RunSpawned(run_id))?;
 
           let event_sender = self.event_sender.clone();
 
           tokio::spawn(async move {
             while let Some(event) = events.recv().await {
-              if event_sender.send(Event::Agent { event, run_id }).is_err() {
+              if event_sender.send(Event::Agent(event)).is_err() {
                 break;
               }
             }
@@ -121,6 +132,19 @@ impl App {
   }
 
   fn handle_event(&mut self, event: Event) -> Result {
+    if let Event::Agent(event) = &event
+      && matches!(
+        event.event,
+        AgentEvent::RunCompleted | AgentEvent::RunFailed(_)
+      )
+      && self
+        .control
+        .as_ref()
+        .is_some_and(|control| control.run_id() == event.run_id)
+    {
+      self.control = None;
+    }
+
     match &mut self.screen {
       Screen::Quit => {}
       Screen::Resume(picker) => match event {
@@ -135,8 +159,9 @@ impl App {
           }
         }
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
-        Event::Agent { .. }
+        Event::Agent(_)
         | Event::ClipboardCopied(_)
+        | Event::RunSpawned(_)
         | Event::SessionForked(_)
         | Event::SessionSaved(_)
         | Event::Tick(_) => {}
@@ -190,6 +215,7 @@ impl App {
     Ok(Self {
       agent: Self::agent(&screen)?,
       clipboard: Clipboard::default(),
+      control: None,
       database,
       event_receiver,
       event_sender,
@@ -249,6 +275,8 @@ impl App {
 
   pub(crate) fn set_screen(&mut self, screen: Screen) -> Result {
     self.agent = Self::agent(&screen)?;
+
+    self.control = None;
 
     self.screen = screen;
 

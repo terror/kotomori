@@ -9,21 +9,58 @@ pub struct Agent {
 }
 
 impl Agent {
-  async fn approval(
+  async fn execute_tool(
     &self,
-    event_sender: &UnboundedSender<AgentEvent>,
-    tool_call: &ToolInvocation,
-    policy: ApprovalPolicy,
-  ) -> Result<ToolApproval> {
-    if self.config.yolo || policy == ApprovalPolicy::None {
-      return Ok(ToolApproval::Approved);
-    }
+    run: &mut RunContext,
+    conversation: &mut Conversation,
+    tool_id: ToolId,
+    invocation: ToolInvocation,
+    tool: ToolCall,
+  ) -> Result {
+    let approval = if self.config.yolo || tool.approval == ApprovalPolicy::None
+    {
+      ToolApproval::Approved
+    } else {
+      run
+        .approval(ApprovalRequest {
+          invocation: invocation.clone(),
+          run_id: run.run_id,
+          tool_id,
+        })
+        .await?
+    };
 
-    let (request, response_receiver) = ApprovalRequest::new(tool_call.clone());
+    let result = match approval {
+      ToolApproval::Approved => {
+        run.send(AgentEvent::ToolStarted { tool_id })?;
+        tool.future.await
+      }
+      ToolApproval::Denied => ToolResult {
+        stderr: Some("permission denied".into()),
+        ..Default::default()
+      },
+    };
 
-    event_sender.send(AgentEvent::ToolApprovalRequest(request))?;
+    let message_id = run.commit(
+      conversation,
+      Message::User(vec![UserMessageContent::ToolResult {
+        call: invocation.protocol.id,
+        name: invocation.protocol.function.name,
+        result,
+      }]),
+      None,
+    )?;
 
-    Ok(response_receiver.await.unwrap_or(ToolApproval::Denied))
+    run.send(match approval {
+      ToolApproval::Approved => AgentEvent::ToolCompleted {
+        tool_id,
+        message_id,
+      },
+      ToolApproval::Denied => AgentEvent::ToolDenied {
+        tool_id,
+        message_id,
+      },
+    })
   }
 
   pub fn interrupt(&mut self) {
@@ -48,10 +85,14 @@ impl Agent {
   pub fn spawn(
     &mut self,
     conversation: Conversation,
-  ) -> UnboundedReceiver<AgentEvent> {
+  ) -> (RunControl, UnboundedReceiver<RunEvent>) {
     self.interrupt();
 
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
+
+    let control = RunControl::new();
+
+    let mut run = RunContext::new(&control, event_sender);
 
     let agent = Self {
       config: self.config.clone(),
@@ -61,29 +102,42 @@ impl Agent {
     };
 
     self.task = Some(tokio::spawn(async move {
-      if let Err(error) = agent.stream(&event_sender, conversation).await {
-        let _ = event_sender.send(AgentEvent::Error(error.to_string()));
+      let result = async {
+        run.send(AgentEvent::RunStarted)?;
+        agent.stream(&mut run, conversation).await
       }
+      .await;
+
+      let _ = run.send(match result {
+        Ok(()) => AgentEvent::RunCompleted,
+        Err(error) => AgentEvent::RunFailed(error.to_string()),
+      });
     }));
 
-    event_receiver
+    (control, event_receiver)
   }
 
   async fn stream(
     &self,
-    event_sender: &UnboundedSender<AgentEvent>,
+    run: &mut RunContext,
     mut conversation: Conversation,
   ) -> Result {
     let tools = self.config.tools.definitions();
 
     for message in conversation.interrupt_pending_calls() {
-      event_sender.send(AgentEvent::Message(message))?;
+      let message_id = run.message_id()?;
+
+      run.send(AgentEvent::MessageCommitted {
+        message_id,
+        message,
+      })?;
     }
 
     loop {
-      let sink = ProviderSink {
-        event_sender: event_sender.clone(),
-      };
+      let message_id = run.message_id()?;
+
+      let sink =
+        ProviderSink::new(run.event_sender.clone(), run.run_id, message_id);
 
       let request = Request {
         messages: conversation.messages(),
@@ -109,49 +163,37 @@ impl Agent {
         })
         .collect::<Result<Vec<_>>>()?;
 
-      let message = Message::Agent(message);
-
-      for message in conversation
-        .push(message.clone())
-        .into_iter()
-        .chain(once(message))
-      {
-        event_sender.send(AgentEvent::Message(message))?;
-      }
+      run.commit(
+        &mut conversation,
+        Message::Agent(message),
+        Some(message_id),
+      )?;
 
       if tool_calls.is_empty() {
         break;
       }
 
-      for (tool_call, tool) in tool_calls {
-        let result = match self
-          .approval(event_sender, &tool_call, tool.approval)
-          .await?
-        {
-          ToolApproval::Approved => tool.future.await,
-          ToolApproval::Denied => ToolResult {
-            stderr: Some("permission denied".into()),
-            ..Default::default()
-          },
-        };
+      let tool_calls = tool_calls
+        .into_iter()
+        .map(|(invocation, tool)| {
+          let tool_id = run.tool_id()?;
 
-        let message = Message::User(vec![UserMessageContent::ToolResult {
-          call: tool_call.protocol.id,
-          name: tool_call.protocol.function.name,
-          result,
-        }]);
+          run.send(AgentEvent::ToolRequested {
+            tool_id,
+            message_id,
+            invocation: invocation.clone(),
+          })?;
 
-        for message in conversation
-          .push(message.clone())
-          .into_iter()
-          .chain(once(message))
-        {
-          event_sender.send(AgentEvent::Message(message))?;
-        }
+          Ok((tool_id, invocation, tool))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+      for (tool_id, invocation, tool) in tool_calls {
+        self
+          .execute_tool(run, &mut conversation, tool_id, invocation, tool)
+          .await?;
       }
     }
-
-    event_sender.send(AgentEvent::Done)?;
 
     Ok(())
   }
@@ -237,6 +279,37 @@ mod tests {
   }
 
   impl TestAgent {
+    async fn assert_events(
+      events: &mut UnboundedReceiver<RunEvent>,
+      run_id: RunId,
+      expected: impl IntoIterator<Item = AgentEvent>,
+    ) {
+      for event in expected {
+        let event = RunEvent { event, run_id };
+
+        assert_eq!(events.recv().await.unwrap(), event);
+        assert_eq!(
+          serde_json::from_str::<RunEvent>(
+            &serde_json::to_string(&event).unwrap()
+          )
+          .unwrap(),
+          event,
+        );
+      }
+    }
+
+    fn assert_requests(&self, expected: &[Vec<Message>]) {
+      let requests = self.requests.lock().unwrap();
+
+      assert_eq!(
+        serde_json::from_str::<Vec<Vec<Message>>>(
+          &serde_json::to_string(&*requests).unwrap(),
+        )
+        .unwrap(),
+        expected,
+      );
+    }
+
     fn new(responses: Vec<TestResponse>, yolo: bool) -> Self {
       let requests = Arc::new(Mutex::new(Vec::new()));
 
@@ -263,85 +336,142 @@ mod tests {
 
   #[tokio::test]
   async fn approvals_can_be_denied() {
-    let tool_call = AssistantContent::tool_call(
-      "foo",
-      ToolName::new("foo").unwrap(),
-      json!("bar"),
-    );
+    for respond in [true, false] {
+      let invocation = ToolInvocation {
+        protocol: ToolRequest::new(
+          CallId::new("foo"),
+          ToolFunction {
+            arguments: json!("bar"),
+            name: ToolName::new("foo").unwrap(),
+          },
+        ),
+      };
 
-    let TestAgent {
-      mut agent,
-      requests,
-    } = TestAgent::new(
-      vec![
-        TestResponse {
-          message: vec![tool_call.clone()].into(),
+      let tool_call = AssistantContent::ToolCall(invocation.protocol.clone());
+
+      let mut test_agent = TestAgent::new(
+        vec![
+          TestResponse {
+            message: vec![tool_call.clone()].into(),
+            ..Default::default()
+          },
+          TestResponse::default(),
+        ],
+        false,
+      );
+
+      let user = Message::User(vec![UserMessageContent::Text("foo".into())]);
+
+      let (control, mut events) =
+        test_agent.agent.spawn(vec![user.clone()].into());
+
+      let run_id = control.run_id();
+
+      TestAgent::assert_events(
+        &mut events,
+        run_id,
+        [
+          AgentEvent::RunStarted,
+          AgentEvent::MessageCommitted {
+            message_id: MessageId(0),
+            message: Message::Agent(vec![tool_call.clone()].into()),
+          },
+          AgentEvent::ToolRequested {
+            tool_id: ToolId(0),
+            message_id: MessageId(0),
+            invocation: invocation.clone(),
+          },
+          AgentEvent::ApprovalRequested(ApprovalRequest {
+            invocation,
+            run_id,
+            tool_id: ToolId(0),
+          }),
+        ],
+      )
+      .await;
+
+      let response = ApprovalResponse {
+        approval: ToolApproval::Denied,
+        run_id,
+        tool_id: ToolId(0),
+      };
+
+      assert!(!control.respond(ApprovalResponse {
+        run_id: RunId(run_id.0 + 1),
+        ..response
+      }));
+      assert!(!control.respond(ApprovalResponse {
+        tool_id: ToolId(1),
+        ..response
+      }));
+      if respond {
+        assert!(control.respond(response));
+        assert!(!control.respond(response));
+      } else {
+        drop(control);
+      }
+
+      let tool_result = Message::User(vec![UserMessageContent::ToolResult {
+        call: CallId::new("foo"),
+        name: ToolName::new("foo").unwrap(),
+        result: ToolResult {
+          stderr: Some("permission denied".into()),
           ..Default::default()
         },
-        TestResponse::default(),
-      ],
-      false,
-    );
+      }]);
 
-    let mut events = agent.spawn(
-      vec![Message::User(vec![UserMessageContent::Text("foo".into())])].into(),
-    );
-
-    assert_eq!(
-      events.recv().await.unwrap(),
-      AgentEvent::Message(Message::Agent(vec![tool_call.clone()].into()))
-    );
-
-    let request = match events.recv().await.unwrap() {
-      AgentEvent::ToolApprovalRequest(request) => request,
-      event => panic!("expected approval request, got {event:?}"),
-    };
-
-    request.respond(ToolApproval::Denied);
-
-    let tool_result = ToolResult {
-      stderr: Some("permission denied".into()),
-      ..Default::default()
-    };
-
-    assert_eq!(
-      events.recv().await.unwrap(),
-      AgentEvent::Message(Message::User(vec![
-        UserMessageContent::ToolResult {
-          call: CallId::new("foo"),
-          name: ToolName::new("foo").unwrap(),
-          result: tool_result.clone(),
-        }
-      ])),
-    );
-
-    assert_eq!(events.recv().await.unwrap(), AgentEvent::Done);
-
-    let requests = requests.lock().unwrap();
-
-    assert_eq!(
-      *requests,
-      [
-        vec![Message::User(vec![UserMessageContent::Text("foo".into())])],
-        vec![
-          Message::User(vec![UserMessageContent::Text("foo".into())]),
-          Message::Agent(vec![tool_call].into()),
-          Message::User(vec![UserMessageContent::ToolResult {
-            call: CallId::new("foo"),
-            name: ToolName::new("foo").unwrap(),
-            result: tool_result.clone(),
-          }]),
+      TestAgent::assert_events(
+        &mut events,
+        run_id,
+        [
+          AgentEvent::ApprovalResolved {
+            tool_id: ToolId(0),
+            approval: ToolApproval::Denied,
+          },
+          AgentEvent::MessageCommitted {
+            message_id: MessageId(1),
+            message: tool_result.clone(),
+          },
+          AgentEvent::ToolDenied {
+            tool_id: ToolId(0),
+            message_id: MessageId(1),
+          },
+          AgentEvent::RunCompleted,
         ],
-      ],
-    );
+      )
+      .await;
+
+      assert_eq!(events.recv().await, None);
+
+      test_agent.assert_requests(&[
+        vec![user.clone()],
+        vec![user, Message::Agent(vec![tool_call].into()), tool_result],
+      ]);
+    }
   }
 
+  #[allow(clippy::too_many_lines)]
   #[tokio::test]
   async fn loops_until_provider_returns_no_tool_calls() {
     let reasoning = Reasoning {
       content: vec![ReasoningContent::Encrypted("foo".into())],
       id: Some("bar".into()),
       issuer: "mock".into(),
+    };
+
+    let invocation = ToolInvocation {
+      protocol: ToolRequest {
+        additional_params: Some(json!({"foo": "bar"})),
+        function: ToolFunction {
+          arguments: json!("bar"),
+          name: ToolName::new("foo").unwrap(),
+        },
+        id: CallId::Provider {
+          call_id: "qux".into(),
+          item_id: Some("baz".into()),
+        },
+        signature: Some("quux".into()),
+      },
     };
 
     let message = AgentMessage {
@@ -356,18 +486,7 @@ mod tests {
           issuer: "mock".into(),
         }),
         AssistantContent::Reasoning(reasoning),
-        AssistantContent::ToolCall(ToolRequest {
-          additional_params: Some(json!({"foo": "bar"})),
-          function: ToolFunction {
-            arguments: json!("bar"),
-            name: ToolName::new("foo").unwrap(),
-          },
-          id: CallId::Provider {
-            call_id: "qux".into(),
-            item_id: Some("baz".into()),
-          },
-          signature: Some("quux".into()),
-        }),
+        AssistantContent::ToolCall(invocation.protocol.clone()),
         AssistantContent::text("baz"),
       ],
       id: Some("quuz".into()),
@@ -396,55 +515,64 @@ mod tests {
 
     let user = Message::User(vec![UserMessageContent::Text("foo".into())]);
 
-    let mut events = test_agent.agent.spawn(vec![user].into());
-
-    let mut received = Vec::new();
-
-    while events.recv_many(&mut received, usize::MAX).await != 0 {}
-
-    let result = ToolResult {
-      content: Some("bar".into()),
-      outcome: ToolOutcome::Success,
-      ..Default::default()
-    };
+    let (control, mut events) =
+      test_agent.agent.spawn(vec![user.clone()].into());
 
     let tool_result = Message::User(vec![UserMessageContent::ToolResult {
-      call: CallId::Provider {
-        call_id: "qux".into(),
-        item_id: Some("baz".into()),
+      call: invocation.protocol.id.clone(),
+      name: invocation.protocol.function.name.clone(),
+      result: ToolResult {
+        content: Some("bar".into()),
+        outcome: ToolOutcome::Success,
+        ..Default::default()
       },
-      name: ToolName::new("foo").unwrap(),
-      result: result.clone(),
     }]);
 
-    let requests = test_agent.requests.lock().unwrap();
-
-    assert_eq!(requests.len(), 2);
-
-    let messages = serde_json::from_str::<Vec<Message>>(
-      &serde_json::to_string(&requests[1]).unwrap(),
-    )
-    .unwrap();
-
-    assert_eq!(
-      messages,
-      vec![
-        Message::User(vec![UserMessageContent::Text("foo".into())]),
-        Message::Agent(message.clone()),
-        tool_result.clone(),
-      ]
-    );
-
-    assert_eq!(
-      received,
+    TestAgent::assert_events(
+      &mut events,
+      control.run_id(),
       [
-        AgentEvent::Update(update("quux")),
-        AgentEvent::Message(Message::Agent(message)),
-        AgentEvent::Message(tool_result),
-        AgentEvent::Update(update("bar")),
-        AgentEvent::Message(Message::Agent(complete)),
-        AgentEvent::Done,
+        AgentEvent::RunStarted,
+        AgentEvent::MessagePreview {
+          message_id: MessageId(0),
+          update: update("quux"),
+        },
+        AgentEvent::MessageCommitted {
+          message_id: MessageId(0),
+          message: Message::Agent(message.clone()),
+        },
+        AgentEvent::ToolRequested {
+          tool_id: ToolId(0),
+          message_id: MessageId(0),
+          invocation,
+        },
+        AgentEvent::ToolStarted { tool_id: ToolId(0) },
+        AgentEvent::MessageCommitted {
+          message_id: MessageId(1),
+          message: tool_result.clone(),
+        },
+        AgentEvent::ToolCompleted {
+          tool_id: ToolId(0),
+          message_id: MessageId(1),
+        },
+        AgentEvent::MessagePreview {
+          message_id: MessageId(2),
+          update: update("bar"),
+        },
+        AgentEvent::MessageCommitted {
+          message_id: MessageId(2),
+          message: Message::Agent(complete),
+        },
+        AgentEvent::RunCompleted,
       ],
-    );
+    )
+    .await;
+
+    assert_eq!(events.recv().await, None);
+
+    test_agent.assert_requests(&[
+      vec![user.clone()],
+      vec![user, Message::Agent(message), tool_result],
+    ]);
   }
 }

@@ -2,13 +2,23 @@ use super::*;
 
 #[derive(Debug)]
 pub struct ProviderSink {
-  pub(super) event_sender: UnboundedSender<AgentEvent>,
+  event_sender: UnboundedSender<RunEvent>,
+  message_id: MessageId,
+  run_id: RunId,
 }
 
 impl ProviderSink {
   #[must_use]
-  pub fn new(event_sender: UnboundedSender<AgentEvent>) -> Self {
-    Self { event_sender }
+  pub fn new(
+    event_sender: UnboundedSender<RunEvent>,
+    run_id: RunId,
+    message_id: MessageId,
+  ) -> Self {
+    Self {
+      event_sender,
+      message_id,
+      run_id,
+    }
   }
 
   pub fn update(&self, mut update: MessageUpdate) -> Result {
@@ -25,7 +35,13 @@ impl ProviderSink {
       _ => {}
     }
 
-    self.event_sender.send(AgentEvent::Update(update))?;
+    self.event_sender.send(RunEvent {
+      event: AgentEvent::MessagePreview {
+        message_id: self.message_id,
+        update,
+      },
+      run_id: self.run_id,
+    })?;
 
     Ok(())
   }
@@ -65,7 +81,7 @@ mod tests {
 
     let (event_sender, mut events) = mpsc::unbounded_channel();
 
-    let sink = ProviderSink { event_sender };
+    let sink = ProviderSink::new(event_sender, RunId(0), MessageId(0));
 
     let reasoning = AssistantContent::Reasoning(Reasoning::new(
       "qux",
@@ -89,16 +105,27 @@ mod tests {
 
     sink.update(MessageUpdate::Complete(message)).unwrap();
 
-    let AgentEvent::Update(update) = events.try_recv().unwrap() else {
-      panic!();
-    };
-
     let preview = AgentMessage {
       content: vec![reasoning],
       id: Some("quux".into()),
     };
 
-    assert_eq!(update, MessageUpdate::Complete(preview.clone()));
+    let event = events.try_recv().unwrap();
+
+    assert_eq!(
+      event,
+      RunEvent {
+        event: AgentEvent::MessagePreview {
+          message_id: MessageId(0),
+          update: MessageUpdate::Complete(preview.clone()),
+        },
+        run_id: RunId(0),
+      }
+    );
+
+    let AgentEvent::MessagePreview { update, .. } = event.event else {
+      panic!();
+    };
 
     buffer.apply(update);
 
