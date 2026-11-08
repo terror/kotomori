@@ -12,12 +12,20 @@ impl AgentRun {
     self.task.abort();
   }
 
-  pub async fn join(mut self) -> Result {
-    match (&mut self.task).await {
+  pub async fn join(mut self) -> (Vec<AgentEvent>, Result) {
+    let result = match (&mut self.task).await {
       Ok(result) => result,
       Err(error) if error.is_cancelled() => Ok(()),
       Err(error) => Err(error).context("agent task failed"),
+    };
+
+    let mut events = Vec::new();
+
+    while let Ok(event) = self.event_receiver.try_recv() {
+      events.push(event);
     }
+
+    (events, result)
   }
 
   pub(super) fn new(

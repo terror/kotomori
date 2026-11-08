@@ -12,6 +12,50 @@ pub(crate) struct State {
 }
 
 impl State {
+  fn clear(&mut self) {
+    self.run = None;
+    self.session.clear();
+    self.composer.clear_history();
+    self.queued_inputs.clear();
+  }
+
+  fn finish_interruption(
+    &mut self,
+    run_id: u64,
+    result: Result<(), String>,
+  ) -> Vec<Effect> {
+    let Some(run) = self.run.as_mut().filter(|run| run.id == run_id) else {
+      return Vec::new();
+    };
+
+    let interruption = run.interruption.take();
+
+    let run_next = interruption == Some(Interruption::ContinueQueued);
+
+    match interruption {
+      Some(Interruption::Clear) => self.clear(),
+      Some(Interruption::ContinueQueued | Interruption::Stop) => {
+        self.finish_run(Some(TranscriptEntry::Interrupted));
+      }
+      Some(Interruption::Error(error)) => {
+        self.finish_run(Some(TranscriptEntry::Error(error)));
+      }
+      None => self.finish_run(None),
+    }
+
+    if let Err(error) = result {
+      self.session.push(TranscriptEntry::Error(error));
+    }
+
+    once(Effect::SaveSession)
+      .chain(if run_next {
+        self.run_next_queued()
+      } else {
+        Vec::new()
+      })
+      .collect()
+  }
+
   fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
     self
       .session
@@ -24,7 +68,7 @@ impl State {
 
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
     if action == Action::Quit && self.run.is_some() {
-      return self.interrupt_agent();
+      return self.interrupt_agent(Interruption::Stop);
     }
 
     match self.run.as_ref().and_then(|run| run.approval.as_ref()) {
@@ -67,13 +111,7 @@ impl State {
         }
         Action::Edit(input) => self.composer.input(input),
         Action::Interrupt => {
-          let effects = self.interrupt_agent();
-
-          if effects.is_empty() {
-            return effects;
-          }
-
-          return effects.into_iter().chain(self.run_next_queued()).collect();
+          return self.interrupt_agent(Interruption::ContinueQueued);
         }
         Action::Paste(input) => self.composer.paste(&input),
         Action::Quit => self.quit(),
@@ -98,15 +136,11 @@ impl State {
   ) -> Vec<Effect> {
     let effects = match command {
       Command::Clear => {
-        let interrupt_agent = self.run.take().is_some();
-
-        self.session.clear();
-        self.composer.clear_history();
-        self.queued_inputs.clear();
-
-        if interrupt_agent {
-          vec![Effect::InterruptAgent, Effect::SaveSession]
+        if self.run.is_some() {
+          self.interrupt_agent(Interruption::Clear)
         } else {
+          self.clear();
+
           vec![Effect::SaveSession]
         }
       }
@@ -127,14 +161,11 @@ impl State {
           Vec::new()
         }
       }
-      Command::Fork => {
-        if self.run.is_some() {
-          self.finish_run(Some(TranscriptEntry::Interrupted));
-          vec![Effect::InterruptAgent, Effect::ForkSession]
-        } else {
-          vec![Effect::ForkSession]
-        }
-      }
+      Command::Fork => self
+        .interrupt_agent(Interruption::Stop)
+        .into_iter()
+        .chain(once(Effect::ForkSession))
+        .collect(),
       Command::Quit => self.handle_action(Action::Quit),
       Command::Rename => {
         if arguments.is_empty() {
@@ -204,12 +235,8 @@ impl State {
           }
         }
       }
-      Event::AgentInterrupted(result) => {
-        if let Err(error) = result {
-          self.session.push(TranscriptEntry::Error(error));
-
-          return vec![Effect::SaveSession];
-        }
+      Event::AgentInterrupted { result, run_id } => {
+        return self.finish_interruption(run_id, result);
       }
       Event::ClipboardCopied(result) => match result {
         Ok(()) => self.session.push(TranscriptEntry::Notice(
@@ -220,18 +247,13 @@ impl State {
         ))),
       },
       Event::Error(error) => {
-        let effects = if self.run.is_some() {
-          vec![Effect::InterruptAgent]
-        } else {
-          Vec::new()
-        };
+        if self.run.is_some() {
+          return self.interrupt_agent(Interruption::Error(error));
+        }
 
         self.finish_run(Some(TranscriptEntry::Error(error)));
 
-        return effects
-          .into_iter()
-          .chain(once(Effect::SaveSession))
-          .collect();
+        return vec![Effect::SaveSession];
       }
       Event::SessionForked(result) => match result {
         Ok(session) => {
@@ -267,14 +289,14 @@ impl State {
     Vec::new()
   }
 
-  fn interrupt_agent(&mut self) -> Vec<Effect> {
-    if self.run.is_none() {
+  fn interrupt_agent(&mut self, interruption: Interruption) -> Vec<Effect> {
+    let Some(run) = &mut self.run else {
       return Vec::new();
-    }
+    };
 
-    self.finish_run(Some(TranscriptEntry::Interrupted));
+    run.interruption = Some(interruption);
 
-    vec![Effect::InterruptAgent, Effect::SaveSession]
+    vec![Effect::InterruptAgent]
   }
 
   pub(crate) fn new(mut session: Session) -> Self {
@@ -385,11 +407,10 @@ impl State {
     self.reset_input();
 
     match action {
-      Action::SubmitImmediately if self.run.is_some() => self
-        .interrupt_agent()
-        .into_iter()
-        .chain(once(self.run(input)))
-        .collect(),
+      Action::SubmitImmediately if self.run.is_some() => {
+        self.queued_inputs.push_front(input);
+        self.interrupt_agent(Interruption::ContinueQueued)
+      }
       _ if self.run.is_some() => {
         self.queued_inputs.push_back(input);
         Vec::new()
@@ -846,6 +867,11 @@ mod tests {
 
     state.handle_event(Event::Action(Action::Interrupt));
 
+    state.handle_event(Event::AgentInterrupted {
+      result: Ok(()),
+      run_id: 0,
+    });
+
     let session = state.session;
 
     assert_eq!(
@@ -872,6 +898,11 @@ mod tests {
 
     state.handle_event(Event::Action(Action::Submit));
     state.handle_event(Event::Action(Action::Interrupt));
+
+    state.handle_event(Event::AgentInterrupted {
+      result: Ok(()),
+      run_id: 0,
+    });
 
     for c in "new".chars() {
       state.handle_event(Event::Action(Action::Edit(Input {
@@ -1022,9 +1053,19 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::Error("foo".into())),
-      vec![Effect::InterruptAgent, Effect::SaveSession]
+      vec![Effect::InterruptAgent]
     );
+
+    assert_eq!(
+      state.handle_event(Event::AgentInterrupted {
+        result: Ok(()),
+        run_id: 0,
+      }),
+      vec![Effect::SaveSession]
+    );
+
     assert_eq!(state.run, None);
+
     assert_eq!(
       state.session.transcript,
       [TranscriptEntry::Error("foo".into())]
@@ -1048,7 +1089,9 @@ mod tests {
       state.handle_event(Event::Error("foo".into())),
       vec![Effect::SaveSession]
     );
+
     assert_eq!(state.run, None);
+
     assert_eq!(
       state.session.transcript,
       [TranscriptEntry::Error("foo".into())]
@@ -1097,7 +1140,14 @@ mod tests {
       let draft = run.message.clone();
 
       state.run = Some(run);
-      state.handle_event(event);
+      for effect in state.handle_event(event) {
+        if let Effect::InterruptAgent = effect {
+          state.handle_event(Event::AgentInterrupted {
+            result: Ok(()),
+            run_id: 0,
+          });
+        }
+      }
 
       let session = state.session;
 

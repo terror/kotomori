@@ -35,6 +35,7 @@ use {
   history::History,
   history_navigation::HistoryNavigation,
   indoc::formatdoc,
+  interruption::Interruption,
   kotomori_core::{
     Agent, AgentConfig, AgentEvent, AgentRun, ApprovalRequest,
     AssistantContent, CallId, Conversation, Message, MessageBuffer,
@@ -144,6 +145,7 @@ mod event;
 mod frame;
 mod history;
 mod history_navigation;
+mod interruption;
 mod loader;
 mod options;
 mod patch;
