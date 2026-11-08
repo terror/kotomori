@@ -36,7 +36,11 @@ impl Agent {
         .approval(event_sender, tool_call, tool.approval)
         .await?
       {
-        ToolApproval::Approved => tool.future.await,
+        ToolApproval::Approved => {
+          event_sender.send(AgentEvent::ToolStarted(tool_call.id.clone()))?;
+
+          tool.future.await
+        }
         ToolApproval::Denied => ToolResult {
           outcome: ToolOutcome::Denied,
           stderr: Some("permission denied".into()),
@@ -385,6 +389,11 @@ mod tests {
 
   #[tokio::test]
   async fn loops_until_provider_returns_no_tool_calls() {
+    let call = CallId::Provider {
+      call_id: "qux".into(),
+      item_id: Some("baz".into()),
+    };
+
     let reasoning = Reasoning {
       content: vec![ReasoningContent::Encrypted("foo".into())],
       id: Some("bar".into()),
@@ -409,10 +418,7 @@ mod tests {
             arguments: json!("bar"),
             name: ToolName::new("foo").unwrap(),
           },
-          id: CallId::Provider {
-            call_id: "qux".into(),
-            item_id: Some("baz".into()),
-          },
+          id: call.clone(),
           signature: Some("quux".into()),
         }),
         AssistantContent::text("baz"),
@@ -460,10 +466,7 @@ mod tests {
     };
 
     let tool_result = Message::User(vec![UserMessageContent::ToolResult {
-      call: CallId::Provider {
-        call_id: "qux".into(),
-        item_id: Some("baz".into()),
-      },
+      call: call.clone(),
       name: ToolName::new("foo").unwrap(),
       result: result.clone(),
     }]);
@@ -492,6 +495,7 @@ mod tests {
         AgentEvent::Update(update("quux")),
         AgentEvent::Usage(Usage::default()),
         AgentEvent::Message(Message::Agent(message)),
+        AgentEvent::ToolStarted(call),
         AgentEvent::Message(tool_result),
         AgentEvent::Update(update("bar")),
         AgentEvent::Usage(Usage::default()),

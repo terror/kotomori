@@ -4,6 +4,7 @@ use super::*;
 pub(crate) struct ToolInvocationComponent<'a> {
   pub(crate) invocation: &'a ToolRequest,
   pub(crate) result: Option<&'a ToolResult>,
+  pub(crate) run: Option<&'a Run>,
 }
 
 impl ToolInvocationComponent<'_> {
@@ -37,11 +38,13 @@ impl ToolInvocationComponent<'_> {
 
   fn title(&self, tense: ToolActionTense) -> String {
     let action = match tense {
+      ToolActionTense::AwaitingApproval => "Awaiting approval to run",
       ToolActionTense::Completed => "Ran",
       ToolActionTense::Denied => "Denied running",
       ToolActionTense::Failed => "Failed running",
       ToolActionTense::Interrupted => "Interrupted running",
       ToolActionTense::Progressive => "Running",
+      ToolActionTense::Queued => "Queued",
       ToolActionTense::Skipped => "Skipped running",
     };
 
@@ -68,7 +71,19 @@ impl Component for ToolInvocationComponent<'_> {
       Some(ToolOutcome::Success) => {
         ("●", Style::Success, ToolActionTense::Completed)
       }
-      None => ("●", Style::Accent, ToolActionTense::Progressive),
+      None => match self.run {
+        Some(run)
+          if run.approval.as_ref().is_some_and(|request| {
+            request.invocation.id == self.invocation.id
+          }) =>
+        {
+          ("●", Style::Muted, ToolActionTense::AwaitingApproval)
+        }
+        Some(run) if run.running_tool.as_ref() == Some(&self.invocation.id) => {
+          ("●", Style::Accent, ToolActionTense::Progressive)
+        }
+        _ => ("●", Style::Muted, ToolActionTense::Queued),
+      },
     };
 
     let gutter = LineComponent::styled("  │ ", Style::Muted);
@@ -152,7 +167,8 @@ mod tests {
       assert_eq!(
         ToolInvocationComponent {
           invocation: &invocation,
-          result: Some(&result)
+          result: Some(&result),
+          run: None,
         }
         .render(9),
         once(LineComponent::from([
@@ -219,7 +235,8 @@ mod tests {
     assert_eq!(
       ToolInvocationComponent {
         invocation: &invocation,
-        result: Some(&result)
+        result: Some(&result),
+        run: None,
       }
       .render(10),
       [

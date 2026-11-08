@@ -9,6 +9,7 @@ pub(crate) struct Run {
   pub(crate) id: u64,
   pub(crate) interruption: Option<Interruption>,
   pub(crate) message: MessageBuffer,
+  pub(crate) running_tool: Option<CallId>,
   pub(crate) usage: Usage,
 }
 
@@ -34,6 +35,7 @@ impl Run {
       id,
       interruption: None,
       message: MessageBuffer::default(),
+      running_tool: None,
       usage: Usage::default(),
     }
   }
@@ -42,6 +44,7 @@ impl Run {
     self.activity = AgentActivity::Waiting;
     self.approval = None;
     self.message = MessageBuffer::default();
+    self.running_tool = None;
   }
 
   pub(crate) fn resolve_approval(&mut self, approval: ToolApproval) {

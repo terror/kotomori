@@ -69,7 +69,11 @@ impl<'a> TranscriptComponent<'a> {
             })
           }
           TranscriptBlock::Tool { invocation, result } => {
-            stack.push(ToolInvocationComponent { invocation, result })
+            stack.push(ToolInvocationComponent {
+              invocation,
+              result,
+              run: self.run,
+            })
           }
         },
       )
@@ -388,9 +392,9 @@ mod tests {
       .render(80),
       [
         LineComponent::from([
-          Span::styled("●", Style::Accent),
+          Span::styled("●", Style::Muted),
           Span::raw(" "),
-          Span::raw("Running bar"),
+          Span::raw("Queued bar"),
         ]),
         LineComponent::blank(),
         LineComponent::from([
@@ -423,9 +427,9 @@ mod tests {
       }
       .render(80),
       [LineComponent::from([
-        Span::styled("●", Style::Accent),
+        Span::styled("●", Style::Muted),
         Span::raw(" "),
-        Span::raw("Running foo {\"bar\":\"baz\"}"),
+        Span::raw("Queued foo {\"bar\":\"baz\"}"),
       ])]
     );
   }
