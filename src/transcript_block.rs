@@ -99,7 +99,9 @@ mod tests {
 
       let mut buffer = MessageBuffer::default();
 
-      buffer.apply(MessageUpdate::Complete(content.to_vec().into()));
+      for (index, content) in content.into_iter().enumerate() {
+        buffer.apply(MessageUpdate::Content { index, content });
+      }
 
       assert_eq!(
         TranscriptBlock::draft(&buffer, following).collect::<Vec<_>>(),
@@ -188,7 +190,9 @@ mod tests {
 
     let mut buffer = MessageBuffer::default();
 
-    buffer.apply(MessageUpdate::Complete(content.to_vec().into()));
+    for (index, content) in content.into_iter().enumerate() {
+      buffer.apply(MessageUpdate::Content { index, content });
+    }
 
     assert_eq!(
       TranscriptBlock::draft(&buffer, &[]).collect::<Vec<_>>(),

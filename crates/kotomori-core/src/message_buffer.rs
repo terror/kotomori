@@ -9,16 +9,6 @@ pub struct MessageBuffer {
 impl MessageBuffer {
   pub fn apply(&mut self, update: MessageUpdate) {
     match update {
-      MessageUpdate::Complete(message) => {
-        self.blocks = message
-          .content
-          .into_iter()
-          .enumerate()
-          .map(|(index, content)| (index, MessageDraft::Content(content)))
-          .collect();
-
-        self.id = message.id;
-      }
       MessageUpdate::Content { index, content } => {
         self.blocks.insert(index, MessageDraft::Content(content));
       }

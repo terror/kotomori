@@ -133,10 +133,6 @@ impl Agent {
 
       let message = response.message;
 
-      if !message.content.is_empty() {
-        sink.update(MessageUpdate::Complete(message.clone()))?;
-      }
-
       match response.finish_reason {
         Some(FinishReason::Length) => {
           bail!("completion truncated: output token limit reached");
@@ -355,11 +351,6 @@ mod tests {
 
     assert_eq!(
       events.recv().await.unwrap(),
-      AgentEvent::Update(MessageUpdate::Complete(AgentMessage::default())),
-    );
-
-    assert_eq!(
-      events.recv().await.unwrap(),
       AgentEvent::Message(Message::Agent(vec![tool_call.clone()].into()))
     );
 
@@ -511,21 +502,15 @@ mod tests {
       ]
     );
 
-    let mut preview = message.clone();
-
-    preview.content.remove(3);
-
     assert_eq!(
       received,
       [
         AgentEvent::Update(update("quux")),
         AgentEvent::Usage(Usage::default()),
-        AgentEvent::Update(MessageUpdate::Complete(preview)),
         AgentEvent::Message(Message::Agent(message)),
         AgentEvent::Message(tool_result),
         AgentEvent::Update(update("bar")),
         AgentEvent::Usage(Usage::default()),
-        AgentEvent::Update(MessageUpdate::Complete(complete.clone())),
         AgentEvent::Message(Message::Agent(complete)),
         AgentEvent::Done,
       ],

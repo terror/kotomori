@@ -2,7 +2,6 @@ use super::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageUpdate {
-  Complete(AgentMessage),
   Content {
     index: usize,
     content: AssistantContent,
