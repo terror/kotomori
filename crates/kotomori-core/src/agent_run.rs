@@ -12,7 +12,9 @@ impl AgentRun {
     self.task.abort();
   }
 
-  pub async fn join(mut self) -> (Vec<AgentEvent>, Result) {
+  pub async fn cancel_and_join(mut self) -> (Vec<AgentEvent>, Result) {
+    self.cancel();
+
     let result = match (&mut self.task).await {
       Ok(result) => result,
       Err(error) if error.is_cancelled() => Ok(()),

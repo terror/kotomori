@@ -358,7 +358,7 @@ mod tests {
 
     assert_eq!(events.recv().await, None);
 
-    events.join().await.1.unwrap();
+    events.cancel_and_join().await.1.unwrap();
 
     let requests = requests.lock().unwrap();
 
@@ -447,7 +447,7 @@ mod tests {
       received.push(event);
     }
 
-    events.join().await.1.unwrap();
+    events.cancel_and_join().await.1.unwrap();
 
     let result = ToolResult {
       content: Some("bar".into()),
