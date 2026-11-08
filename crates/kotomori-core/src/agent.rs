@@ -62,7 +62,7 @@ impl Agent {
 
     self.task = Some(tokio::spawn(async move {
       if let Err(error) = agent.stream(&event_sender, conversation).await {
-        let _ = event_sender.send(AgentEvent::Error(error.to_string()));
+        let _ = event_sender.send(AgentEvent::Error(format!("{error:#}")));
       }
     }));
 

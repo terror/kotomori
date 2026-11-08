@@ -227,7 +227,7 @@ fn provider_malformed_tool_arguments_recovers() -> Result {
       │ foo
 
       ● Error
-        │ failed to decode `command` arguments
+        │ failed to decode `command` arguments: missing field `command`
 
       │
 
@@ -241,7 +241,7 @@ fn provider_malformed_tool_arguments_recovers() -> Result {
       │ foo
 
       ● Error
-        │ failed to decode `command` arguments
+        │ failed to decode `command` arguments: missing field `command`
 
       │ bar
 
