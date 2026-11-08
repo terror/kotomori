@@ -2,6 +2,7 @@ use {
   action::Action,
   agent::Agent,
   agent_activity::AgentActivity,
+  agent_config::AgentConfig,
   agent_event::AgentEvent,
   agent_message::AgentMessage,
   anyhow::{Context, Error, bail},
@@ -165,6 +166,7 @@ use {
 mod action;
 mod agent;
 mod agent_activity;
+mod agent_config;
 mod agent_event;
 mod agent_message;
 mod app;
@@ -234,9 +236,6 @@ mod user_message_content;
 mod write_ext;
 
 static FIRST_DRAW_STARTED_AT: OnceLock<Instant> = OnceLock::new();
-
-pub(crate) static SYSTEM_PROMPT: LazyLock<String> =
-  LazyLock::new(|| include_str!("../etc/system.md").trim_end().to_string());
 
 type AsyncCommand = tokio::process::Command;
 type Result<T = (), E = Error> = std::result::Result<T, E>;

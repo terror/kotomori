@@ -2,8 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(crate) struct ProviderSink {
-  pub(super) event_sender: UnboundedSender<Event>,
-  pub(super) run_id: u64,
+  pub(super) event_sender: UnboundedSender<AgentEvent>,
 }
 
 impl ProviderSink {
@@ -21,10 +20,7 @@ impl ProviderSink {
       _ => {}
     }
 
-    self.event_sender.send(Event::Agent {
-      event: AgentEvent::Update(update),
-      run_id: self.run_id,
-    })?;
+    self.event_sender.send(AgentEvent::Update(update))?;
 
     Ok(())
   }
@@ -64,10 +60,7 @@ mod tests {
 
     let (event_sender, mut events) = mpsc::unbounded_channel();
 
-    let sink = ProviderSink {
-      event_sender,
-      run_id: 0,
-    };
+    let sink = ProviderSink { event_sender };
 
     let reasoning = AssistantContent::Reasoning(
       Reasoning::new_with_signature("bar", Some("baz".into())).sealed("qux"),
@@ -87,11 +80,7 @@ mod tests {
 
     sink.update(MessageUpdate::Complete(message)).unwrap();
 
-    let Event::Agent {
-      event: AgentEvent::Update(update),
-      run_id: 0,
-    } = events.try_recv().unwrap()
-    else {
+    let AgentEvent::Update(update) = events.try_recv().unwrap() else {
       panic!();
     };
 
