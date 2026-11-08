@@ -96,6 +96,7 @@ mod tests {
     let mut session = Session::new(
       &Settings {
         directory: "foo".into(),
+        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:foo".parse().unwrap(),
         prompt: None,
         yolo: false,
