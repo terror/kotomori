@@ -11,18 +11,15 @@ impl ProviderSink {
     Self { event_sender }
   }
 
-  pub fn update(&self, mut update: MessageUpdate) -> Result {
-    match &mut update {
-      MessageUpdate::Complete(message) => {
-        message
-          .content
-          .retain(|content| !matches!(content, AssistantContent::ToolCall(_)));
-      }
+  pub fn update(&self, update: MessageUpdate) -> Result {
+    if matches!(
+      update,
       MessageUpdate::Content {
         content: AssistantContent::ToolCall(_),
         ..
-      } => return Ok(()),
-      _ => {}
+      }
+    ) {
+      return Ok(());
     }
 
     self.event_sender.send(AgentEvent::Update(update))?;
@@ -45,24 +42,7 @@ mod tests {
   use super::*;
 
   #[test]
-  fn completion_replaces_drafts_without_publishing_tools() {
-    let mut buffer = MessageBuffer::default();
-
-    buffer.apply_many(&[
-      MessageUpdate::Content {
-        content: AssistantContent::reasoning("foo", "bar"),
-        index: 2,
-      },
-      MessageUpdate::ReasoningDelta {
-        delta: "baz".into(),
-        index: 4,
-      },
-      MessageUpdate::Text {
-        delta: "qux".into(),
-        index: 5,
-      },
-    ]);
-
+  fn finalized_content_replaces_drafts_without_publishing_tools() {
     let (event_sender, mut events) = mpsc::unbounded_channel();
 
     let sink = ProviderSink { event_sender };
@@ -75,34 +55,53 @@ mod tests {
       }],
     ));
 
-    let message = AgentMessage {
-      content: vec![
-        reasoning.clone(),
-        AssistantContent::tool_call(
+    let updates = [
+      MessageUpdate::ReasoningDelta {
+        delta: "foo".into(),
+        index: 2,
+      },
+      MessageUpdate::Content {
+        content: reasoning.clone(),
+        index: 2,
+      },
+      MessageUpdate::Text {
+        delta: "qux".into(),
+        index: 5,
+      },
+      MessageUpdate::MessageId("quux".into()),
+    ];
+
+    sink.update_many(updates.clone()).unwrap();
+
+    sink
+      .update(MessageUpdate::Content {
+        content: AssistantContent::tool_call(
           "foo",
           ToolName::new("command").unwrap(),
           serde_json::json!({"command": "bar"}),
         ),
-      ],
-      id: Some("quux".into()),
-    };
+        index: 4,
+      })
+      .unwrap();
 
-    sink.update(MessageUpdate::Complete(message)).unwrap();
+    let mut buffer = MessageBuffer::default();
 
-    let AgentEvent::Update(update) = events.try_recv().unwrap() else {
-      panic!();
-    };
+    for update in updates {
+      assert_eq!(
+        events.try_recv().unwrap(),
+        AgentEvent::Update(update.clone()),
+      );
 
-    let preview = AgentMessage {
-      content: vec![reasoning],
-      id: Some("quux".into()),
-    };
+      buffer.apply(update);
+    }
 
-    assert_eq!(update, MessageUpdate::Complete(preview.clone()));
-
-    buffer.apply(update);
-
-    assert_eq!(buffer.finish(), preview);
+    assert_eq!(
+      buffer.finish(),
+      AgentMessage {
+        content: vec![reasoning, AssistantContent::text("qux")],
+        id: Some("quux".into()),
+      }
+    );
 
     assert_eq!(events.try_recv(), Err(mpsc::error::TryRecvError::Empty));
   }
