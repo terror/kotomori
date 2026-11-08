@@ -319,7 +319,6 @@ impl App {
     self.handle_effects(vec![Effect::InterruptAgent]).await;
 
     self.agent = agent;
-
     self.screen = screen;
 
     Ok(())
