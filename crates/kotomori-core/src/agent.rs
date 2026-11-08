@@ -114,14 +114,26 @@ impl Agent {
 
       let message = response.message;
 
-      match response.finish_reason {
+      let error = match response.finish_reason {
         Some(FinishReason::Length) => {
-          bail!("completion truncated: output token limit reached");
+          Some("completion truncated: output token limit reached")
         }
         Some(FinishReason::ContentFilter) => {
-          bail!("completion filtered by the provider");
+          Some("completion filtered by the provider")
         }
-        _ => {}
+        _ => None,
+      };
+
+      if let Some(error) = error {
+        let mut message = message;
+
+        message
+          .content
+          .retain(|content| !matches!(content, AssistantContent::ToolCall(_)));
+
+        event_sender.send(AgentEvent::Message(Message::Agent(message)))?;
+
+        bail!(error);
       }
 
       if message.content.is_empty() {
