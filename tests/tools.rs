@@ -65,7 +65,7 @@ fn approval_prompt_denies_command() -> Result {
 
         baz
 
-        ● Failed running echo bar
+        ● Denied running echo bar
           │ permission denied
 
         qux
@@ -107,7 +107,7 @@ fn approval_prompt_escapes_control_characters() -> Result {
 
       │ foo
 
-      ● Failed running echo foo\\r\\u{1b}[2J\\n? y approve
+      ● Denied running echo foo\\r\\u{1b}[2J\\n? y approve
         │ permission denied
 
       queued for mock:escaped-command: foo
@@ -179,7 +179,7 @@ fn ctrl_c_interrupts_active_approval() -> Result {
 
       baz
 
-      ● Failed running echo bar
+      ● Interrupted running echo bar
         │ interrupted
 
       qux

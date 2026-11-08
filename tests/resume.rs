@@ -100,7 +100,7 @@ fn resume_interrupts_pending_tool_calls() -> Result {
 
       baz
 
-      ● Failed running echo bar
+      ● Interrupted running echo bar
         │ interrupted
 
       qux
@@ -200,7 +200,7 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
     .submit("denied tool result")
     .expect_screen_contains("Approve echo bar?")
     .type_text("n")
-    .expect_screen_contains("Failed running echo bar")
+    .expect_screen_contains("Denied running echo bar")
     .expect_screen_contains("permission denied")
     .expect_screen_contains("done")
     .wait(SETTLE_INTERVAL)
@@ -230,7 +230,7 @@ fn resume_loads_sessions_with_tools_and_interruptions() -> Result {
     .env("KOTOMORI_HOME", state)
     .argument("resume")
     .submit("denied tool result")
-    .expect_screen_contains("Failed running echo bar")
+    .expect_screen_contains("Denied running echo bar")
     .expect_screen_contains("permission denied")
     .expect_screen_contains("done")
     .run()?;
