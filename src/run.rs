@@ -7,6 +7,7 @@ pub(crate) struct Run {
   pub(crate) elapsed: Duration,
   pub(crate) frame: usize,
   pub(crate) id: u64,
+  pub(crate) interruption: Option<Interruption>,
   pub(crate) message: MessageBuffer,
   pub(crate) usage: Usage,
 }
@@ -31,6 +32,7 @@ impl Run {
       elapsed: Duration::ZERO,
       frame: 0,
       id,
+      interruption: None,
       message: MessageBuffer::default(),
       usage: Usage::default(),
     }

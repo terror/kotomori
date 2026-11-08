@@ -75,7 +75,9 @@ impl App {
     } else {
       let (_, run) = self.agent_run.take().unwrap();
 
-      match run.join().await {
+      let (_, result) = run.join().await;
+
+      match result {
         Ok(()) => AgentEvent::Done,
         Err(error) => AgentEvent::Error(format!("{error:#}")),
       }
@@ -84,47 +86,45 @@ impl App {
     self.handle_event(Event::Agent { event, run_id }).await
   }
 
-  async fn handle_effect(&mut self, effect: Effect) -> Option<Event> {
+  async fn handle_effect(&mut self, effect: Effect) -> Vec<Event> {
     match effect {
       Effect::CopyToClipboard(text) => {
         let result =
           self.clipboard.copy(text).map_err(|error| error.to_string());
 
-        Some(Event::ClipboardCopied(result))
+        vec![Event::ClipboardCopied(result)]
       }
       Effect::ForkSession => {
         let Screen::Session(state) = &self.screen else {
-          return None;
+          return Vec::new();
         };
 
         let result = now()
           .and_then(|now| self.database.fork_session(&state.session, now))
           .map_err(|error| error.to_string());
 
-        Some(Event::SessionForked(result))
+        vec![Event::SessionForked(result)]
       }
       Effect::InterruptAgent => self.interrupt_agent().await,
       Effect::RunAgent {
         conversation,
         run_id,
       } => {
-        let event = self.interrupt_agent().await;
-
         if let Some(agent) = &self.agent {
           self.agent_run = Some((run_id, agent.spawn(conversation)));
         }
 
-        event
+        Vec::new()
       }
       Effect::SaveSession => {
         let Screen::Session(state) = &self.screen else {
-          return None;
+          return Vec::new();
         };
 
         let session = &state.session;
 
         if session.transcript.is_empty() && session.id.is_none() {
-          return None;
+          return Vec::new();
         }
 
         let result = now()
@@ -133,7 +133,7 @@ impl App {
           })
           .map_err(|error| error.to_string());
 
-        Some(Event::SessionSaved(result))
+        vec![Event::SessionSaved(result)]
       }
     }
   }
@@ -142,15 +142,18 @@ impl App {
     let mut effects = VecDeque::from(effects);
 
     while let Some(effect) = effects.pop_front() {
-      let Some(event) = self.handle_effect(effect).await else {
-        continue;
-      };
+      let events = self.handle_effect(effect).await;
 
       let Screen::Session(state) = &mut self.screen else {
         continue;
       };
 
-      for effect in state.handle_event(event).into_iter().rev() {
+      let pending = events
+        .into_iter()
+        .flat_map(|event| state.handle_event(event))
+        .collect::<Vec<_>>();
+
+      for effect in pending.into_iter().rev() {
         effects.push_front(effect);
       }
     }
@@ -174,7 +177,7 @@ impl App {
         }
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
         Event::Agent { .. }
-        | Event::AgentInterrupted(_)
+        | Event::AgentInterrupted { .. }
         | Event::ClipboardCopied(_)
         | Event::SessionForked(_)
         | Event::SessionSaved(_)
@@ -190,14 +193,23 @@ impl App {
     Ok(())
   }
 
-  async fn interrupt_agent(&mut self) -> Option<Event> {
-    let (_, run) = self.agent_run.take()?;
+  async fn interrupt_agent(&mut self) -> Vec<Event> {
+    let Some((run_id, run)) = self.agent_run.take() else {
+      return Vec::new();
+    };
 
     run.cancel();
 
-    Some(Event::AgentInterrupted(
-      run.join().await.map_err(|error| format!("{error:#}")),
-    ))
+    let (events, result) = run.join().await;
+
+    events
+      .into_iter()
+      .map(|event| Event::Agent { event, run_id })
+      .chain(once(Event::AgentInterrupted {
+        result: result.map_err(|error| format!("{error:#}")),
+        run_id,
+      }))
+      .collect()
   }
 
   fn listen_for_input(&self) {
