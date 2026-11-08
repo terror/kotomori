@@ -1,6 +1,8 @@
 use super::*;
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(
+  Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize,
+)]
 #[serde(try_from = "String", into = "String")]
 pub struct ToolName(String);
 

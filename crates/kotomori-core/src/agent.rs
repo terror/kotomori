@@ -180,7 +180,7 @@ mod tests {
       sink: &'a ProviderSink,
     ) -> BoxFuture<'a, Result<AgentMessage>> {
       Box::pin(async move {
-        assert_eq!(request.tools, [TestTool.definition()]);
+        assert_eq!(request.tools, [TestTool.definition().unwrap()]);
 
         self
           .requests
@@ -207,12 +207,12 @@ mod tests {
   struct TestTool;
 
   impl Tool for TestTool {
-    fn definition(&self) -> ToolDefinition {
-      ToolDefinition {
+    fn definition(&self) -> Result<ToolDefinition> {
+      Ok(ToolDefinition {
         description: "bar".into(),
-        name: "foo".into(),
+        name: ToolName::new("foo")?,
         parameters: json!({"type": "string"}),
-      }
+      })
     }
 
     fn prepare(&self, arguments: Value) -> Result<ToolCall> {

@@ -138,7 +138,7 @@ impl Rig {
         .iter()
         .map(|tool| completion::ToolDefinition {
           description: tool.description.clone(),
-          name: tool.name.clone(),
+          name: tool.name.to_string(),
           parameters: tool.parameters.clone(),
         })
         .collect(),
@@ -300,7 +300,7 @@ mod tests {
           .iter()
           .map(|tool| completion::ToolDefinition {
             description: tool.description.clone(),
-            name: tool.name.clone(),
+            name: tool.name.to_string(),
             parameters: tool.parameters.clone(),
           })
           .collect::<Vec<_>>()
@@ -310,7 +310,7 @@ mod tests {
     case(&[]);
     case(&[ToolDefinition {
       description: "bar".into(),
-      name: "foo".into(),
+      name: ToolName::new("foo").unwrap(),
       parameters: json!({
         "type": "object",
         "properties": {"baz": {"type": "string"}},

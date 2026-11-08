@@ -2,22 +2,27 @@ use super::*;
 
 #[derive(Clone, Debug, Default)]
 pub struct ToolRegistry {
-  tools: BTreeMap<String, Arc<dyn Tool>>,
+  tools: BTreeMap<ToolName, (ToolDefinition, Arc<dyn Tool>)>,
 }
 
 impl ToolRegistry {
   #[must_use]
   pub fn definitions(&self) -> Vec<ToolDefinition> {
-    self.tools.values().map(|tool| tool.definition()).collect()
+    self
+      .tools
+      .values()
+      .map(|(definition, _)| definition.clone())
+      .collect()
   }
 
   pub fn prepare(&self, call: ToolRequest) -> Result<(ToolRequest, ToolCall)> {
-    let name = call.function.name.as_str();
+    let name = &call.function.name;
 
     let tool = self
       .tools
       .get(name)
       .with_context(|| format!("unknown tool `{name}`"))?
+      .1
       .prepare(call.function.arguments.clone())
       .with_context(|| format!("failed to decode `{name}` arguments"))?;
 
@@ -25,12 +30,14 @@ impl ToolRegistry {
   }
 
   pub fn register(&mut self, tool: Arc<dyn Tool>) -> Result {
-    match self.tools.entry(tool.definition().name) {
+    let definition = tool.definition()?;
+
+    match self.tools.entry(definition.name.clone()) {
       Entry::Occupied(entry) => {
         bail!("duplicate tool `{}`", entry.key());
       }
       Entry::Vacant(entry) => {
-        entry.insert(tool);
+        entry.insert((definition, tool));
         Ok(())
       }
     }
