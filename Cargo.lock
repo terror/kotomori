@@ -3373,6 +3373,7 @@ dependencies = [
  "futures-util",
  "kotomori-core",
  "rig",
+ "serde",
  "serde_json",
 ]
 
