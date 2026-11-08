@@ -40,11 +40,13 @@ impl RunContext {
     conversation: &mut Conversation,
     message: Message,
     message_id: Option<MessageId>,
+    draft: Option<MessageBuffer>,
   ) -> Result<MessageId> {
     for message in conversation.push(message.clone()) {
       let message_id = self.message_id()?;
 
       self.send(AgentEvent::MessageCommitted {
+        draft: None,
         message_id,
         message,
       })?;
@@ -56,6 +58,7 @@ impl RunContext {
     };
 
     self.send(AgentEvent::MessageCommitted {
+      draft,
       message_id,
       message,
     })?;
@@ -94,6 +97,30 @@ impl RunContext {
     })?;
 
     Ok(())
+  }
+
+  pub(crate) fn settle(
+    &mut self,
+    conversation: &mut Conversation,
+    message_id: MessageId,
+    buffer: MessageBuffer,
+  ) -> Result {
+    let message = buffer.message();
+
+    let draft = buffer.has_pending_reasoning().then_some(buffer);
+
+    if message.content.is_empty() {
+      self.send(AgentEvent::MessagePreviewFinished { draft, message_id })
+    } else {
+      self.commit(
+        conversation,
+        Message::Agent(message),
+        Some(message_id),
+        draft,
+      )?;
+
+      Ok(())
+    }
   }
 
   pub(crate) fn tool_id(&mut self) -> Result<ToolId> {

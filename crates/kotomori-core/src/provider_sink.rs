@@ -3,11 +3,16 @@ use super::*;
 #[derive(Debug)]
 pub struct ProviderSink {
   event_sender: UnboundedSender<RunEvent>,
+  message: MessageBuffer,
   message_id: MessageId,
   run_id: RunId,
 }
 
 impl ProviderSink {
+  pub(crate) fn finish(self) -> MessageBuffer {
+    self.message
+  }
+
   #[must_use]
   pub fn new(
     event_sender: UnboundedSender<RunEvent>,
@@ -16,12 +21,13 @@ impl ProviderSink {
   ) -> Self {
     Self {
       event_sender,
+      message: MessageBuffer::default(),
       message_id,
       run_id,
     }
   }
 
-  pub fn update(&self, mut update: MessageUpdate) -> Result {
+  pub fn update(&mut self, mut update: MessageUpdate) -> Result {
     match &mut update {
       MessageUpdate::Complete(message) => {
         message
@@ -35,6 +41,8 @@ impl ProviderSink {
       _ => {}
     }
 
+    self.message.apply(update.clone());
+
     self.event_sender.send(RunEvent {
       event: AgentEvent::MessagePreview {
         message_id: self.message_id,
@@ -47,7 +55,7 @@ impl ProviderSink {
   }
 
   pub fn update_many(
-    &self,
+    &mut self,
     updates: impl IntoIterator<Item = MessageUpdate>,
   ) -> Result {
     updates
@@ -81,7 +89,7 @@ mod tests {
 
     let (event_sender, mut events) = mpsc::unbounded_channel();
 
-    let sink = ProviderSink::new(event_sender, RunId(0), MessageId(0));
+    let mut sink = ProviderSink::new(event_sender, RunId(0), MessageId(0));
 
     let reasoning = AssistantContent::Reasoning(Reasoning::new(
       "qux",
@@ -129,8 +137,12 @@ mod tests {
 
     buffer.apply(update);
 
+    assert_eq!(sink.finish(), buffer);
     assert_eq!(buffer.finish(), preview);
 
-    assert_eq!(events.try_recv(), Err(mpsc::error::TryRecvError::Empty));
+    assert_eq!(
+      events.try_recv(),
+      Err(mpsc::error::TryRecvError::Disconnected)
+    );
   }
 }

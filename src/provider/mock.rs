@@ -8,7 +8,7 @@ impl Provider for Mock {
   fn stream<'a>(
     &'a self,
     request: Request<'a>,
-    sink: &'a ProviderSink,
+    sink: &'a mut ProviderSink,
   ) -> BoxFuture<'a, Result<AgentMessage>> {
     Box::pin(async move {
       let content = match request.model.name.as_str() {

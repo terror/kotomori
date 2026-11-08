@@ -49,6 +49,7 @@ impl Agent {
         result,
       }]),
       None,
+      None,
     )?;
 
     run.send(match approval {
@@ -128,6 +129,7 @@ impl Agent {
       let message_id = run.message_id()?;
 
       run.send(AgentEvent::MessageCommitted {
+        draft: None,
         message_id,
         message,
       })?;
@@ -136,7 +138,7 @@ impl Agent {
     loop {
       let message_id = run.message_id()?;
 
-      let sink =
+      let mut sink =
         ProviderSink::new(run.event_sender.clone(), run.run_id, message_id);
 
       let request = Request {
@@ -146,9 +148,20 @@ impl Agent {
         tools: &tools,
       };
 
-      let message = self.provider.stream(request, &sink).await?;
+      let message = self.provider.stream(request, &mut sink).await;
+
+      let draft = sink.finish();
+
+      let message = match message {
+        Ok(message) => message,
+        Err(error) => {
+          run.settle(&mut conversation, message_id, draft)?;
+          return Err(error);
+        }
+      };
 
       if message.content.is_empty() {
+        run.settle(&mut conversation, message_id, draft)?;
         break;
       }
 
@@ -161,12 +174,21 @@ impl Agent {
           }
           _ => None,
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>();
+
+      let tool_calls = match tool_calls {
+        Ok(tool_calls) => tool_calls,
+        Err(error) => {
+          run.settle(&mut conversation, message_id, draft)?;
+          return Err(error);
+        }
+      };
 
       run.commit(
         &mut conversation,
         Message::Agent(message),
         Some(message_id),
+        None,
       )?;
 
       if tool_calls.is_empty() {
@@ -219,7 +241,7 @@ mod tests {
     fn stream<'a>(
       &'a self,
       request: Request<'a>,
-      sink: &'a ProviderSink,
+      sink: &'a mut ProviderSink,
     ) -> BoxFuture<'a, Result<AgentMessage>> {
       Box::pin(async move {
         assert_eq!(request.tools, [TestTool.definition()]);
@@ -234,6 +256,10 @@ mod tests {
 
         sink.update_many(response.updates)?;
 
+        if let Some(error) = response.error {
+          bail!(error);
+        }
+
         Ok(response.message)
       })
     }
@@ -241,6 +267,7 @@ mod tests {
 
   #[derive(Debug, Default)]
   struct TestResponse {
+    error: Option<&'static str>,
     message: AgentMessage,
     updates: Vec<MessageUpdate>,
   }
@@ -334,6 +361,7 @@ mod tests {
     }
   }
 
+  #[allow(clippy::too_many_lines)]
   #[tokio::test]
   async fn approvals_can_be_denied() {
     for respond in [true, false] {
@@ -373,6 +401,7 @@ mod tests {
         [
           AgentEvent::RunStarted,
           AgentEvent::MessageCommitted {
+            draft: None,
             message_id: MessageId(0),
             message: Message::Agent(vec![tool_call.clone()].into()),
           },
@@ -429,12 +458,17 @@ mod tests {
             approval: ToolApproval::Denied,
           },
           AgentEvent::MessageCommitted {
+            draft: None,
             message_id: MessageId(1),
             message: tool_result.clone(),
           },
           AgentEvent::ToolDenied {
             tool_id: ToolId(0),
             message_id: MessageId(1),
+          },
+          AgentEvent::MessagePreviewFinished {
+            draft: None,
+            message_id: MessageId(2),
           },
           AgentEvent::RunCompleted,
         ],
@@ -453,6 +487,84 @@ mod tests {
   #[allow(clippy::too_many_lines)]
   #[tokio::test]
   async fn loops_until_provider_returns_no_tool_calls() {
+    async fn case(
+      invocation: &ToolInvocation,
+      message: &AgentMessage,
+      response: TestResponse,
+      expected: Vec<AgentEvent>,
+    ) {
+      let update = MessageUpdate::Text {
+        delta: "quux".into(),
+        index: 0,
+      };
+
+      let mut test_agent = TestAgent::new(
+        vec![
+          TestResponse {
+            message: message.clone(),
+            updates: vec![update.clone()],
+            ..Default::default()
+          },
+          response,
+        ],
+        true,
+      );
+
+      let user = Message::User(vec![UserMessageContent::Text("foo".into())]);
+      let (control, mut events) =
+        test_agent.agent.spawn(vec![user.clone()].into());
+      let tool_result = Message::User(vec![UserMessageContent::ToolResult {
+        call: invocation.protocol.id.clone(),
+        name: invocation.protocol.function.name.clone(),
+        result: ToolResult {
+          content: Some("bar".into()),
+          outcome: ToolOutcome::Success,
+          ..Default::default()
+        },
+      }]);
+
+      TestAgent::assert_events(
+        &mut events,
+        control.run_id(),
+        [
+          AgentEvent::RunStarted,
+          AgentEvent::MessagePreview {
+            message_id: MessageId(0),
+            update,
+          },
+          AgentEvent::MessageCommitted {
+            draft: None,
+            message_id: MessageId(0),
+            message: Message::Agent(message.clone()),
+          },
+          AgentEvent::ToolRequested {
+            tool_id: ToolId(0),
+            message_id: MessageId(0),
+            invocation: invocation.clone(),
+          },
+          AgentEvent::ToolStarted { tool_id: ToolId(0) },
+          AgentEvent::MessageCommitted {
+            draft: None,
+            message_id: MessageId(1),
+            message: tool_result.clone(),
+          },
+          AgentEvent::ToolCompleted {
+            tool_id: ToolId(0),
+            message_id: MessageId(1),
+          },
+        ]
+        .into_iter()
+        .chain(expected),
+      )
+      .await;
+
+      assert_eq!(events.recv().await, None);
+      test_agent.assert_requests(&[
+        vec![user.clone()],
+        vec![user, Message::Agent(message.clone()), tool_result],
+      ]);
+    }
+
     let reasoning = Reasoning {
       content: vec![ReasoningContent::Encrypted("foo".into())],
       id: Some("bar".into()),
@@ -492,74 +604,27 @@ mod tests {
       id: Some("quuz".into()),
     };
 
-    let update = |delta: &str| MessageUpdate::Text {
-      delta: delta.into(),
+    let complete = AgentMessage::from(vec![AssistantContent::text("bar")]);
+    let update = MessageUpdate::Text {
+      delta: "bar".into(),
       index: 0,
     };
 
-    let complete = AgentMessage::from(vec![AssistantContent::text("bar")]);
-
-    let mut test_agent = TestAgent::new(
-      vec![
-        TestResponse {
-          message: message.clone(),
-          updates: vec![update("quux")],
-        },
-        TestResponse {
-          message: complete.clone(),
-          updates: vec![update("bar")],
-        },
-      ],
-      true,
-    );
-
-    let user = Message::User(vec![UserMessageContent::Text("foo".into())]);
-
-    let (control, mut events) =
-      test_agent.agent.spawn(vec![user.clone()].into());
-
-    let tool_result = Message::User(vec![UserMessageContent::ToolResult {
-      call: invocation.protocol.id.clone(),
-      name: invocation.protocol.function.name.clone(),
-      result: ToolResult {
-        content: Some("bar".into()),
-        outcome: ToolOutcome::Success,
+    case(
+      &invocation,
+      &message,
+      TestResponse {
+        message: complete.clone(),
+        updates: vec![update.clone()],
         ..Default::default()
       },
-    }]);
-
-    TestAgent::assert_events(
-      &mut events,
-      control.run_id(),
-      [
-        AgentEvent::RunStarted,
-        AgentEvent::MessagePreview {
-          message_id: MessageId(0),
-          update: update("quux"),
-        },
-        AgentEvent::MessageCommitted {
-          message_id: MessageId(0),
-          message: Message::Agent(message.clone()),
-        },
-        AgentEvent::ToolRequested {
-          tool_id: ToolId(0),
-          message_id: MessageId(0),
-          invocation,
-        },
-        AgentEvent::ToolStarted { tool_id: ToolId(0) },
-        AgentEvent::MessageCommitted {
-          message_id: MessageId(1),
-          message: tool_result.clone(),
-        },
-        AgentEvent::ToolCompleted {
-          tool_id: ToolId(0),
-          message_id: MessageId(1),
-        },
+      vec![
         AgentEvent::MessagePreview {
           message_id: MessageId(2),
-          update: update("bar"),
+          update,
         },
         AgentEvent::MessageCommitted {
+          draft: None,
           message_id: MessageId(2),
           message: Message::Agent(complete),
         },
@@ -568,11 +633,128 @@ mod tests {
     )
     .await;
 
-    assert_eq!(events.recv().await, None);
+    let partial = AgentMessage {
+      content: vec![
+        AssistantContent::reasoning("foo", "bar"),
+        AssistantContent::text("baz"),
+      ],
+      id: Some("qux".into()),
+    };
+    let updates = vec![
+      MessageUpdate::Complete(partial.clone()),
+      MessageUpdate::ReasoningDelta {
+        delta: "quux".into(),
+        index: 2,
+      },
+    ];
+    let mut draft = MessageBuffer::default();
+    draft.apply_many(&updates);
 
-    test_agent.assert_requests(&[
-      vec![user.clone()],
-      vec![user, Message::Agent(message), tool_result],
-    ]);
+    let invalid = AssistantContent::tool_call(
+      "foo",
+      ToolName::new("foo").unwrap(),
+      json!(false),
+    );
+
+    for (response, terminal) in [
+      (
+        TestResponse {
+          error: Some("foo"),
+          ..Default::default()
+        },
+        AgentEvent::RunFailed("foo".into()),
+      ),
+      (TestResponse::default(), AgentEvent::RunCompleted),
+      (
+        TestResponse {
+          message: vec![invalid.clone()].into(),
+          ..Default::default()
+        },
+        AgentEvent::RunFailed("failed to decode `foo` arguments".into()),
+      ),
+    ] {
+      case(
+        &invocation,
+        &message,
+        TestResponse {
+          updates: updates
+            .iter()
+            .cloned()
+            .chain([MessageUpdate::Content {
+              index: 3,
+              content: invalid.clone(),
+            }])
+            .collect(),
+          ..response
+        },
+        updates
+          .iter()
+          .cloned()
+          .map(|update| AgentEvent::MessagePreview {
+            message_id: MessageId(2),
+            update,
+          })
+          .chain([
+            AgentEvent::MessageCommitted {
+              draft: Some(draft.clone()),
+              message_id: MessageId(2),
+              message: Message::Agent(partial.clone()),
+            },
+            terminal,
+          ])
+          .collect(),
+      )
+      .await;
+    }
+
+    let update = MessageUpdate::ReasoningDelta {
+      delta: "foo".into(),
+      index: 0,
+    };
+    let mut draft = MessageBuffer::default();
+    draft.apply(update.clone());
+
+    case(
+      &invocation,
+      &message,
+      TestResponse {
+        error: Some("bar"),
+        updates: vec![update.clone()],
+        ..Default::default()
+      },
+      vec![
+        AgentEvent::MessagePreview {
+          message_id: MessageId(2),
+          update,
+        },
+        AgentEvent::MessagePreviewFinished {
+          message_id: MessageId(2),
+          draft: Some(draft),
+        },
+        AgentEvent::RunFailed("bar".into()),
+      ],
+    )
+    .await;
+
+    for error in [None, Some("foo")] {
+      case(
+        &invocation,
+        &message,
+        TestResponse {
+          error,
+          ..Default::default()
+        },
+        vec![
+          AgentEvent::MessagePreviewFinished {
+            message_id: MessageId(2),
+            draft: None,
+          },
+          error.map_or(AgentEvent::RunCompleted, |error| {
+            AgentEvent::RunFailed(error.into())
+          }),
+        ],
+      )
+      .await;
+    }
   }
 }

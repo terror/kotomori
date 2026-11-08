@@ -47,7 +47,7 @@ impl Provider for ChatGpt {
   fn stream<'a>(
     &'a self,
     request: Request<'a>,
-    sink: &'a ProviderSink,
+    sink: &'a mut ProviderSink,
   ) -> BoxFuture<'a, Result<AgentMessage>> {
     Box::pin(async move {
       let client = OpenAIConfig::with_key(&chatgpt::DIALECT, "")

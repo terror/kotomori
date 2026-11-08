@@ -9,12 +9,17 @@ pub enum AgentEvent {
     approval: ToolApproval,
   },
   MessageCommitted {
+    draft: Option<MessageBuffer>,
     message_id: MessageId,
     message: Message,
   },
   MessagePreview {
     message_id: MessageId,
     update: MessageUpdate,
+  },
+  MessagePreviewFinished {
+    draft: Option<MessageBuffer>,
+    message_id: MessageId,
   },
   RunCompleted,
   RunFailed(String),

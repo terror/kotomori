@@ -19,6 +19,27 @@ impl Session {
     self.transcript.clear();
   }
 
+  pub(crate) fn commit(
+    &mut self,
+    message: Message,
+    draft: Option<MessageBuffer>,
+  ) {
+    let entry = match draft {
+      Some(draft) => TranscriptEntry::Draft(draft),
+      None => TranscriptEntry::Message(message.clone()),
+    };
+
+    self.transcript.push_many(
+      self
+        .conversation
+        .push(message)
+        .into_iter()
+        .map(TranscriptEntry::Message),
+    );
+
+    self.transcript.push(entry);
+  }
+
   pub(crate) fn generate_title(&self) -> Option<String> {
     self
       .conversation
