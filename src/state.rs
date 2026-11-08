@@ -16,7 +16,9 @@ impl State {
     self
       .session
       .push_many(self.run.take().and_then(Run::finish));
+
     self.session.interrupt_pending_calls();
+
     self.session.push_many(entry);
   }
 
