@@ -30,18 +30,157 @@ impl Rig {
     Ok(Self::build(Cohere::from_env()?.completion(model)))
   }
 
+  fn decode_call_id(id: message::CallId) -> CallId {
+    match id {
+      message::CallId::Local(id) => CallId::Local(id.to_string()),
+      message::CallId::Provider(message::ProviderCallId {
+        call_id,
+        item_id,
+      }) => CallId::Provider { call_id, item_id },
+    }
+  }
+
   fn decode_content(
     content: message::AssistantContent,
   ) -> Result<AssistantContent> {
-    serde_json::from_value(serde_json::to_value(content)?)
-      .context("failed to decode provider content")
+    Ok(match content {
+      message::AssistantContent::Image(image) => AssistantContent::Image(
+        serde_json::to_value(image)
+          .context("failed to decode provider content")?,
+      ),
+      message::AssistantContent::Reasoning(reasoning) => {
+        let issuer = reasoning.issuer().as_str().to_owned();
+
+        let message::Reasoning { content, id } = reasoning
+          .open(reasoning.issuer())
+          .context("failed to open provider reasoning")?;
+
+        AssistantContent::Reasoning(Reasoning {
+          content: content.iter().map(Self::decode_reasoning_content).collect(),
+          id: id.clone(),
+          issuer,
+        })
+      }
+      message::AssistantContent::Text(message::Text {
+        additional_params,
+        text,
+      }) => AssistantContent::Text(Text {
+        additional_params: additional_params
+          .map(message::AdditionalParams::into_value),
+        text,
+      }),
+      message::AssistantContent::ToolCall(message::ToolCall {
+        additional_params,
+        function: message::ToolFunction { arguments, name },
+        id,
+        signature,
+      }) => AssistantContent::ToolCall(ToolRequest {
+        additional_params: additional_params.filter(|value| !value.is_null()),
+        function: ToolFunction {
+          arguments,
+          name: ToolName::new(String::from(name))
+            .context("failed to decode provider content")?,
+        },
+        id: Self::decode_call_id(id),
+        signature,
+      }),
+    })
+  }
+
+  fn decode_reasoning_content(
+    content: &message::ReasoningContent,
+  ) -> ReasoningContent {
+    match content {
+      message::ReasoningContent::Encrypted(content) => {
+        ReasoningContent::Encrypted(content.clone())
+      }
+      message::ReasoningContent::Redacted { data } => {
+        ReasoningContent::Redacted { data: data.clone() }
+      }
+      message::ReasoningContent::Summary(content) => {
+        ReasoningContent::Summary(content.clone())
+      }
+      message::ReasoningContent::Text { signature, text } => {
+        ReasoningContent::Text {
+          signature: signature.clone(),
+          text: text.clone(),
+        }
+      }
+    }
+  }
+
+  fn encode_call_id(id: &CallId) -> Result<message::CallId> {
+    Ok(match id {
+      CallId::Local(id) => message::CallId::Local(
+        message::LocalCallId::deserialize(
+          value::StrDeserializer::<value::Error>::new(id),
+        )
+        .context("failed to encode tool call identity")?,
+      ),
+      CallId::Provider { call_id, item_id } => {
+        let id = message::ProviderCallId::new(call_id.clone())
+          .ok_or(message::EmptyCallId)
+          .context("failed to encode tool call identity")?;
+
+        message::CallId::Provider(if let Some(item_id) = item_id {
+          id.with_item_id(item_id)
+        } else {
+          id
+        })
+      }
+    })
   }
 
   fn encode_content(
     content: &AssistantContent,
   ) -> Result<message::AssistantContent> {
-    serde_json::from_value(serde_json::to_value(content)?)
-      .context("failed to encode provider content")
+    Ok(match content {
+      AssistantContent::Image(image) => message::AssistantContent::Image(
+        serde_json::from_value(image.clone())
+          .context("failed to encode provider content")?,
+      ),
+      AssistantContent::Reasoning(Reasoning {
+        content,
+        id,
+        issuer,
+      }) => message::AssistantContent::Reasoning(
+        message::Reasoning {
+          content: content.iter().map(Self::encode_reasoning_content).collect(),
+          id: id.clone(),
+        }
+        .sealed(issuer.clone()),
+      ),
+      AssistantContent::Text(Text {
+        additional_params,
+        text,
+      }) => message::AssistantContent::Text(message::Text {
+        additional_params: message::AdditionalParams::try_from_value(
+          additional_params.clone().unwrap_or_default(),
+        )
+        .map_err(|_| {
+          anyhow!("`additional_params` must be a JSON object (or null)")
+        })
+        .context("failed to encode provider content")?,
+        text: text.clone(),
+      }),
+      AssistantContent::ToolCall(ToolRequest {
+        additional_params,
+        function: ToolFunction { arguments, name },
+        id,
+        signature,
+      }) => message::AssistantContent::ToolCall(message::ToolCall {
+        additional_params: additional_params
+          .clone()
+          .filter(|value| !value.is_null()),
+        function: message::ToolFunction {
+          arguments: arguments.clone(),
+          name: message::ToolName::new(name.as_str())
+            .context("failed to encode provider content")?,
+        },
+        id: Self::encode_call_id(id)?,
+        signature: signature.clone(),
+      }),
+    })
   }
 
   fn encode_message(message: &Message) -> Result<message::Message> {
@@ -64,8 +203,7 @@ impl Rig {
               }
               UserMessageContent::ToolResult { call, name, result } => {
                 message::UserContent::tool_result(
-                  serde_json::from_value(serde_json::to_value(call)?)
-                    .context("failed to encode tool call identity")?,
+                  Self::encode_call_id(call)?,
                   message::ToolName::new(name.as_str())?,
                   vec![message::ToolResultContent::text(
                     result.message_content(),
@@ -77,6 +215,28 @@ impl Rig {
           .collect::<Result<Vec<_>>>()?,
       },
     })
+  }
+
+  fn encode_reasoning_content(
+    content: &ReasoningContent,
+  ) -> message::ReasoningContent {
+    match content {
+      ReasoningContent::Encrypted(content) => {
+        message::ReasoningContent::Encrypted(content.clone())
+      }
+      ReasoningContent::Redacted { data } => {
+        message::ReasoningContent::Redacted { data: data.clone() }
+      }
+      ReasoningContent::Summary(content) => {
+        message::ReasoningContent::Summary(content.clone())
+      }
+      ReasoningContent::Text { signature, text } => {
+        message::ReasoningContent::Text {
+          signature: signature.clone(),
+          text: text.clone(),
+        }
+      }
+    }
   }
 
   pub fn gateway(

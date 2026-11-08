@@ -2,19 +2,20 @@
 
 use {
   ::rig::{client::env::EnvError, providers::openai::OpenAIConfig},
-  anyhow::Context,
+  anyhow::{Context, anyhow},
   futures_util::{StreamExt, future::BoxFuture},
   kotomori_core::{
-    AgentMessage, AssistantContent, Message, MessageUpdate, Model, Provider,
-    ProviderSink, Request, Result, UserMessageContent,
+    AgentMessage, AssistantContent, CallId, Message, MessageUpdate, Model,
+    Provider, ProviderSink, Reasoning, ReasoningContent, Request, Result, Text,
+    ToolFunction, ToolName, ToolRequest, UserMessageContent,
   },
+  serde::{Deserialize, de::value},
   std::{env, path::PathBuf, sync::Arc},
 };
 
 #[cfg(test)]
 use kotomori_core::{
-  CallId, MessageBuffer, MessageDraft, ToolDefinition, ToolName, ToolOutcome,
-  ToolResult,
+  MessageBuffer, MessageDraft, ToolDefinition, ToolOutcome, ToolResult,
 };
 
 pub use {chatgpt::ChatGpt, copilot::GithubCopilot, rig::Rig};
