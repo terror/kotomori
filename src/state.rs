@@ -61,7 +61,9 @@ impl State {
       .session
       .push_many(self.run.take().and_then(Run::finish));
 
-    self.session.interrupt_pending_calls();
+    if let Err(error) = self.session.interrupt_pending_calls() {
+      self.session.push(TranscriptEntry::Error(error.to_string()));
+    }
 
     self.session.push_many(entry);
   }
@@ -296,8 +298,8 @@ impl State {
     vec![Effect::InterruptAgent]
   }
 
-  pub(crate) fn new(mut session: Session) -> Self {
-    session.interrupt_pending_calls();
+  pub(crate) fn new(mut session: Session) -> Result<Self> {
+    session.interrupt_pending_calls()?;
 
     let history = session
       .conversation
@@ -307,7 +309,7 @@ impl State {
       .map(str::to_owned)
       .collect();
 
-    Self {
+    Ok(Self {
       composer: Composer::new(
         session.settings.prompt.as_deref().unwrap_or_default(),
         history,
@@ -318,7 +320,7 @@ impl State {
       run: None,
       session,
       should_quit: false,
-    }
+    })
   }
 
   fn quit(&mut self) {
@@ -335,8 +337,11 @@ impl State {
     }
   }
 
-  fn run(&mut self, input: String) -> Effect {
-    self.session.interrupt_pending_calls();
+  fn run(&mut self, input: String) -> Option<Effect> {
+    if let Err(error) = self.session.interrupt_pending_calls() {
+      self.session.push(TranscriptEntry::Error(error.to_string()));
+      return None;
+    }
 
     self
       .session
@@ -355,18 +360,19 @@ impl State {
 
     self.run = Some(Run::new(run_id));
 
-    Effect::RunAgent {
+    Some(Effect::RunAgent {
       conversation,
       run_id,
-    }
+    })
   }
 
   fn run_next_queued(&mut self) -> Vec<Effect> {
     self
       .queued_inputs
       .pop_front()
-      .map(|input| vec![self.run(input)])
-      .unwrap_or_default()
+      .and_then(|input| self.run(input))
+      .into_iter()
+      .collect()
   }
 
   fn submit(&mut self, action: &Action) -> Vec<Effect> {
@@ -412,7 +418,7 @@ impl State {
         self.queued_inputs.push_back(input);
         Vec::new()
       }
-      _ => vec![Effect::SaveSession, self.run(input)],
+      _ => once(Effect::SaveSession).chain(self.run(input)).collect(),
     }
   }
 }
@@ -432,7 +438,8 @@ mod tests {
         yolo: false,
       },
       0,
-    ));
+    ))
+    .unwrap();
 
     let invocation = ToolRequest::new(
       CallId::new("foo"),
@@ -483,7 +490,8 @@ mod tests {
         yolo: false,
       },
       0,
-    ));
+    ))
+    .unwrap();
 
     let (request, response_receiver) = ApprovalRequest::new(ToolRequest::new(
       CallId::new("foo"),
@@ -527,7 +535,8 @@ mod tests {
         yolo: false,
       },
       0,
-    ));
+    ))
+    .unwrap();
 
     let (request, response_receiver) = ApprovalRequest::new(ToolRequest::new(
       CallId::new("foo"),
@@ -561,7 +570,7 @@ mod tests {
       yolo: false,
     };
 
-    let mut state = State::new(Session::new(&settings, 0));
+    let mut state = State::new(Session::new(&settings, 0)).unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
 
@@ -639,7 +648,7 @@ mod tests {
 
     let session = state.session;
 
-    let mut state = State::new(session);
+    let mut state = State::new(session).unwrap();
 
     let messages =
       once(Message::User(vec![UserMessageContent::Text("foo".into())]))
@@ -672,7 +681,8 @@ mod tests {
         yolo: false,
       },
       0,
-    ));
+    ))
+    .unwrap();
 
     assert_eq!(
       state.handle_event(Event::Action(Action::Submit)),
@@ -732,7 +742,8 @@ mod tests {
         yolo: false,
       },
       0,
-    ));
+    ))
+    .unwrap();
 
     state.run = Some({
       let mut run = Run::new(0);
@@ -778,7 +789,8 @@ mod tests {
         yolo: false,
       },
       0,
-    ));
+    ))
+    .unwrap();
 
     state.run = Some({
       let mut run = Run::new(0);
@@ -815,7 +827,8 @@ mod tests {
         yolo: false,
       },
       0,
-    ));
+    ))
+    .unwrap();
 
     state.run = Some(Run::new(0));
 
@@ -898,7 +911,8 @@ mod tests {
         yolo: false,
       },
       0,
-    ));
+    ))
+    .unwrap();
 
     state.handle_event(Event::Action(Action::Submit));
     state.handle_event(Event::Action(Action::Interrupt));
@@ -1006,7 +1020,7 @@ mod tests {
       yolo: false,
     };
 
-    let mut state = State::new(Session::new(&settings, 1));
+    let mut state = State::new(Session::new(&settings, 1)).unwrap();
 
     state
       .session
@@ -1053,7 +1067,8 @@ mod tests {
         yolo: false,
       },
       0,
-    ));
+    ))
+    .unwrap();
 
     state.run = Some(Run::new(0));
 
@@ -1089,7 +1104,8 @@ mod tests {
         yolo: false,
       },
       0,
-    ));
+    ))
+    .unwrap();
 
     assert_eq!(
       state.handle_event(Event::Error("foo".into())),
@@ -1116,7 +1132,7 @@ mod tests {
         yolo: false,
       };
 
-      let mut state = State::new(Session::new(&settings, 0));
+      let mut state = State::new(Session::new(&settings, 0)).unwrap();
 
       let reasoning = Reasoning::new(
         "foo",
@@ -1159,7 +1175,7 @@ mod tests {
 
       assert_eq!(session.transcript, [TranscriptEntry::Draft(draft), entry]);
 
-      let mut state = State::new(session);
+      let mut state = State::new(session).unwrap();
 
       assert_eq!(
         state.handle_event(Event::Action(Action::Submit)),

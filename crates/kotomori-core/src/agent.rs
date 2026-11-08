@@ -82,7 +82,7 @@ impl Agent {
 
     let mut usage = Usage::default();
 
-    for message in conversation.interrupt_pending_calls() {
+    for message in conversation.interrupt_pending_calls()? {
       event_sender.send(AgentEvent::Message(message))?;
     }
 

@@ -243,7 +243,7 @@ impl App {
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
 
     let screen =
-      Screen::Session(Box::new(State::new(Session::new(settings, now()?))));
+      Screen::Session(Box::new(State::new(Session::new(settings, now()?))?));
 
     Ok(Self {
       agent: Self::agent(&screen)?,
@@ -261,7 +261,7 @@ impl App {
     self
       .set_screen(Screen::Session(Box::new(State::new(
         self.database.load_session(id, &self.settings)?,
-      ))))
+      )?)))
       .await
   }
 
