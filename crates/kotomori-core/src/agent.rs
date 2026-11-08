@@ -26,6 +26,26 @@ impl Agent {
     Ok(response_receiver.await.unwrap_or(ToolApproval::Denied))
   }
 
+  async fn execute(
+    &self,
+    event_sender: &UnboundedSender<AgentEvent>,
+    tool_call: &ToolRequest,
+    tool: ToolCall,
+  ) -> Result<ToolResult> {
+    Ok(
+      match self
+        .approval(event_sender, tool_call, tool.approval)
+        .await?
+      {
+        ToolApproval::Approved => tool.future.await,
+        ToolApproval::Denied => ToolResult {
+          stderr: Some("permission denied".into()),
+          ..Default::default()
+        },
+      },
+    )
+  }
+
   pub fn interrupt(&mut self) {
     if let Some(task) = self.task.take() {
       task.abort();
@@ -136,11 +156,11 @@ impl Agent {
         .iter()
         .filter_map(|content| match content {
           AssistantContent::ToolCall(call) => {
-            Some(self.config.tools.prepare(call.clone()))
+            Some((call.clone(), self.config.tools.prepare(call.clone())))
           }
           _ => None,
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Vec<_>>();
 
       let message = Message::Agent(message);
 
@@ -156,14 +176,18 @@ impl Agent {
         break;
       }
 
+      let invalid = tool_calls.iter().any(|(_, tool)| tool.is_err());
+
       for (tool_call, tool) in tool_calls {
-        let result = match self
-          .approval(event_sender, &tool_call, tool.approval)
-          .await?
-        {
-          ToolApproval::Approved => tool.future.await,
-          ToolApproval::Denied => ToolResult {
-            stderr: Some("permission denied".into()),
+        let result = match tool {
+          Ok((_, tool)) if !invalid => {
+            self.execute(event_sender, &tool_call, tool).await?
+          }
+          tool => ToolResult {
+            stderr: Some(match tool {
+              Ok(_) => "batch skipped: another tool call is invalid".into(),
+              Err(error) => format!("{error:#}"),
+            }),
             ..Default::default()
           },
         };
