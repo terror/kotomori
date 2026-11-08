@@ -50,11 +50,13 @@ pub use {
   context_strategy::{ContextStrategy, FullContext},
   conversation::Conversation,
   finish_reason::FinishReason,
+  host_policy::{AllowAll, DefaultHostPolicy, HostPolicy},
   message::Message,
   message_buffer::MessageBuffer,
   message_draft::MessageDraft,
   message_update::MessageUpdate,
   model::Model,
+  policy_decision::PolicyDecision,
   provider::Provider,
   provider_response::ProviderResponse,
   provider_sink::ProviderSink,
@@ -99,11 +101,13 @@ mod call_id;
 mod context_strategy;
 mod conversation;
 mod finish_reason;
+mod host_policy;
 mod message;
 mod message_buffer;
 mod message_draft;
 mod message_update;
 mod model;
+mod policy_decision;
 mod provider;
 mod provider_response;
 mod provider_sink;

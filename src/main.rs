@@ -37,7 +37,7 @@ use {
   indoc::formatdoc,
   interruption::Interruption,
   kotomori_core::{
-    Agent, AgentConfig, AgentEvent, AgentRun, ApprovalRequest,
+    Agent, AgentConfig, AgentEvent, AgentRun, AllowAll, ApprovalRequest,
     AssistantContent, CallId, Conversation, Message, MessageBuffer,
     MessageDraft, MessageUpdate, Model, Provider, ProviderResponse,
     ProviderSink, Reasoning, ReasoningContent, Request, RunEntry, RunOutcome,

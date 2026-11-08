@@ -5,7 +5,6 @@ pub struct AgentConfig {
   pub max_rounds: usize,
   pub model: Model,
   pub tools: ToolRegistry,
-  pub yolo: bool,
 }
 
 impl AgentConfig {

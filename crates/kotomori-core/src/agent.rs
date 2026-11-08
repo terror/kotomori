@@ -4,6 +4,7 @@ use super::*;
 pub struct Agent {
   config: AgentConfig,
   context_strategy: Arc<dyn ContextStrategy>,
+  host_policy: Arc<dyn HostPolicy>,
   provider: Arc<dyn Provider>,
   system: String,
 }
@@ -13,10 +14,12 @@ impl Agent {
     &self,
     event_sender: &UnboundedSender<AgentEvent>,
     tool_call: &ToolRequest,
-    policy: ApprovalPolicy,
+    decision: PolicyDecision,
   ) -> Result<ToolApproval> {
-    if self.config.yolo || policy == ApprovalPolicy::None {
-      return Ok(ToolApproval::Approved);
+    match decision {
+      PolicyDecision::Allow => return Ok(ToolApproval::Approved),
+      PolicyDecision::Deny => return Ok(ToolApproval::Denied),
+      PolicyDecision::Ask => {}
     }
 
     let (request, response_receiver) = ApprovalRequest::new(tool_call.clone());
@@ -32,10 +35,11 @@ impl Agent {
     response: ResponseId,
     tool_call: &ToolRequest,
     tool: ToolCall,
+    decision: PolicyDecision,
   ) -> Result<ToolResult> {
     Ok(
       match self
-        .approval(&run.event_sender, tool_call, tool.approval)
+        .approval(&run.event_sender, tool_call, decision)
         .await?
       {
         ToolApproval::Approved => {
@@ -66,6 +70,7 @@ impl Agent {
     Self {
       config,
       context_strategy: Arc::new(FullContext),
+      host_policy: Arc::new(DefaultHostPolicy),
       provider,
       system,
     }
@@ -89,6 +94,17 @@ impl Agent {
     context.request(&self.config.model).validate()?;
 
     Ok(context)
+  }
+
+  fn prepare_tool(
+    &self,
+    call: &ToolRequest,
+  ) -> Result<(ToolCall, PolicyDecision)> {
+    let tool = self.config.tools.prepare(call)?;
+
+    let decision = self.host_policy.evaluate(call, tool.approval);
+
+    Ok((tool, decision))
   }
 
   pub fn spawn(&self, conversation: Conversation) -> AgentRun {
@@ -240,7 +256,7 @@ impl Agent {
           let tool = tools
             .get(&call.function.name)
             .with_context(|| format!("unknown tool `{}`", call.function.name))
-            .and_then(|_| self.config.tools.prepare(&call));
+            .and_then(|_| self.prepare_tool(&call));
 
           (call, tool)
         })
@@ -250,8 +266,8 @@ impl Agent {
 
       for (tool_call, tool) in tool_calls {
         let result = match tool {
-          Ok(tool) if !invalid => {
-            self.execute(run, id, &tool_call, tool).await?
+          Ok((tool, decision)) if !invalid => {
+            self.execute(run, id, &tool_call, tool, decision).await?
           }
           Ok(_) => ToolResult {
             outcome: ToolOutcome::Skipped,
@@ -286,6 +302,14 @@ impl Agent {
   ) -> Self {
     Self {
       context_strategy,
+      ..self
+    }
+  }
+
+  #[must_use]
+  pub fn with_host_policy(self, host_policy: Arc<dyn HostPolicy>) -> Self {
+    Self {
+      host_policy,
       ..self
     }
   }
@@ -384,7 +408,6 @@ mod tests {
           max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
           model: "mock:local".parse().unwrap(),
           tools,
-          yolo,
         },
         Arc::new(TestProvider {
           requests: requests.clone(),
@@ -392,6 +415,12 @@ mod tests {
         }),
         String::new(),
       );
+
+      let agent = if yolo {
+        agent.with_host_policy(Arc::new(AllowAll))
+      } else {
+        agent
+      };
 
       Self { agent, requests }
     }

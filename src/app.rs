@@ -32,16 +32,21 @@ impl App {
       directory: settings.directory.clone(),
     }))?;
 
-    Ok(Some(Agent::new(
+    let agent = Agent::new(
       AgentConfig {
         max_rounds: settings.max_rounds,
         model: settings.model.clone(),
         tools,
-        yolo: settings.yolo,
       },
       provider::build(&settings.model)?,
       Self::system_prompt(&settings.directory)?,
-    )))
+    );
+
+    Ok(Some(if settings.yolo {
+      agent.with_host_policy(Arc::new(AllowAll))
+    } else {
+      agent
+    }))
   }
 
   async fn drain_pending_events(&mut self) -> Result {
