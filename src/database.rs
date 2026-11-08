@@ -21,7 +21,7 @@ impl Database {
     let session = Session {
       conversation: session.conversation.clone(),
       title: session.title.clone(),
-      transcript: Transcript::new(session.transcript.entries.clone()),
+      transcript: session.transcript.clone(),
       ..Session::new(&session.settings, now)
     };
 
@@ -87,7 +87,7 @@ impl Database {
               ..settings.clone()
             },
             title: row.get(5)?,
-            transcript: Transcript::default(),
+            transcript: Vec::new(),
             updated_at: row.get(2)?,
           };
 
@@ -133,7 +133,7 @@ impl Database {
       .to_str()
       .context("session directory is not valid UTF-8")?;
 
-    let entries = serde_json::to_string(&session.transcript.entries)
+    let entries = serde_json::to_string(&session.transcript)
       .context("failed to serialize session transcript")?;
 
     let title = session.title.clone().or_else(|| session.generate_title());
@@ -291,7 +291,7 @@ mod tests {
           yolo: false,
         },
         title: None,
-        transcript: Transcript::default(),
+        transcript: Vec::new(),
         updated_at,
       };
 
@@ -327,7 +327,7 @@ mod tests {
         yolo: true,
       },
       title: None,
-      transcript: Transcript::default(),
+      transcript: Vec::new(),
       updated_at: 0,
     };
 

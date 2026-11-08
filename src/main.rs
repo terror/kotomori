@@ -96,7 +96,6 @@ use {
     time::{interval, sleep},
   },
   tool_action_tense::ToolActionTense,
-  transcript::Transcript,
   transcript_block::TranscriptBlock,
   transcript_entry::TranscriptEntry,
   unicode_segmentation::UnicodeSegmentation,
@@ -167,7 +166,6 @@ mod str_ext;
 mod style;
 mod subcommand;
 mod tool_action_tense;
-mod transcript;
 mod transcript_block;
 mod transcript_entry;
 mod write_ext;

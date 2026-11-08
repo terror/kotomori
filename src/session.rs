@@ -7,7 +7,7 @@ pub(crate) struct Session {
   pub(crate) id: Option<i64>,
   pub(crate) settings: Settings,
   pub(crate) title: Option<String>,
-  pub(crate) transcript: Transcript,
+  pub(crate) transcript: Vec<TranscriptEntry>,
   pub(crate) updated_at: u64,
 }
 
@@ -38,7 +38,7 @@ impl Session {
   }
 
   pub(crate) fn interrupt_pending_calls(&mut self) {
-    self.transcript.push_many(
+    self.transcript.extend(
       self
         .conversation
         .interrupt_pending_calls()
@@ -54,7 +54,7 @@ impl Session {
       id: None,
       settings: settings.clone(),
       title: None,
-      transcript: Transcript::default(),
+      transcript: Vec::new(),
       updated_at: now,
     }
   }
@@ -72,7 +72,7 @@ impl Session {
 
     self
       .transcript
-      .push_many(messages.into_iter().map(TranscriptEntry::Message));
+      .extend(messages.into_iter().map(TranscriptEntry::Message));
 
     self.transcript.push(entry);
   }
