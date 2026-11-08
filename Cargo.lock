@@ -3328,11 +3328,11 @@ dependencies = [
  "futures-util",
  "indoc",
  "kotomori-core",
+ "kotomori-rig",
  "kotomori-tools",
  "portable-pty",
  "ratatui-core",
  "ratatui-textarea",
- "rig",
  "rusqlite",
  "serde",
  "serde_json",
@@ -3363,6 +3363,17 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "kotomori-rig"
+version = "0.4.1"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "kotomori-core",
+ "rig",
+ "serde_json",
 ]
 
 [[package]]

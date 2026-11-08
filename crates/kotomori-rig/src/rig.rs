@@ -5,22 +5,29 @@ use {
     completion::{self, CompletionRequest},
     message,
     operation::Completion,
+    providers::{
+      cohere::Cohere, ollama::Ollama, openai::wire::Dialect,
+      registry::ProviderRef,
+    },
     streaming::{Item, StreamEvent},
   },
 };
 
 #[derive(Clone, Debug)]
-pub(super) struct Rig {
+pub struct Rig {
   model: DynModel<Completion>,
 }
 
 impl Rig {
-  pub(super) fn build(
-    model: impl Into<DynModel<Completion>>,
-  ) -> Arc<dyn Provider> {
+  #[must_use]
+  pub fn build(model: impl Into<DynModel<Completion>>) -> Arc<dyn Provider> {
     Arc::new(Self {
       model: model.into(),
     })
+  }
+
+  pub fn cohere(model: &str) -> Result<Arc<dyn Provider>> {
+    Ok(Self::build(Cohere::from_env()?.completion(model)))
   }
 
   fn decode_content(
@@ -70,6 +77,37 @@ impl Rig {
           .collect::<Result<Vec<_>>>()?,
       },
     })
+  }
+
+  pub fn gateway(
+    model: &str,
+    name: &'static str,
+    base_url: &'static str,
+    api_key_env: &'static str,
+  ) -> Result<Arc<dyn Provider>> {
+    Ok(Self::build(
+      OpenAIConfig::from_env_with(&Dialect::gateway(
+        name,
+        base_url,
+        api_key_env,
+      ))?
+      .client()
+      .chat(model),
+    ))
+  }
+
+  pub fn ollama(model: &str) -> Result<Arc<dyn Provider>> {
+    Ok(Self::build(Ollama::from_env()?.completion(model)))
+  }
+
+  pub fn openai(model: &str) -> Result<Arc<dyn Provider>> {
+    Ok(Self::build(OpenAIConfig::from_env()?.client().chat(model)))
+  }
+
+  pub fn provider(provider: &str, model: &str) -> Result<Arc<dyn Provider>> {
+    Ok(Self::build(
+      ProviderRef::parse(&format!("{provider}:{model}"))?.completion_model()?,
+    ))
   }
 
   fn request(request: &Request<'_>) -> Result<CompletionRequest> {

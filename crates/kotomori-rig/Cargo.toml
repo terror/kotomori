@@ -1,0 +1,19 @@
+[package]
+name = "kotomori-rig"
+version = "0.4.1"
+description = "Rig provider adapter for Kotomori"
+authors = ["Liam <liam@scalzulli.com>"]
+license = "CC0-1.0"
+homepage = "https://github.com/terror/kotomori"
+repository = "https://github.com/terror/kotomori"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1.0.102"
+futures-util = { version = "0.3.32", default-features = false, features = ["std"] }
+kotomori-core = { version = "0.4.1", path = "../kotomori-core" }
+rig = { version = "0.43.0", default-features = false, features = ["reqwest", "rustls"] }
+serde_json = "1.0.150"

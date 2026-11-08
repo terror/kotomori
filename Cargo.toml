@@ -21,7 +21,12 @@ include = [
 ]
 
 [workspace]
-default-members = [".", "crates/kotomori-core", "crates/kotomori-tools"]
+default-members = [
+  ".",
+  "crates/kotomori-core",
+  "crates/kotomori-rig",
+  "crates/kotomori-tools",
+]
 members = [".", "crates/*"]
 resolver = "2"
 
@@ -55,10 +60,10 @@ crossterm = "0.29.0"
 futures-util = "0.3.32"
 indoc = "2.0.7"
 kotomori-core = { version = "0.4.1", path = "crates/kotomori-core" }
+kotomori-rig = { version = "0.4.1", path = "crates/kotomori-rig" }
 kotomori-tools = { version = "0.4.1", path = "crates/kotomori-tools" }
 ratatui-core = { version = "0.1.0", default-features = false, features = ["anstyle"] }
 ratatui-textarea = "0.9.1"
-rig = { version = "0.43.0", default-features = false, features = ["reqwest", "rustls"] }
 rusqlite = { version = "0.40.1", features = ["bundled", "fallible_uint"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
