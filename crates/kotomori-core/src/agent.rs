@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Debug)]
 pub struct Agent {
   config: AgentConfig,
+  context_strategy: Arc<dyn ContextStrategy>,
   provider: Arc<dyn Provider>,
   system: String,
 }
@@ -64,9 +65,30 @@ impl Agent {
   ) -> Self {
     Self {
       config,
+      context_strategy: Arc::new(FullContext),
       provider,
       system,
     }
+  }
+
+  async fn prepare_context<'a>(
+    &'a self,
+    conversation: &'a Conversation,
+    tools: &'a [ToolDefinition],
+  ) -> Result<RequestContext<'a>> {
+    let context = self
+      .context_strategy
+      .prepare(Request {
+        messages: conversation.messages(),
+        model: &self.config.model,
+        system: (!self.system.is_empty()).then_some(self.system.as_str()),
+        tools,
+      })
+      .await?;
+
+    context.request(&self.config.model).validate()?;
+
+    Ok(context)
   }
 
   pub fn spawn(&self, conversation: Conversation) -> AgentRun {
@@ -124,8 +146,6 @@ impl Agent {
   ) -> Result<RunOutcome> {
     let event_sender = &run.event_sender;
 
-    let tools = self.config.tools.definitions();
-
     let mut rounds = 0;
 
     for message in conversation.interrupt_pending_calls()? {
@@ -139,14 +159,19 @@ impl Agent {
         }));
       }
 
-      let sink = ProviderSink::new(event_sender.clone());
+      let tools = self.config.tools.definitions();
 
-      let request = Request {
-        messages: conversation.messages(),
-        model: &self.config.model,
-        system: (!self.system.is_empty()).then_some(self.system.as_str()),
-        tools: &tools,
-      };
+      let context = self.prepare_context(&conversation, &tools).await?;
+
+      let request = context.request(&self.config.model);
+
+      let tools = request
+        .tools
+        .iter()
+        .map(|tool| tool.name.clone())
+        .collect::<BTreeSet<_>>();
+
+      let sink = ProviderSink::new(event_sender.clone());
 
       rounds += 1;
 
@@ -157,6 +182,8 @@ impl Agent {
       let response = self.provider.stream(request, &sink).await;
 
       guard.finish(&response);
+
+      drop(context);
 
       let response = response?;
 
@@ -210,7 +237,10 @@ impl Agent {
       let tool_calls = tool_calls
         .into_iter()
         .map(|call| {
-          let tool = self.config.tools.prepare(&call);
+          let tool = tools
+            .get(&call.function.name)
+            .with_context(|| format!("unknown tool `{}`", call.function.name))
+            .and_then(|_| self.config.tools.prepare(&call));
 
           (call, tool)
         })
@@ -247,6 +277,17 @@ impl Agent {
     }
 
     Ok(RunOutcome::Completed)
+  }
+
+  #[must_use]
+  pub fn with_context_strategy(
+    self,
+    context_strategy: Arc<dyn ContextStrategy>,
+  ) -> Self {
+    Self {
+      context_strategy,
+      ..self
+    }
   }
 }
 
