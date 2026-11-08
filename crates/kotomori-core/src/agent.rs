@@ -65,6 +65,8 @@ impl Agent {
   pub fn spawn(&self, conversation: Conversation) -> AgentRun {
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
 
+    let state = RunState::new(conversation.clone());
+
     let agent = self.clone();
 
     let task =
@@ -72,14 +74,18 @@ impl Agent {
         async move { agent.stream(&event_sender, conversation).await },
       );
 
-    AgentRun::new(event_receiver, task)
+    AgentRun {
+      event_receiver,
+      state,
+      task,
+    }
   }
 
   async fn stream(
     &self,
     event_sender: &UnboundedSender<AgentEvent>,
     mut conversation: Conversation,
-  ) -> Result {
+  ) -> Result<RunOutcome> {
     let tools = self.config.tools.definitions();
 
     let mut rounds = 0;
@@ -92,15 +98,12 @@ impl Agent {
 
     loop {
       if rounds >= self.config.max_rounds {
-        bail!(
-          "agent round limit reached: maximum of {} provider requests per run",
-          self.config.max_rounds
-        );
+        return Ok(RunOutcome::Limited(RunLimit::Rounds {
+          max: self.config.max_rounds,
+        }));
       }
 
-      let sink = ProviderSink {
-        event_sender: event_sender.clone(),
-      };
+      let sink = ProviderSink::new(event_sender.clone());
 
       let request = Request {
         messages: conversation.messages(),
@@ -119,17 +122,17 @@ impl Agent {
 
       let message = response.message;
 
-      let error = match response.finish_reason {
+      let outcome = match response.finish_reason {
         Some(FinishReason::Length) => {
-          Some("completion truncated: output token limit reached")
+          Some(RunOutcome::Limited(RunLimit::OutputTokens))
         }
-        Some(FinishReason::ContentFilter) => {
-          Some("completion filtered by the provider")
-        }
+        Some(FinishReason::ContentFilter) => Some(RunOutcome::Failed(
+          "completion filtered by the provider".into(),
+        )),
         _ => None,
       };
 
-      if let Some(error) = error {
+      if let Some(outcome) = outcome {
         let mut message = message;
 
         message
@@ -138,7 +141,7 @@ impl Agent {
 
         event_sender.send(AgentEvent::Message(Message::Agent(message)))?;
 
-        bail!(error);
+        return Ok(outcome);
       }
 
       if message.content.is_empty() {
@@ -149,9 +152,7 @@ impl Agent {
         .content
         .iter()
         .filter_map(|content| match content {
-          AssistantContent::ToolCall(call) => {
-            Some((call.clone(), self.config.tools.prepare(call)))
-          }
+          AssistantContent::ToolCall(call) => Some(call.clone()),
           _ => None,
         })
         .collect::<Vec<_>>();
@@ -165,6 +166,15 @@ impl Agent {
       if tool_calls.is_empty() {
         break;
       }
+
+      let tool_calls = tool_calls
+        .into_iter()
+        .map(|call| {
+          let tool = self.config.tools.prepare(&call);
+
+          (call, tool)
+        })
+        .collect::<Vec<_>>();
 
       let invalid = tool_calls.iter().any(|(_, tool)| tool.is_err());
 
@@ -196,7 +206,7 @@ impl Agent {
       }
     }
 
-    Ok(())
+    Ok(RunOutcome::Completed)
   }
 }
 
@@ -229,8 +239,13 @@ mod tests {
 
         sink.update_many(response.updates)?;
 
+        if response.pending {
+          return std::future::pending().await;
+        }
+
         Ok(ProviderResponse {
           message: response.message,
+          usage: response.usage,
           ..Default::default()
         })
       })
@@ -240,7 +255,9 @@ mod tests {
   #[derive(Debug, Default)]
   struct TestResponse {
     message: AgentMessage,
+    pending: bool,
     updates: Vec<MessageUpdate>,
+    usage: Usage,
   }
 
   #[derive(Debug)]
@@ -321,26 +338,13 @@ mod tests {
       false,
     );
 
-    let mut events = agent.spawn(
-      vec![Message::User(vec![UserMessageContent::Text("foo".into())])].into(),
-    );
-
-    assert_eq!(
-      events.recv().await.unwrap(),
-      AgentEvent::Usage(Usage::default()),
-    );
-
-    assert_eq!(
-      events.recv().await.unwrap(),
-      AgentEvent::Message(Message::Agent(vec![tool_call.clone()].into()))
-    );
-
-    let request = match events.recv().await.unwrap() {
-      AgentEvent::ToolApprovalRequest(request) => request,
-      event => panic!("expected approval request, got {event:?}"),
-    };
-
-    request.respond(ToolApproval::Denied);
+    let result = agent
+      .spawn(
+        vec![Message::User(vec![UserMessageContent::Text("foo".into())])]
+          .into(),
+      )
+      .join()
+      .await;
 
     let tool_result = ToolResult {
       outcome: ToolOutcome::Denied,
@@ -348,27 +352,11 @@ mod tests {
       ..Default::default()
     };
 
-    assert_eq!(
-      events.recv().await.unwrap(),
-      AgentEvent::Message(Message::User(vec![
-        UserMessageContent::ToolResult {
-          call: CallId::new("foo"),
-          name: ToolName::new("foo").unwrap(),
-          result: tool_result.clone(),
-        }
-      ])),
-    );
-
-    assert_eq!(
-      events.recv().await.unwrap(),
-      AgentEvent::Usage(Usage::default()),
-    );
-
-    assert_eq!(events.recv().await, None);
-
-    events.cancel_and_join().await.1.unwrap();
+    assert_eq!(result.outcome, RunOutcome::Completed);
 
     let requests = requests.lock().unwrap();
+
+    assert_eq!(result.conversation.messages(), requests[1]);
 
     assert_eq!(
       *requests,
@@ -388,7 +376,82 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn interruption_preserves_streamed_protocol() {
+    let reasoning = Reasoning {
+      content: vec![ReasoningContent::Text {
+        text: "foo".into(),
+        signature: Some("bar".into()),
+      }],
+      id: Some("baz".into()),
+      issuer: "foo".into(),
+    };
+
+    let encrypted = Reasoning {
+      content: vec![ReasoningContent::Encrypted("qux".into())],
+      id: Some("quux".into()),
+      issuer: "foo".into(),
+    };
+
+    let update = MessageUpdate::ReasoningDelta {
+      delta: "foo".into(),
+      index: 0,
+    };
+
+    let test_agent = TestAgent::new(
+      vec![TestResponse {
+        pending: true,
+        updates: vec![
+          update.clone(),
+          MessageUpdate::Content {
+            index: 0,
+            content: AssistantContent::Reasoning(reasoning.clone()),
+          },
+          MessageUpdate::Content {
+            index: 1,
+            content: AssistantContent::Reasoning(encrypted.clone()),
+          },
+          MessageUpdate::Text {
+            delta: "quuz".into(),
+            index: 2,
+          },
+        ],
+        ..Default::default()
+      }],
+      true,
+    );
+
+    let mut run = test_agent.agent.spawn(Conversation::default());
+
+    assert_eq!(run.recv().await, Some(AgentEvent::Update(update)));
+
+    let message = Message::Agent(
+      vec![
+        AssistantContent::Reasoning(reasoning),
+        AssistantContent::Reasoning(encrypted),
+        AssistantContent::text("quuz"),
+      ]
+      .into(),
+    );
+
+    assert_eq!(
+      run.cancel_and_join().await,
+      RunResult {
+        conversation: vec![message.clone()].into(),
+        entries: vec![RunEntry::Message(message)],
+        outcome: RunOutcome::Cancelled,
+        usage: Usage::default(),
+      },
+    );
+  }
+
+  #[tokio::test]
+  #[allow(clippy::too_many_lines)]
   async fn loops_until_provider_returns_no_tool_calls() {
+    let usage = |tokens| Usage {
+      total_tokens: Some(tokens),
+      ..Default::default()
+    };
+
     let call = CallId::Provider {
       call_id: "qux".into(),
       item_id: Some("baz".into()),
@@ -438,10 +501,14 @@ mod tests {
         TestResponse {
           message: message.clone(),
           updates: vec![update("quux")],
+          usage: usage(2),
+          ..Default::default()
         },
         TestResponse {
           message: complete.clone(),
           updates: vec![update("bar")],
+          usage: usage(3),
+          ..Default::default()
         },
       ],
       true,
@@ -457,9 +524,11 @@ mod tests {
       received.push(event);
     }
 
-    events.cancel_and_join().await.1.unwrap();
+    let result = events.join().await;
 
-    let result = ToolResult {
+    assert_eq!(result.outcome, RunOutcome::Completed);
+
+    let tool_result = ToolResult {
       content: Some("bar".into()),
       outcome: ToolOutcome::Success,
       ..Default::default()
@@ -468,12 +537,22 @@ mod tests {
     let tool_result = Message::User(vec![UserMessageContent::ToolResult {
       call: call.clone(),
       name: ToolName::new("foo").unwrap(),
-      result: result.clone(),
+      result: tool_result,
     }]);
 
     let requests = test_agent.requests.lock().unwrap();
 
     assert_eq!(requests.len(), 2);
+
+    assert_eq!(result.usage, usage(5));
+    assert_eq!(
+      result.conversation.messages(),
+      requests[1]
+        .iter()
+        .cloned()
+        .chain([Message::Agent(complete.clone())])
+        .collect::<Vec<_>>(),
+    );
 
     let messages = serde_json::from_str::<Vec<Message>>(
       &serde_json::to_string(&requests[1]).unwrap(),
@@ -493,12 +572,12 @@ mod tests {
       received,
       [
         AgentEvent::Update(update("quux")),
-        AgentEvent::Usage(Usage::default()),
+        AgentEvent::Usage(usage(2)),
         AgentEvent::Message(Message::Agent(message)),
         AgentEvent::ToolStarted(call),
         AgentEvent::Message(tool_result),
         AgentEvent::Update(update("bar")),
-        AgentEvent::Usage(Usage::default()),
+        AgentEvent::Usage(usage(5)),
         AgentEvent::Message(Message::Agent(complete)),
       ],
     );

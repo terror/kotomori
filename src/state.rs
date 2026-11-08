@@ -19,32 +19,47 @@ impl State {
     self.queued_inputs.clear();
   }
 
-  fn finish_interruption(
-    &mut self,
-    run_id: u64,
-    result: Result<(), String>,
-  ) -> Vec<Effect> {
-    let Some(run) = self.run.as_mut().filter(|run| run.id == run_id) else {
+  fn finish_run(&mut self, run_id: u64, result: RunResult) -> Vec<Effect> {
+    if self.run.as_ref().is_none_or(|run| run.id != run_id) {
       return Vec::new();
-    };
-
-    let interruption = run.interruption.take();
-
-    let run_next = interruption == Some(Interruption::ContinueQueued);
-
-    match interruption {
-      Some(Interruption::Clear) => self.clear(),
-      Some(Interruption::ContinueQueued | Interruption::Stop) => {
-        self.finish_run(Some(TranscriptEntry::Interrupted));
-      }
-      Some(Interruption::Error(error)) => {
-        self.finish_run(Some(TranscriptEntry::Error(error)));
-      }
-      None => self.finish_run(None),
     }
 
-    if let Err(error) = result {
-      self.session.push(TranscriptEntry::Error(error));
+    let run = self.run.take().unwrap();
+
+    let run_next =
+      matches!(run.interruption, None | Some(Interruption::ContinueQueued));
+
+    if run.interruption == Some(Interruption::Clear) {
+      self.clear();
+    } else {
+      self.session.transcript.extend(
+        result
+          .entries
+          .into_iter()
+          .skip(run.received_entries)
+          .map(TranscriptEntry::from),
+      );
+
+      self.session.conversation = result.conversation;
+
+      match result.outcome {
+        RunOutcome::Cancelled => {
+          if !matches!(run.interruption, Some(Interruption::Error(_))) {
+            self.session.push(TranscriptEntry::Interrupted);
+          }
+        }
+        RunOutcome::Completed => {}
+        RunOutcome::Failed(error) => {
+          self.session.push(TranscriptEntry::Error(error));
+        }
+        RunOutcome::Limited(limit) => {
+          self.session.push(TranscriptEntry::Error(limit.to_string()));
+        }
+      }
+
+      if let Some(Interruption::Error(error)) = run.interruption {
+        self.session.push(TranscriptEntry::Error(error));
+      }
     }
 
     once(Effect::SaveSession)
@@ -54,18 +69,6 @@ impl State {
         Vec::new()
       })
       .collect()
-  }
-
-  fn finish_run(&mut self, entry: Option<TranscriptEntry>) {
-    self
-      .session
-      .push_many(self.run.take().and_then(Run::finish));
-
-    if let Err(error) = self.session.interrupt_pending_calls() {
-      self.session.push(TranscriptEntry::Error(error.to_string()));
-    }
-
-    self.session.push_many(entry);
   }
 
   fn handle_action(&mut self, action: Action) -> Vec<Effect> {
@@ -211,7 +214,11 @@ impl State {
           AgentEvent::Message(message) => {
             run.reset_message();
 
+            let entries = self.session.transcript.len();
+
             self.session.push(TranscriptEntry::Message(message));
+
+            run.received_entries += self.session.transcript.len() - entries;
 
             return vec![Effect::SaveSession];
           }
@@ -221,24 +228,11 @@ impl State {
           AgentEvent::ToolStarted(call) => {
             run.running_tool = Some(call);
           }
-          AgentEvent::Usage(usage) => {
-            run.usage = usage;
-          }
+          AgentEvent::Usage(_) => {}
         }
       }
       Event::AgentCompleted { result, run_id } => {
-        if self.run.as_ref().is_none_or(|run| run.id != run_id) {
-          return Vec::new();
-        }
-
-        self.finish_run(result.err().map(TranscriptEntry::Error));
-
-        return once(Effect::SaveSession)
-          .chain(self.run_next_queued())
-          .collect();
-      }
-      Event::AgentInterrupted { result, run_id } => {
-        return self.finish_interruption(run_id, result);
+        return self.finish_run(run_id, result);
       }
       Event::ClipboardCopied(result) => match result {
         Ok(()) => self.session.push(TranscriptEntry::Notice(
@@ -253,7 +247,7 @@ impl State {
           return self.interrupt_agent(Interruption::Error(error));
         }
 
-        self.finish_run(Some(TranscriptEntry::Error(error)));
+        self.session.push(TranscriptEntry::Error(error));
 
         return vec![Effect::SaveSession];
       }
@@ -472,7 +466,8 @@ mod tests {
 
     assert_eq!(
       state.handle_event(Event::AgentCompleted {
-        result: Ok(()),
+        result: RunState::new(state.session.conversation.clone())
+          .finish(RunOutcome::Completed),
         run_id: 0,
       }),
       Vec::new(),
@@ -523,7 +518,13 @@ mod tests {
       run_id: 0,
     });
 
-    assert_eq!(state.run, Some(Run::new(0)));
+    assert_eq!(
+      state.run,
+      Some(Run {
+        received_entries: 1,
+        ..Run::new(0)
+      })
+    );
     assert!(response_receiver.await.is_err());
   }
 
@@ -555,7 +556,8 @@ mod tests {
     });
 
     state.handle_event(Event::AgentCompleted {
-      result: Err("bar".into()),
+      result: RunState::new(state.session.conversation.clone())
+        .finish(RunOutcome::Failed("bar".into())),
       run_id: 0,
     });
 
@@ -637,17 +639,26 @@ mod tests {
       Message::Agent(vec![AssistantContent::text("qux")].into()),
     ];
 
+    let mut run = RunState::new(state.session.conversation.clone());
+
     for message in &messages {
+      run.apply(&AgentEvent::Message(message.clone()));
+    }
+
+    for message in &messages[..2] {
       state.handle_event(Event::Agent {
         event: AgentEvent::Message(message.clone()),
         run_id: 0,
       });
     }
 
-    state.handle_event(Event::AgentCompleted {
-      result: Ok(()),
-      run_id: 0,
-    });
+    let result = run.finish(RunOutcome::Completed);
+
+    let conversation = result.conversation.clone();
+
+    state.handle_event(Event::AgentCompleted { result, run_id: 0 });
+
+    assert_eq!(state.session.conversation, conversation);
 
     let session = state.session;
 
@@ -702,7 +713,8 @@ mod tests {
     );
 
     state.handle_event(Event::AgentCompleted {
-      result: Err("bar".into()),
+      result: RunState::new(state.session.conversation.clone())
+        .finish(RunOutcome::Failed("bar".into())),
       run_id: 0,
     });
 
@@ -781,128 +793,6 @@ mod tests {
     );
   }
 
-  #[test]
-  fn finish_run_saves_partial_output() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
-        model: "mock:local".parse().unwrap(),
-        prompt: None,
-        yolo: false,
-      },
-      0,
-    ))
-    .unwrap();
-
-    state.run = Some({
-      let mut run = Run::new(0);
-      run.update(MessageUpdate::Text {
-        delta: "foo".into(),
-        index: 0,
-      });
-      run
-    });
-
-    assert_eq!(
-      state.handle_event(Event::AgentCompleted {
-        result: Ok(()),
-        run_id: 0
-      }),
-      [Effect::SaveSession]
-    );
-
-    assert_eq!(state.run, None);
-    assert_eq!(
-      state.session.conversation.messages(),
-      [Message::Agent(vec![AssistantContent::text("foo")].into())]
-    );
-  }
-
-  #[test]
-  fn interruption_preserves_streamed_protocol() {
-    let mut state = State::new(Session::new(
-      &Settings {
-        directory: "foo".into(),
-        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
-        model: "mock:foo".parse().unwrap(),
-        prompt: None,
-        yolo: false,
-      },
-      0,
-    ))
-    .unwrap();
-
-    state.run = Some(Run::new(0));
-
-    let (event_sender, mut events) = mpsc::unbounded_channel();
-
-    let sink = ProviderSink::new(event_sender);
-
-    let reasoning = Reasoning {
-      content: vec![ReasoningContent::Text {
-        text: "foo".into(),
-        signature: Some("bar".into()),
-      }],
-      id: Some("baz".into()),
-      issuer: "foo".into(),
-    };
-
-    let encrypted = Reasoning {
-      content: vec![ReasoningContent::Encrypted("qux".into())],
-      id: Some("quux".into()),
-      issuer: "foo".into(),
-    };
-
-    for update in [
-      MessageUpdate::ReasoningDelta {
-        delta: "foo".into(),
-        index: 0,
-      },
-      MessageUpdate::Content {
-        index: 0,
-        content: AssistantContent::Reasoning(reasoning.clone()),
-      },
-      MessageUpdate::Content {
-        index: 1,
-        content: AssistantContent::Reasoning(encrypted.clone()),
-      },
-      MessageUpdate::Text {
-        delta: "quuz".into(),
-        index: 2,
-      },
-    ] {
-      sink.update(update).unwrap();
-    }
-
-    while let Ok(event) = events.try_recv() {
-      state.handle_event(Event::Agent { event, run_id: 0 });
-    }
-
-    let content = vec![
-      AssistantContent::Reasoning(reasoning),
-      AssistantContent::Reasoning(encrypted),
-      AssistantContent::text("quuz"),
-    ];
-
-    state.handle_event(Event::Action(Action::Interrupt));
-
-    state.handle_event(Event::AgentInterrupted {
-      result: Ok(()),
-      run_id: 0,
-    });
-
-    let session = state.session;
-
-    assert_eq!(
-      session.transcript,
-      [
-        TranscriptEntry::Message(Message::Agent(content.into())),
-        TranscriptEntry::Interrupted,
-      ]
-    );
-  }
-
   #[tokio::test]
   async fn stale_agent_events_do_not_mutate_new_run() {
     let mut state = State::new(Session::new(
@@ -920,8 +810,9 @@ mod tests {
     state.handle_event(Event::Action(Action::Submit));
     state.handle_event(Event::Action(Action::Interrupt));
 
-    state.handle_event(Event::AgentInterrupted {
-      result: Ok(()),
+    state.handle_event(Event::AgentCompleted {
+      result: RunState::new(state.session.conversation.clone())
+        .finish(RunOutcome::Cancelled),
       run_id: 0,
     });
 
@@ -974,8 +865,11 @@ mod tests {
       state.handle_event(Event::Agent { event, run_id: 0 });
     }
 
-    for result in [Err("stale".into()), Ok(())] {
-      state.handle_event(Event::AgentCompleted { result, run_id: 0 });
+    for outcome in [RunOutcome::Failed("stale".into()), RunOutcome::Completed] {
+      state.handle_event(Event::AgentCompleted {
+        result: RunState::default().finish(outcome),
+        run_id: 0,
+      });
     }
 
     assert_eq!(
@@ -998,10 +892,14 @@ mod tests {
       run_id: 1,
     });
 
-    state.handle_event(Event::AgentCompleted {
-      result: Ok(()),
-      run_id: 1,
-    });
+    let result = RunState {
+      conversation: state.session.conversation.clone(),
+      message: state.run.as_ref().unwrap().message.clone(),
+      ..Default::default()
+    }
+    .finish(RunOutcome::Completed);
+
+    state.handle_event(Event::AgentCompleted { result, run_id: 1 });
 
     assert_eq!(
       state.session.conversation.messages(),
@@ -1081,8 +979,9 @@ mod tests {
     );
 
     assert_eq!(
-      state.handle_event(Event::AgentInterrupted {
-        result: Ok(()),
+      state.handle_event(Event::AgentCompleted {
+        result: RunState::new(state.session.conversation.clone())
+          .finish(RunOutcome::Cancelled),
         run_id: 0,
       }),
       vec![Effect::SaveSession]
@@ -1120,99 +1019,6 @@ mod tests {
     assert_eq!(
       state.session.transcript,
       [TranscriptEntry::Error("foo".into())]
-    );
-  }
-
-  #[test]
-  fn unfinished_reasoning_survives_without_entering_requests() {
-    #[track_caller]
-    fn case(event: Event, entry: TranscriptEntry) {
-      let settings = Settings {
-        directory: "foo".into(),
-        max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
-        model: "mock:foo".parse().unwrap(),
-        prompt: Some("qux".into()),
-        yolo: false,
-      };
-
-      let mut state = State::new(Session::new(&settings, 0)).unwrap();
-
-      let reasoning = Reasoning::new(
-        "foo",
-        vec![ReasoningContent::Text {
-          text: "foo".into(),
-          signature: Some("bar".into()),
-        }],
-      );
-
-      let mut run = Run::new(0);
-
-      run.update_many(&[
-        MessageUpdate::Content {
-          index: 0,
-          content: AssistantContent::Reasoning(reasoning.clone()),
-        },
-        MessageUpdate::Text {
-          delta: "baz".into(),
-          index: 1,
-        },
-        MessageUpdate::ReasoningDelta {
-          delta: "quux".into(),
-          index: 2,
-        },
-      ]);
-
-      let draft = run.message.clone();
-
-      state.run = Some(run);
-      for effect in state.handle_event(event) {
-        if let Effect::InterruptAgent = effect {
-          state.handle_event(Event::AgentInterrupted {
-            result: Ok(()),
-            run_id: 0,
-          });
-        }
-      }
-
-      let session = state.session;
-
-      assert_eq!(session.transcript, [TranscriptEntry::Draft(draft), entry]);
-
-      let mut state = State::new(session).unwrap();
-
-      assert_eq!(
-        state.handle_event(Event::Action(Action::Submit)),
-        [
-          Effect::SaveSession,
-          Effect::RunAgent {
-            conversation: vec![
-              Message::Agent(
-                vec![
-                  AssistantContent::Reasoning(reasoning),
-                  AssistantContent::text("baz"),
-                ]
-                .into(),
-              ),
-              Message::User(vec![UserMessageContent::Text("qux".into())]),
-            ]
-            .into(),
-            run_id: 0,
-          }
-        ]
-      );
-    }
-
-    case(
-      Event::Action(Action::Interrupt),
-      TranscriptEntry::Interrupted,
-    );
-
-    case(
-      Event::AgentCompleted {
-        result: Err("foo".into()),
-        run_id: 0,
-      },
-      TranscriptEntry::Error("foo".into()),
     );
   }
 }

@@ -8,6 +8,7 @@ use {
   std::{
     collections::{BTreeMap, btree_map::Entry},
     fmt::{self, Debug, Display, Formatter},
+    mem,
     ops::AddAssign,
     str::FromStr,
     sync::Arc,
@@ -34,7 +35,9 @@ pub use {
   message_update::MessageUpdate, model::Model, provider::Provider,
   provider_response::ProviderResponse, provider_sink::ProviderSink,
   reasoning::Reasoning, reasoning_content::ReasoningContent, request::Request,
-  text::Text, tool::Tool, tool_approval::ToolApproval, tool_call::ToolCall,
+  run_entry::RunEntry, run_limit::RunLimit, run_outcome::RunOutcome,
+  run_result::RunResult, run_state::RunState, text::Text, tool::Tool,
+  tool_approval::ToolApproval, tool_call::ToolCall,
   tool_definition::ToolDefinition, tool_function::ToolFunction,
   tool_name::ToolName, tool_outcome::ToolOutcome, tool_registry::ToolRegistry,
   tool_request::ToolRequest, tool_result::ToolResult, usage::Usage,
@@ -63,6 +66,11 @@ mod provider_sink;
 mod reasoning;
 mod reasoning_content;
 mod request;
+mod run_entry;
+mod run_limit;
+mod run_outcome;
+mod run_result;
+mod run_state;
 mod text;
 mod tool;
 mod tool_approval;

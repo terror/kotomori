@@ -75,10 +75,8 @@ impl App {
     } else {
       let (_, run) = self.agent_run.take().unwrap();
 
-      let (_, result) = run.cancel_and_join().await;
-
       Event::AgentCompleted {
-        result: result.map_err(|error| format!("{error:#}")),
+        result: run.join().await,
         run_id,
       }
     };
@@ -178,7 +176,6 @@ impl App {
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
         Event::Agent { .. }
         | Event::AgentCompleted { .. }
-        | Event::AgentInterrupted { .. }
         | Event::ClipboardCopied(_)
         | Event::SessionForked(_)
         | Event::SessionSaved(_)
@@ -199,16 +196,10 @@ impl App {
       return Vec::new();
     };
 
-    let (events, result) = run.cancel_and_join().await;
-
-    events
-      .into_iter()
-      .map(|event| Event::Agent { event, run_id })
-      .chain(once(Event::AgentInterrupted {
-        result: result.map_err(|error| format!("{error:#}")),
-        run_id,
-      }))
-      .collect()
+    vec![Event::AgentCompleted {
+      result: run.cancel_and_join().await,
+      run_id,
+    }]
   }
 
   fn listen_for_input(&self) {

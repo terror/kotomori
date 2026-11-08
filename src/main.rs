@@ -40,9 +40,9 @@ use {
     Agent, AgentConfig, AgentEvent, AgentRun, ApprovalRequest,
     AssistantContent, CallId, Conversation, Message, MessageBuffer,
     MessageDraft, MessageUpdate, Model, Provider, ProviderResponse,
-    ProviderSink, Reasoning, ReasoningContent, Request, ToolApproval,
-    ToolFunction, ToolName, ToolOutcome, ToolRegistry, ToolRequest, ToolResult,
-    Usage, UserMessageContent,
+    ProviderSink, Reasoning, ReasoningContent, Request, RunEntry, RunOutcome,
+    RunResult, ToolApproval, ToolFunction, ToolName, ToolOutcome, ToolRegistry,
+    ToolRequest, ToolResult, UserMessageContent,
   },
   kotomori_rig::{ChatGpt, GithubCopilot, Rig},
   kotomori_tools::{CommandArguments, CommandExecutor, CommandTool},
@@ -123,7 +123,7 @@ macro_rules! assert_matches {
 }
 
 #[cfg(test)]
-use temptree::temptree;
+use {kotomori_core::RunState, temptree::temptree};
 
 mod action;
 mod agent_activity;

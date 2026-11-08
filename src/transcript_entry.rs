@@ -8,3 +8,12 @@ pub(crate) enum TranscriptEntry {
   Message(Message),
   Notice(String),
 }
+
+impl From<RunEntry> for TranscriptEntry {
+  fn from(entry: RunEntry) -> Self {
+    match entry {
+      RunEntry::Draft(buffer) => Self::Draft(buffer),
+      RunEntry::Message(message) => Self::Message(message),
+    }
+  }
+}
