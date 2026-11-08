@@ -7,15 +7,14 @@ pub struct CommandTool {
 }
 
 impl Tool for CommandTool {
-  fn definition(&self) -> ToolDefinition {
-    ToolDefinition {
+  fn definition(&self) -> Result<ToolDefinition> {
+    Ok(ToolDefinition {
       description: "Run a command using the system shell and capture stdout, stderr, and exit status. Pipes, redirects, glob expansion, and command chaining are supported.".into(),
-      name: "command".into(),
+      name: ToolName::new("command")?,
       parameters: serde_json::to_value(CommandArguments::json_schema(
         &mut schemars::SchemaGenerator::default(),
-      ))
-      .expect("failed to serialize tool schema"),
-    }
+      ))?,
+    })
   }
 
   fn prepare(&self, arguments: Value) -> Result<ToolCall> {
@@ -129,7 +128,8 @@ mod tests {
       command_executor: CommandExecutor::default(),
       directory: "foo".into(),
     }
-    .definition();
+    .definition()
+    .unwrap();
 
     assert_eq!(
       tool.parameters,

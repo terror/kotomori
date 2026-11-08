@@ -1,8 +1,8 @@
 use {
   command_child::CommandChild,
   kotomori_core::{
-    ApprovalPolicy, Result, Tool, ToolCall, ToolDefinition, ToolOutcome,
-    ToolResult,
+    ApprovalPolicy, Result, Tool, ToolCall, ToolDefinition, ToolName,
+    ToolOutcome, ToolResult,
   },
   process_wrap::tokio::{ChildWrapper, CommandWrap, KillOnDrop},
   schemars::JsonSchema,
@@ -28,7 +28,7 @@ use process_wrap::tokio::JobObject;
 
 #[cfg(test)]
 use {
-  kotomori_core::{CallId, ToolFunction, ToolName, ToolRegistry, ToolRequest},
+  kotomori_core::{CallId, ToolFunction, ToolRegistry, ToolRequest},
   std::{fs, sync::Arc},
 };
 
