@@ -8,7 +8,6 @@ use {
   std::{
     collections::{BTreeMap, btree_map::Entry},
     fmt::{self, Debug, Display, Formatter},
-    iter::once,
     ops::AddAssign,
     str::FromStr,
     sync::Arc,

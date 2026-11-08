@@ -141,13 +141,9 @@ impl Agent {
 
       let message = Message::Agent(message);
 
-      for message in conversation
-        .push(message.clone())
-        .into_iter()
-        .chain(once(message))
-      {
-        event_sender.send(AgentEvent::Message(message))?;
-      }
+      conversation.push(message.clone());
+
+      event_sender.send(AgentEvent::Message(message))?;
 
       if tool_calls.is_empty() {
         break;
@@ -175,13 +171,9 @@ impl Agent {
           result,
         }]);
 
-        for message in conversation
-          .push(message.clone())
-          .into_iter()
-          .chain(once(message))
-        {
-          event_sender.send(AgentEvent::Message(message))?;
-        }
+        conversation.push(message.clone());
+
+        event_sender.send(AgentEvent::Message(message))?;
       }
     }
 
