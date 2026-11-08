@@ -3,19 +3,26 @@ use super::*;
 #[derive(Debug)]
 #[must_use]
 pub struct AgentRun {
+  pub(super) cancellation: CancellationToken,
   pub(super) event_receiver: UnboundedReceiver<AgentEvent>,
+  pub(super) id: RunId,
   pub(super) state: RunState,
   pub(super) task: task::JoinHandle<Result<RunOutcome>>,
 }
 
 impl AgentRun {
   pub fn cancel(&self) {
-    self.task.abort();
+    self.cancellation.cancel();
   }
 
   pub async fn cancel_and_join(self) -> RunResult {
     self.cancel();
     self.join().await
+  }
+
+  #[must_use]
+  pub fn id(&self) -> RunId {
+    self.id
   }
 
   pub async fn join(mut self) -> RunResult {
@@ -43,5 +50,6 @@ impl AgentRun {
 impl Drop for AgentRun {
   fn drop(&mut self) {
     self.cancel();
+    self.task.abort();
   }
 }

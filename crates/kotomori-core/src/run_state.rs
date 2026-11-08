@@ -5,6 +5,7 @@ pub struct RunState {
   pub conversation: Conversation,
   pub entries: Vec<RunEntry>,
   pub message: MessageBuffer,
+  pub responses: Vec<ResponseResult>,
   pub usage: Usage,
 }
 
@@ -16,8 +17,15 @@ impl RunState {
         self.push(RunEntry::Message(message.clone()));
       }
       AgentEvent::Update(update) => self.message.apply(update.clone()),
-      AgentEvent::Usage(usage) => self.usage = *usage,
-      AgentEvent::ToolApprovalRequest(_) | AgentEvent::ToolStarted(_) => {}
+      AgentEvent::ResponseFinished(response) => {
+        self.usage += response.usage;
+        self.responses.push(response.clone());
+      }
+      AgentEvent::ResponseStarted(_)
+      | AgentEvent::ToolApprovalRequest(_)
+      | AgentEvent::ToolFinished { .. }
+      | AgentEvent::ToolProgress { .. }
+      | AgentEvent::ToolStarted { .. } => {}
     }
   }
 
@@ -47,6 +55,7 @@ impl RunState {
       conversation: self.conversation,
       entries: self.entries,
       outcome,
+      responses: self.responses,
       usage: self.usage,
     }
   }
@@ -91,6 +100,7 @@ mod tests {
         conversation: vec![message.clone()].into(),
         entries: vec![RunEntry::Message(message)],
         outcome: RunOutcome::Completed,
+        responses: Vec::new(),
         usage: Usage::default(),
       },
     );
@@ -142,6 +152,7 @@ mod tests {
           .into(),
           entries: vec![RunEntry::Draft(draft)],
           outcome,
+          responses: Vec::new(),
           usage: Usage::default(),
         },
       );
