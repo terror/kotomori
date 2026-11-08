@@ -4,6 +4,7 @@ use super::*;
 pub enum AgentEvent {
   Message(Message),
   ToolApprovalRequest(ApprovalRequest),
+  ToolStarted(CallId),
   Update(MessageUpdate),
   Usage(Usage),
 }

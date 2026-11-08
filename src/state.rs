@@ -218,6 +218,9 @@ impl State {
           AgentEvent::ToolApprovalRequest(request) => {
             run.approval = Some(request);
           }
+          AgentEvent::ToolStarted(call) => {
+            run.running_tool = Some(call);
+          }
           AgentEvent::Usage(usage) => {
             run.usage = usage;
           }
