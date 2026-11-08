@@ -19,17 +19,15 @@ impl Provider for Mock {
             return Ok(
               vec![
                 AssistantContent::text("baz"),
-                AssistantContent::ToolCall(
-                  ::rig::message::ToolCall::from_wire(
-                    "foo",
-                    ToolFunction {
-                      arguments: serde_json::json!({
-                        "command": "echo bar",
-                      }),
-                      name: ToolName::new("command")?,
-                    },
-                  ),
-                ),
+                AssistantContent::ToolCall(ToolRequest::new(
+                  CallId::new("foo"),
+                  ToolFunction {
+                    arguments: serde_json::json!({
+                      "command": "echo bar",
+                    }),
+                    name: ToolName::new("command")?,
+                  },
+                )),
                 AssistantContent::text("qux"),
               ]
               .into(),
@@ -46,9 +44,10 @@ impl Provider for Mock {
           )
         }
         "empty-reasoning" => AssistantContent::reasoning("mock", ""),
-        "encrypted-reasoning" => AssistantContent::Reasoning(
-          Reasoning::encrypted("bar").sealed("mock"),
-        ),
+        "encrypted-reasoning" => AssistantContent::Reasoning(Reasoning::new(
+          "mock",
+          vec![ReasoningContent::Encrypted("bar".into())],
+        )),
         "error" if request.messages.len() == 1 => {
           bail!("foo\nbar");
         }
@@ -78,8 +77,8 @@ impl Provider for Mock {
               ToolName::new("command")?,
               serde_json::json!({"command": "echo bar>foo"}),
             ),
-            AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
-              "bar",
+            AssistantContent::ToolCall(ToolRequest::new(
+              CallId::new("bar"),
               ToolFunction {
                 arguments: serde_json::json!({}),
                 name: ToolName::new("command")?,
@@ -94,8 +93,13 @@ impl Provider for Mock {
           return Ok(content.into());
         }
         "reasoning" => {
-          let mut reasoning =
-            Reasoning::new_with_signature("bar\nbaz", Some("foo".into()));
+          let mut reasoning = Reasoning::new(
+            "mock",
+            vec![ReasoningContent::Text {
+              text: "bar\nbaz".into(),
+              signature: Some("foo".into()),
+            }],
+          );
 
           reasoning.content.extend([
             ReasoningContent::Summary("qux".into()),
@@ -108,7 +112,7 @@ impl Provider for Mock {
           return Ok(
             vec![
               AssistantContent::text("corge"),
-              AssistantContent::Reasoning(reasoning.sealed("mock")),
+              AssistantContent::Reasoning(reasoning),
               AssistantContent::text("grault"),
             ]
             .into(),
@@ -141,8 +145,8 @@ impl Provider for Mock {
           return pending().await;
         }
         "unknown-tool" if request.messages.len() == 1 => {
-          AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
-            "foo",
+          AssistantContent::ToolCall(ToolRequest::new(
+            CallId::new("foo"),
             ToolFunction {
               arguments: serde_json::json!({}),
               name: ToolName::new("unknown")?,

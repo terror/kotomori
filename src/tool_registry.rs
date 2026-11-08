@@ -12,7 +12,7 @@ impl ToolRegistry {
 
   pub(crate) fn prepare(
     &self,
-    call: ::rig::message::ToolCall,
+    call: ToolRequest,
   ) -> Result<(ToolInvocation, ToolCall)> {
     let name = call.function.name.as_str();
 

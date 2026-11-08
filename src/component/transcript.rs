@@ -369,12 +369,12 @@ mod tests {
       TranscriptEntry::Message(message),
       TranscriptEntry::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          call: CallId::from_wire("baz"),
+          call: CallId::new("baz"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult::default(),
         },
         UserMessageContent::ToolResult {
-          call: CallId::from_wire("foo"),
+          call: CallId::new("foo"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult {
             outcome: ToolOutcome::Success,
@@ -411,15 +411,13 @@ mod tests {
   fn render_unknown_tool() {
     let transcript =
       Transcript::new(vec![TranscriptEntry::Message(Message::Agent(
-        vec![AssistantContent::ToolCall(
-          ::rig::message::ToolCall::from_wire(
-            "foo",
-            ToolFunction {
-              arguments: serde_json::json!({"bar": "baz"}),
-              name: ToolName::new("foo").unwrap(),
-            },
-          ),
-        )]
+        vec![AssistantContent::ToolCall(ToolRequest::new(
+          CallId::new("foo"),
+          ToolFunction {
+            arguments: serde_json::json!({"bar": "baz"}),
+            name: ToolName::new("foo").unwrap(),
+          },
+        ))]
         .into(),
       ))]);
 

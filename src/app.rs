@@ -37,7 +37,7 @@ impl App {
         tools,
         yolo: settings.yolo,
       },
-      provider: Arc::<dyn Provider>::try_from(settings.model.clone())?,
+      provider: provider::build(&settings.model)?,
       system: Self::system_prompt(&settings.directory)?,
       task: None,
     }))

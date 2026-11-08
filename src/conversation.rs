@@ -151,7 +151,7 @@ mod tests {
         .into(),
       ),
       Message::User(vec![UserMessageContent::ToolResult {
-        call: CallId::from_wire("foo"),
+        call: CallId::new("foo"),
         name: ToolName::new("command").unwrap(),
         result: ToolResult::default(),
       }]),

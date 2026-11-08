@@ -115,17 +115,17 @@ mod tests {
     let entry = TranscriptEntry::Message(Message::User(vec![
       UserMessageContent::Text("foo".into()),
       UserMessageContent::ToolResult {
-        call: CallId::from_wire("qux"),
+        call: CallId::new("qux"),
         name: ToolName::new("command").unwrap(),
         result: ToolResult::default(),
       },
       UserMessageContent::ToolResult {
-        call: CallId::from_wire("foo"),
+        call: CallId::new("foo"),
         name: ToolName::new("command").unwrap(),
         result: result.clone(),
       },
       UserMessageContent::ToolResult {
-        call: CallId::from_wire("foo"),
+        call: CallId::new("foo"),
         name: ToolName::new("command").unwrap(),
         result: ToolResult::default(),
       },
@@ -159,9 +159,9 @@ mod tests {
   #[test]
   fn unsupported_content() {
     let content = [
-      AssistantContent::Image(::rig::message::Image::default()),
-      AssistantContent::ToolCall(::rig::message::ToolCall::from_wire(
-        "foo",
+      AssistantContent::Image(serde_json::json!({"data": {"type": "unknown"}})),
+      AssistantContent::ToolCall(ToolRequest::new(
+        CallId::new("foo"),
         ToolFunction {
           arguments: serde_json::json!({"bar": "baz"}),
           name: ToolName::new("command").unwrap(),
@@ -171,8 +171,8 @@ mod tests {
 
     let expected = [TranscriptBlock::Tool {
       invocation: ToolInvocation {
-        protocol: ::rig::message::ToolCall::from_wire(
-          "foo",
+        protocol: ToolRequest::new(
+          CallId::new("foo"),
           ToolFunction {
             arguments: serde_json::json!({"bar": "baz"}),
             name: ToolName::new("command").unwrap(),

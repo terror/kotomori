@@ -23,29 +23,3 @@ impl Message {
     }
   }
 }
-
-impl From<&Message> for RigMessage {
-  fn from(message: &Message) -> Self {
-    match message {
-      Message::Agent(message) => Self::Assistant {
-        content: message.content.clone(),
-        id: message.id.clone(),
-      },
-      Message::User(content) => Self::User {
-        content: content
-          .iter()
-          .map(|content| match content {
-            UserMessageContent::Text(text) => UserContent::text(text.clone()),
-            UserMessageContent::ToolResult { call, name, result } => {
-              UserContent::tool_result(
-                call.clone(),
-                name.clone(),
-                vec![ToolResultContent::text(result.message_content())],
-              )
-            }
-          })
-          .collect(),
-      },
-    }
-  }
-}

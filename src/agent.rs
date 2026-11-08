@@ -292,7 +292,7 @@ mod tests {
       events.recv().await.unwrap(),
       AgentEvent::Message(Message::User(vec![
         UserMessageContent::ToolResult {
-          call: CallId::from_wire("foo"),
+          call: CallId::new("foo"),
           name: ToolName::new("command").unwrap(),
           result: tool_result.clone(),
         }
@@ -311,7 +311,7 @@ mod tests {
           Message::User(vec![UserMessageContent::Text("foo".into())]),
           Message::Agent(vec![tool_call].into()),
           Message::User(vec![UserMessageContent::ToolResult {
-            call: CallId::from_wire("foo"),
+            call: CallId::new("foo"),
             name: ToolName::new("command").unwrap(),
             result: tool_result.clone(),
           }]),
@@ -322,23 +322,30 @@ mod tests {
 
   #[tokio::test]
   async fn loops_until_provider_returns_no_tool_calls() {
-    let reasoning = Reasoning::encrypted("foo")
-      .with_id("bar".into())
-      .sealed("mock");
+    let reasoning = Reasoning {
+      content: vec![ReasoningContent::Encrypted("foo".into())],
+      id: Some("bar".into()),
+      issuer: "mock".into(),
+    };
 
     let message = AgentMessage {
       content: vec![
         AssistantContent::text("foo"),
-        AssistantContent::Reasoning(
-          Reasoning::new_with_signature("bar", Some("baz".into()))
-            .with_id("qux".into())
-            .sealed("mock"),
-        ),
+        AssistantContent::Reasoning(Reasoning {
+          content: vec![ReasoningContent::Text {
+            text: "bar".into(),
+            signature: Some("baz".into()),
+          }],
+          id: Some("qux".into()),
+          issuer: "mock".into(),
+        }),
         AssistantContent::Reasoning(reasoning),
         AssistantContent::ToolCall(
-          ::rig::message::ToolCall::from_dual_wire(
-            "baz",
-            "qux",
+          ToolRequest::new(
+            CallId::Provider {
+              call_id: "qux".into(),
+              item_id: Some("baz".into()),
+            },
             ToolFunction {
               arguments: json!({"command": "echo bar", "cwd": null}),
               name: ToolName::new("command").unwrap(),
@@ -389,7 +396,10 @@ mod tests {
     };
 
     let tool_result = Message::User(vec![UserMessageContent::ToolResult {
-      call: CallId::from_dual_wire("baz", "qux"),
+      call: CallId::Provider {
+        call_id: "qux".into(),
+        item_id: Some("baz".into()),
+      },
       name: ToolName::new("command").unwrap(),
       result: result.clone(),
     }]);
@@ -403,26 +413,12 @@ mod tests {
     )
     .unwrap();
 
-    let request = CompletionRequest::from(&Request {
-      messages: &messages,
-      model: &"mock:foo".parse().unwrap(),
-      system: None,
-      tools: &[],
-    });
-
     assert_eq!(
-      request.chat_history,
+      messages,
       vec![
-        RigMessage::user("foo"),
-        RigMessage::Assistant {
-          content: message.content.clone(),
-          id: message.id.clone(),
-        },
-        RigMessage::tool_result(
-          CallId::from_dual_wire("baz", "qux"),
-          ToolName::new("command").unwrap(),
-          result.message_content()
-        ),
+        Message::User(vec![UserMessageContent::Text("foo".into())]),
+        Message::Agent(message.clone()),
+        tool_result.clone(),
       ]
     );
 
