@@ -1,18 +1,6 @@
 use super::*;
 
-pub(crate) trait ToolCall:
-  DeserializeOwned + Display + JsonSchema + Send + Sync
-{
-  const DESCRIPTION: &'static str;
-  const NAME: &'static str;
-
-  fn action(tense: ToolActionTense) -> &'static str;
-
-  fn approval(&self) -> ApprovalPolicy {
-    ApprovalPolicy::None
-  }
-
-  fn details(&self) -> Vec<(&'static str, String)> {
-    Vec::new()
-  }
+pub(crate) struct ToolCall {
+  pub(crate) approval: ApprovalPolicy,
+  pub(crate) future: BoxFuture<'static, ToolResult>,
 }

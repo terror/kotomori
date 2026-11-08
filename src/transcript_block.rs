@@ -3,7 +3,6 @@ use super::*;
 #[derive(Debug, PartialEq)]
 pub(crate) enum TranscriptBlock<'a> {
   Markdown(&'a str),
-  Raw(String),
   Reasoning(Cow<'a, str>),
   Tool {
     invocation: ToolInvocation,
@@ -42,36 +41,30 @@ impl<'a> TranscriptBlock<'a> {
         Some(Self::Reasoning(Cow::Owned(reasoning.text())))
       }
       AssistantContent::Text(text) => Some(Self::Markdown(&text.text)),
-      AssistantContent::ToolCall(call) => {
-        Some(match ToolInvocationKind::decode(call.clone()) {
-          Ok(invocation) => Self::Tool {
-            invocation,
-            result: following
-              .iter()
-              .map_while(|entry| match entry {
-                TranscriptEntry::Draft(_)
-                | TranscriptEntry::Message(Message::Agent(_)) => None,
-                TranscriptEntry::Message(Message::User(content)) => {
-                  Some(content.as_slice())
-                }
-                TranscriptEntry::Error(_)
-                | TranscriptEntry::Interrupted
-                | TranscriptEntry::Notice(_) => Some(&[]),
-              })
-              .flatten()
-              .find_map(|content| match content {
-                UserMessageContent::ToolResult {
-                  call: id, result, ..
-                } if *id == call.id => Some(result),
-                _ => None,
-              }),
-          },
-          Err(_) => Self::Raw(format!(
-            "{} {}",
-            call.function.name, call.function.arguments
-          )),
-        })
-      }
+      AssistantContent::ToolCall(call) => Some(Self::Tool {
+        invocation: ToolInvocation {
+          protocol: call.clone(),
+        },
+        result: following
+          .iter()
+          .map_while(|entry| match entry {
+            TranscriptEntry::Draft(_)
+            | TranscriptEntry::Message(Message::Agent(_)) => None,
+            TranscriptEntry::Message(Message::User(content)) => {
+              Some(content.as_slice())
+            }
+            TranscriptEntry::Error(_)
+            | TranscriptEntry::Interrupted
+            | TranscriptEntry::Notice(_) => Some(&[]),
+          })
+          .flatten()
+          .find_map(|content| match content {
+            UserMessageContent::ToolResult {
+              call: id, result, ..
+            } if *id == call.id => Some(result),
+            _ => None,
+          }),
+      }),
       AssistantContent::Image(_) => None,
     }
   }
@@ -87,10 +80,10 @@ mod tests {
     fn case(following: &[TranscriptEntry], result: Option<&ToolResult>) {
       let invocation = ToolInvocation::new(
         "foo",
-        ToolInvocationKind::Command(CommandTool {
+        CommandArguments {
           command: "bar".into(),
           cwd: None,
-        }),
+        },
       );
 
       let (content, expected) = (
@@ -176,7 +169,18 @@ mod tests {
       )),
     ];
 
-    let expected = [TranscriptBlock::Raw("command {\"bar\":\"baz\"}".into())];
+    let expected = [TranscriptBlock::Tool {
+      invocation: ToolInvocation {
+        protocol: ::rig::message::ToolCall::from_wire(
+          "foo",
+          ToolFunction {
+            arguments: serde_json::json!({"bar": "baz"}),
+            name: ToolName::new("command").unwrap(),
+          },
+        ),
+      },
+      result: None,
+    }];
 
     assert_eq!(
       TranscriptBlock::content(&content, &[]).collect::<Vec<_>>(),

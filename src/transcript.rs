@@ -112,10 +112,10 @@ mod tests {
           AssistantContent::ToolCall(
             ToolInvocation::new(
               "foo",
-              ToolInvocationKind::Command(CommandTool {
+              CommandArguments {
                 command: "bar".into(),
                 cwd: None,
-              }),
+              },
             )
             .protocol,
           ),

@@ -49,7 +49,6 @@ impl<'a> TranscriptComponent<'a> {
           TranscriptBlock::Markdown(text) => {
             stack.push(MarkdownComponent { text })
           }
-          TranscriptBlock::Raw(text) => stack.push(LineComponent::raw(text)),
           TranscriptBlock::Reasoning(reasoning) => {
             if reasoning.is_empty() {
               return stack;
@@ -292,10 +291,10 @@ mod tests {
   fn render_tool_entry_after_user() {
     let invocation = ToolInvocation::new(
       "bar",
-      ToolInvocationKind::Command(CommandTool {
+      CommandArguments {
         command: "rg --files".into(),
         cwd: None,
-      }),
+      },
     );
 
     let transcript = Transcript::new(vec![
@@ -355,10 +354,10 @@ mod tests {
   fn render_tool_results_are_scoped_to_the_agent_message() {
     let invocation = ToolInvocation::new(
       "foo",
-      ToolInvocationKind::Command(CommandTool {
+      CommandArguments {
         command: "bar".into(),
         cwd: None,
-      }),
+      },
     );
 
     let message = Message::Agent(
@@ -431,7 +430,11 @@ mod tests {
         state: &transcript
       }
       .render(80),
-      [LineComponent::raw("foo {\"bar\":\"baz\"}")]
+      [LineComponent::from([
+        Span::styled("●", Style::Accent),
+        Span::raw(" "),
+        Span::raw("Running foo {\"bar\":\"baz\"}"),
+      ])]
     );
   }
 }

@@ -410,10 +410,10 @@ mod tests {
 
     let invocation = ToolInvocation::new(
       "foo",
-      ToolInvocationKind::Command(CommandTool {
+      CommandArguments {
         command: "bar".into(),
         cwd: None,
-      }),
+      },
     );
 
     for event in [
@@ -454,10 +454,10 @@ mod tests {
     let (request, response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
         "foo",
-        ToolInvocationKind::Command(CommandTool {
+        CommandArguments {
           command: "bar".into(),
           cwd: None,
-        }),
+        },
       ));
 
     state.run = Some(Run {
@@ -498,10 +498,10 @@ mod tests {
     let (request, response_receiver) =
       ApprovalRequest::new(ToolInvocation::new(
         "foo",
-        ToolInvocationKind::Command(CommandTool {
+        CommandArguments {
           command: "bar".into(),
           cwd: None,
-        }),
+        },
       ));
 
     state.run = Some(Run {
@@ -555,10 +555,10 @@ mod tests {
           AssistantContent::ToolCall(
             ToolInvocation::new(
               "foo",
-              ToolInvocationKind::Command(CommandTool {
+              CommandArguments {
                 command: "bar".into(),
                 cwd: None,
-              }),
+              },
             )
             .protocol,
           ),
@@ -566,10 +566,10 @@ mod tests {
           AssistantContent::ToolCall(
             ToolInvocation::new(
               "bar",
-              ToolInvocationKind::Command(CommandTool {
+              CommandArguments {
                 command: "qux".into(),
                 cwd: None,
-              }),
+              },
             )
             .protocol,
           ),
@@ -870,10 +870,10 @@ mod tests {
 
     let invocation = ToolInvocation::new(
       "stale",
-      ToolInvocationKind::Command(CommandTool {
+      CommandArguments {
         command: "echo".into(),
         cwd: None,
-      }),
+      },
     );
 
     let (request, response_receiver) = ApprovalRequest::new(invocation.clone());

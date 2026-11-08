@@ -24,13 +24,17 @@ impl App {
 
     let settings = &state.session.settings;
 
+    let mut tools = ToolRegistry::default();
+
+    tools.register(Arc::new(CommandTool {
+      command_executor: CommandExecutor::default(),
+      directory: settings.directory.clone(),
+    }))?;
+
     Ok(Some(Agent {
       config: AgentConfig {
         model: settings.model.clone(),
-        tool_executor: ToolExecutor {
-          command_executor: CommandExecutor::default(),
-          directory: settings.directory.clone(),
-        },
+        tools,
         yolo: settings.yolo,
       },
       provider: Arc::<dyn Provider>::try_from(settings.model.clone())?,
