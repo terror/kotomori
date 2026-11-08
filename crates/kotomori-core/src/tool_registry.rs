@@ -15,18 +15,16 @@ impl ToolRegistry {
       .collect()
   }
 
-  pub fn prepare(&self, call: ToolRequest) -> Result<(ToolRequest, ToolCall)> {
+  pub fn prepare(&self, call: &ToolRequest) -> Result<ToolCall> {
     let name = &call.function.name;
 
-    let tool = self
+    self
       .tools
       .get(name)
       .with_context(|| format!("unknown tool `{name}`"))?
       .1
       .prepare(call.function.arguments.clone())
-      .with_context(|| format!("failed to decode `{name}` arguments"))?;
-
-    Ok((call, tool))
+      .with_context(|| format!("failed to decode `{name}` arguments"))
   }
 
   pub fn register(&mut self, tool: Arc<dyn Tool>) -> Result {

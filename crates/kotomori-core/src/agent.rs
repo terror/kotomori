@@ -145,7 +145,7 @@ impl Agent {
         .iter()
         .filter_map(|content| match content {
           AssistantContent::ToolCall(call) => {
-            Some((call.clone(), self.config.tools.prepare(call.clone())))
+            Some((call.clone(), self.config.tools.prepare(call)))
           }
           _ => None,
         })
@@ -165,7 +165,7 @@ impl Agent {
 
       for (tool_call, tool) in tool_calls {
         let result = match tool {
-          Ok((_, tool)) if !invalid => {
+          Ok(tool) if !invalid => {
             self.execute(event_sender, &tool_call, tool).await?
           }
           tool => ToolResult {
