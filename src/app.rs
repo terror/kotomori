@@ -6,6 +6,7 @@ static SYSTEM_PROMPT: LazyLock<String> =
 #[derive(Debug)]
 pub(crate) struct App {
   agent: Option<Agent>,
+  agent_run: Option<(u64, AgentRun)>,
   clipboard: Clipboard,
   database: Database,
   event_receiver: UnboundedReceiver<Event>,
@@ -43,69 +44,87 @@ impl App {
     )))
   }
 
-  fn drain_pending_events(&mut self) -> Result {
+  async fn drain_pending_events(&mut self) -> Result {
     while !self.screen.should_quit() {
-      let Ok(event) = self.event_receiver.try_recv() else {
+      if let Ok(event) = self.event_receiver.try_recv() {
+        self.handle_event(event).await?;
+        continue;
+      }
+
+      let Some((_, run)) = &mut self.agent_run else {
         break;
       };
 
-      self.handle_event(event)?;
+      let Some(event) = run.recv().now_or_never() else {
+        break;
+      };
+
+      self.handle_agent_event(event).await?;
     }
 
     Ok(())
   }
 
-  fn handle_effect(&mut self, effect: Effect) -> Result {
+  async fn handle_agent_event(&mut self, event: Option<AgentEvent>) -> Result {
+    let (run_id, _) = self.agent_run.as_ref().unwrap();
+
+    let run_id = *run_id;
+
+    let event = if let Some(event) = event {
+      event
+    } else {
+      let (_, run) = self.agent_run.take().unwrap();
+
+      match run.join().await {
+        Ok(()) => AgentEvent::Done,
+        Err(error) => AgentEvent::Error(format!("{error:#}")),
+      }
+    };
+
+    self.handle_event(Event::Agent { event, run_id }).await
+  }
+
+  async fn handle_effect(&mut self, effect: Effect) -> Option<Event> {
     match effect {
       Effect::CopyToClipboard(text) => {
         let result =
           self.clipboard.copy(text).map_err(|error| error.to_string());
 
-        self.handle_event(Event::ClipboardCopied(result))?;
+        Some(Event::ClipboardCopied(result))
       }
       Effect::ForkSession => {
         let Screen::Session(state) = &self.screen else {
-          return Ok(());
+          return None;
         };
 
         let result = now()
           .and_then(|now| self.database.fork_session(&state.session, now))
           .map_err(|error| error.to_string());
 
-        self.handle_event(Event::SessionForked(result))?;
+        Some(Event::SessionForked(result))
       }
-      Effect::InterruptAgent => {
-        if let Some(agent) = &mut self.agent {
-          agent.interrupt();
-        }
-      }
+      Effect::InterruptAgent => self.interrupt_agent().await,
       Effect::RunAgent {
         conversation,
         run_id,
       } => {
-        if let Some(agent) = &mut self.agent {
-          let mut events = agent.spawn(conversation);
+        let event = self.interrupt_agent().await;
 
-          let event_sender = self.event_sender.clone();
-
-          tokio::spawn(async move {
-            while let Some(event) = events.recv().await {
-              if event_sender.send(Event::Agent { event, run_id }).is_err() {
-                break;
-              }
-            }
-          });
+        if let Some(agent) = &self.agent {
+          self.agent_run = Some((run_id, agent.spawn(conversation)));
         }
+
+        event
       }
       Effect::SaveSession => {
         let Screen::Session(state) = &self.screen else {
-          return Ok(());
+          return None;
         };
 
         let session = &state.session;
 
         if session.transcript.is_empty() && session.id.is_none() {
-          return Ok(());
+          return None;
         }
 
         let result = now()
@@ -114,14 +133,30 @@ impl App {
           })
           .map_err(|error| error.to_string());
 
-        self.handle_event(Event::SessionSaved(result))?;
+        Some(Event::SessionSaved(result))
       }
     }
-
-    Ok(())
   }
 
-  fn handle_event(&mut self, event: Event) -> Result {
+  async fn handle_effects(&mut self, effects: Vec<Effect>) {
+    let mut effects = VecDeque::from(effects);
+
+    while let Some(effect) = effects.pop_front() {
+      let Some(event) = self.handle_effect(effect).await else {
+        continue;
+      };
+
+      let Screen::Session(state) = &mut self.screen else {
+        continue;
+      };
+
+      for effect in state.handle_event(event).into_iter().rev() {
+        effects.push_front(effect);
+      }
+    }
+  }
+
+  async fn handle_event(&mut self, event: Event) -> Result {
     match &mut self.screen {
       Screen::Quit => {}
       Screen::Resume(picker) => match event {
@@ -131,12 +166,15 @@ impl App {
           };
 
           match action {
-            ResumePickerAction::Cancel => self.set_screen(Screen::Quit)?,
-            ResumePickerAction::Resume(id) => self.resume(id)?,
+            ResumePickerAction::Cancel => {
+              self.set_screen(Screen::Quit).await?;
+            }
+            ResumePickerAction::Resume(id) => self.resume(id).await?,
           }
         }
         Event::Error(error) => bail!("failed to read terminal input: {error}"),
         Event::Agent { .. }
+        | Event::AgentInterrupted(_)
         | Event::ClipboardCopied(_)
         | Event::SessionForked(_)
         | Event::SessionSaved(_)
@@ -145,13 +183,21 @@ impl App {
       Screen::Session(state) => {
         let effects = state.handle_event(event);
 
-        for effect in effects {
-          self.handle_effect(effect)?;
-        }
+        self.handle_effects(effects).await;
       }
     }
 
     Ok(())
+  }
+
+  async fn interrupt_agent(&mut self) -> Option<Event> {
+    let (_, run) = self.agent_run.take()?;
+
+    run.cancel();
+
+    Some(Event::AgentInterrupted(
+      run.join().await.map_err(|error| format!("{error:#}")),
+    ))
   }
 
   fn listen_for_input(&self) {
@@ -190,6 +236,7 @@ impl App {
 
     Ok(Self {
       agent: Self::agent(&screen)?,
+      agent_run: None,
       clipboard: Clipboard::default(),
       database,
       event_receiver,
@@ -199,13 +246,23 @@ impl App {
     })
   }
 
-  pub(crate) fn resume(&mut self, id: i64) -> Result {
-    self.set_screen(Screen::Session(Box::new(State::new(
-      self.database.load_session(id, &self.settings)?,
-    ))))
+  pub(crate) async fn resume(&mut self, id: i64) -> Result {
+    self
+      .set_screen(Screen::Session(Box::new(State::new(
+        self.database.load_session(id, &self.settings)?,
+      ))))
+      .await
   }
 
   pub(crate) async fn run(mut self) -> Result {
+    let result = self.run_inner().await;
+
+    self.handle_effects(vec![Effect::InterruptAgent]).await;
+
+    result
+  }
+
+  async fn run_inner(&mut self) -> Result {
     let mut renderer = Renderer::new()?;
 
     let (mut first_draw_started_at, mut first_draw_duration) =
@@ -235,22 +292,33 @@ impl App {
             break;
           };
 
-          self.handle_event(event)?;
+          self.handle_event(event).await?;
+        }
+        event = async {
+          match &mut self.agent_run {
+            Some((_, run)) => run.recv().await,
+            None => pending().await,
+          }
+        } => {
+          self.handle_agent_event(event).await?;
         }
         _ = tick_interval.tick() => {
-          self.handle_event(Event::Tick(Self::TICK_INTERVAL))?;
+          self.handle_event(Event::Tick(Self::TICK_INTERVAL)).await?;
         }
       }
 
-      self.drain_pending_events()?;
+      self.drain_pending_events().await?;
     }
 
     Ok(())
   }
 
-  pub(crate) fn set_screen(&mut self, screen: Screen) -> Result {
-    self.agent = Self::agent(&screen)?;
+  pub(crate) async fn set_screen(&mut self, screen: Screen) -> Result {
+    let agent = Self::agent(&screen)?;
 
+    self.handle_effects(vec![Effect::InterruptAgent]).await;
+
+    self.agent = agent;
     self.screen = screen;
 
     Ok(())

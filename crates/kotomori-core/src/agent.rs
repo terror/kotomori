@@ -1,11 +1,10 @@
 use super::*;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Agent {
   config: AgentConfig,
   provider: Arc<dyn Provider>,
   system: String,
-  task: Option<task::JoinHandle<()>>,
 }
 
 impl Agent {
@@ -46,12 +45,6 @@ impl Agent {
     )
   }
 
-  pub fn interrupt(&mut self) {
-    if let Some(task) = self.task.take() {
-      task.abort();
-    }
-  }
-
   pub fn new(
     config: AgentConfig,
     provider: Arc<dyn Provider>,
@@ -61,32 +54,20 @@ impl Agent {
       config,
       provider,
       system,
-      task: None,
     }
   }
 
-  pub fn spawn(
-    &mut self,
-    conversation: Conversation,
-  ) -> UnboundedReceiver<AgentEvent> {
-    self.interrupt();
-
+  pub fn spawn(&self, conversation: Conversation) -> AgentRun {
     let (event_sender, event_receiver) = mpsc::unbounded_channel();
 
-    let agent = Self {
-      config: self.config.clone(),
-      provider: self.provider.clone(),
-      system: self.system.clone(),
-      task: None,
-    };
+    let agent = self.clone();
 
-    self.task = Some(tokio::spawn(async move {
-      if let Err(error) = agent.stream(&event_sender, conversation).await {
-        let _ = event_sender.send(AgentEvent::Error(format!("{error:#}")));
-      }
-    }));
+    let task =
+      tokio::spawn(
+        async move { agent.stream(&event_sender, conversation).await },
+      );
 
-    event_receiver
+    AgentRun::new(event_receiver, task)
   }
 
   async fn stream(
@@ -204,15 +185,7 @@ impl Agent {
       }
     }
 
-    event_sender.send(AgentEvent::Done)?;
-
     Ok(())
-  }
-}
-
-impl Drop for Agent {
-  fn drop(&mut self) {
-    self.interrupt();
   }
 }
 
@@ -326,10 +299,7 @@ mod tests {
       json!("bar"),
     );
 
-    let TestAgent {
-      mut agent,
-      requests,
-    } = TestAgent::new(
+    let TestAgent { agent, requests } = TestAgent::new(
       vec![
         TestResponse {
           message: vec![tool_call.clone()].into(),
@@ -382,7 +352,9 @@ mod tests {
       AgentEvent::Usage(Usage::default()),
     );
 
-    assert_eq!(events.recv().await.unwrap(), AgentEvent::Done);
+    assert_eq!(events.recv().await, None);
+
+    events.join().await.unwrap();
 
     let requests = requests.lock().unwrap();
 
@@ -447,7 +419,7 @@ mod tests {
 
     let complete = AgentMessage::from(vec![AssistantContent::text("bar")]);
 
-    let mut test_agent = TestAgent::new(
+    let test_agent = TestAgent::new(
       vec![
         TestResponse {
           message: message.clone(),
@@ -467,7 +439,11 @@ mod tests {
 
     let mut received = Vec::new();
 
-    while events.recv_many(&mut received, usize::MAX).await != 0 {}
+    while let Some(event) = events.recv().await {
+      received.push(event);
+    }
+
+    events.join().await.unwrap();
 
     let result = ToolResult {
       content: Some("bar".into()),
@@ -512,7 +488,6 @@ mod tests {
         AgentEvent::Update(update("bar")),
         AgentEvent::Usage(Usage::default()),
         AgentEvent::Message(Message::Agent(complete)),
-        AgentEvent::Done,
       ],
     );
   }
