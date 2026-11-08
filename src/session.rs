@@ -63,6 +63,11 @@ impl Session {
 
   pub(crate) fn push(&mut self, entry: TranscriptEntry) {
     match &entry {
+      TranscriptEntry::Message(Message::Agent(message))
+        if message.content.is_empty() =>
+      {
+        return;
+      }
       TranscriptEntry::Message(message) => {
         self.conversation.push(message.clone());
       }
