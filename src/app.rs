@@ -142,12 +142,16 @@ impl App {
     let mut effects = VecDeque::from(effects);
 
     while let Some(effect) = effects.pop_front() {
-      if let Some(event) = self.handle_effect(effect).await
-        && let Screen::Session(state) = &mut self.screen
-      {
-        for effect in state.handle_event(event).into_iter().rev() {
-          effects.push_front(effect);
-        }
+      let Some(event) = self.handle_effect(effect).await else {
+        continue;
+      };
+
+      let Screen::Session(state) = &mut self.screen else {
+        continue;
+      };
+
+      for effect in state.handle_event(event).into_iter().rev() {
+        effects.push_front(effect);
       }
     }
   }
