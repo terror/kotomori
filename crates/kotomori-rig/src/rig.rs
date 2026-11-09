@@ -313,6 +313,8 @@ impl Rig {
   }
 
   fn request(request: &Request<'_>) -> Result<CompletionRequest> {
+    request.generation.validate()?;
+
     let chat_history = request
       .system
       .map(message::Message::system)
@@ -329,12 +331,27 @@ impl Rig {
         chat_history
       },
       documents: Vec::new(),
-      max_tokens: None,
+      max_tokens: request.generation.max_output_tokens.map(Into::into),
       model: Some(request.model.name.clone()),
-      output_schema: None,
+      output_schema: request
+        .generation
+        .output_schema
+        .clone()
+        .map(TryInto::try_into)
+        .transpose()
+        .context("failed to encode output schema")?,
       record_telemetry_content: false,
-      temperature: None,
-      tool_choice: None,
+      temperature: request.generation.temperature,
+      tool_choice: request.generation.tool_choice.as_ref().map(|choice| {
+        match choice {
+          ToolChoice::Auto => message::ToolChoice::Auto,
+          ToolChoice::None => message::ToolChoice::None,
+          ToolChoice::Required => message::ToolChoice::Required,
+          ToolChoice::Specific(names) => message::ToolChoice::Specific {
+            function_names: names.iter().map(ToString::to_string).collect(),
+          },
+        }
+      }),
       tools: request
         .tools
         .iter()
@@ -400,11 +417,12 @@ impl Provider for Rig {
 
 #[cfg(test)]
 mod tests {
-  use {super::*, serde_json::json};
+  use {super::*, ::rig::schemars::Schema, serde_json::json};
 
   #[test]
   fn completion_request_uses_blank_user_message_for_empty_history() {
     let request = Rig::request(&Request {
+      generation: &GenerationOptions::default(),
       messages: &[],
       model: &Model {
         name: "foo".into(),
@@ -422,6 +440,53 @@ mod tests {
   }
 
   #[test]
+  fn completion_request_uses_generation_options() {
+    #[track_caller]
+    fn case(
+      choice: Option<ToolChoice>,
+      expected: Option<&message::ToolChoice>,
+    ) {
+      let generation = GenerationOptions {
+        max_output_tokens: 1.try_into().ok(),
+        output_schema: Some(json!({"type": "object"})),
+        temperature: Some(0.5),
+        tool_choice: choice,
+      };
+
+      let request = Rig::request(&Request {
+        generation: &generation,
+        messages: &[],
+        model: &Model::default(),
+        system: None,
+        tools: &[],
+      })
+      .unwrap();
+
+      assert_eq!(request.max_tokens, Some(1));
+      assert_eq!(
+        request.output_schema.map(Schema::to_value),
+        generation.output_schema
+      );
+      assert_eq!(request.temperature, Some(0.5));
+      assert_eq!(request.tool_choice.as_ref(), expected);
+    }
+
+    case(None, None);
+    case(Some(ToolChoice::Auto), Some(&message::ToolChoice::Auto));
+    case(Some(ToolChoice::None), Some(&message::ToolChoice::None));
+    case(
+      Some(ToolChoice::Required),
+      Some(&message::ToolChoice::Required),
+    );
+    case(
+      Some(ToolChoice::Specific(vec![ToolName::new("foo").unwrap()])),
+      Some(&message::ToolChoice::Specific {
+        function_names: vec!["foo".into()],
+      }),
+    );
+  }
+
+  #[test]
   fn completion_request_uses_system_context_and_model() {
     let result = ToolResult {
       content: "foo".into(),
@@ -430,6 +495,7 @@ mod tests {
     };
 
     let request = Rig::request(&Request {
+      generation: &GenerationOptions::default(),
       messages: &[
         Message::User(vec![UserMessageContent::Text("bar".into())]),
         Message::Agent(vec![AssistantContent::text("qux")].into()),
@@ -473,6 +539,7 @@ mod tests {
     #[track_caller]
     fn case(tools: &[ToolDefinition]) {
       let request = Rig::request(&Request {
+        generation: &GenerationOptions::default(),
         messages: &[],
         model: &Model {
           name: "foo".into(),

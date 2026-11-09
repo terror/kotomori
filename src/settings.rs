@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Settings {
   pub(crate) directory: PathBuf,
+  pub(crate) max_output_tokens: Option<NonZeroU64>,
   pub(crate) max_rounds: usize,
   pub(crate) model: Model,
   pub(crate) prompt: Option<String>,
@@ -40,6 +41,7 @@ impl Settings {
 
     Ok(Self {
       directory,
+      max_output_tokens: options.max_output_tokens.or(config.max_output_tokens),
       max_rounds: options
         .max_rounds
         .or(config.max_rounds)

@@ -1,5 +1,7 @@
 use super::*;
 
+mod chatgpt;
+mod copilot;
 mod mock;
 
 pub(crate) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
@@ -15,9 +17,9 @@ pub(crate) fn build(model: &Model) -> Result<Arc<dyn Provider>> {
   };
 
   match provider {
-    "chatgpt" | "chatgpt/openai" => ChatGpt::build(model),
+    "chatgpt" | "chatgpt/openai" => chatgpt::build(model),
     "cohere" => Rig::cohere(&model.name),
-    "copilot" | "copilot/openai" => GithubCopilot::build(model),
+    "copilot" | "copilot/openai" => copilot::build(model),
     "galadriel" => Rig::gateway(
       &model.name,
       "galadriel",

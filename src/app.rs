@@ -34,6 +34,10 @@ impl App {
 
     let agent = Agent::new(
       AgentConfig {
+        generation: GenerationOptions {
+          max_output_tokens: settings.max_output_tokens,
+          ..Default::default()
+        },
         max_rounds: settings.max_rounds,
         model: settings.model.clone(),
         tools,

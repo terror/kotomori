@@ -89,6 +89,9 @@ impl Provider for Mock {
             }),
           )
         }
+        "generation-options" => {
+          AssistantContent::text(serde_json::to_string(request.generation)?)
+        }
         "malformed-tool-arguments" if request.messages.len() == 1 => {
           let content = vec![
             AssistantContent::tool_call(

@@ -92,6 +92,7 @@ impl Agent {
     let context = self
       .context_strategy
       .prepare(Request {
+        generation: &self.config.generation,
         messages: conversation.messages(),
         model: &self.config.model,
         system: (!self.system.is_empty()).then_some(self.system.as_str()),
@@ -411,6 +412,7 @@ mod tests {
 
       let agent = Agent::new(
         AgentConfig {
+          generation: GenerationOptions::default(),
           max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
           model: "mock:local".parse().unwrap(),
           tools,

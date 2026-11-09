@@ -14,6 +14,7 @@ use {
     fmt::{self, Debug, Display, Formatter},
     future::{Future, pending},
     mem,
+    num::NonZeroU64,
     ops::AddAssign,
     str::FromStr,
     sync::{
@@ -53,6 +54,7 @@ pub use {
   context_strategy::{ContextStrategy, FullContext},
   conversation::Conversation,
   finish_reason::FinishReason,
+  generation_options::GenerationOptions,
   host_policy::{AllowAll, DefaultHostPolicy, HostPolicy},
   message::Message,
   message_buffer::MessageBuffer,
@@ -82,6 +84,7 @@ pub use {
   tool::Tool,
   tool_approval::ToolApproval,
   tool_call::ToolCall,
+  tool_choice::ToolChoice,
   tool_context::ToolContext,
   tool_definition::ToolDefinition,
   tool_function::ToolFunction,
@@ -108,6 +111,7 @@ mod call_id;
 mod context_strategy;
 mod conversation;
 mod finish_reason;
+mod generation_options;
 mod host_policy;
 mod message;
 mod message_buffer;
@@ -140,6 +144,7 @@ mod text;
 mod tool;
 mod tool_approval;
 mod tool_call;
+mod tool_choice;
 mod tool_context;
 mod tool_definition;
 mod tool_function;

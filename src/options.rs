@@ -5,6 +5,8 @@ pub(crate) struct Options {
   #[arg(long, global = true)]
   pub(crate) directory: Option<PathBuf>,
   #[arg(long, global = true)]
+  pub(crate) max_output_tokens: Option<NonZeroU64>,
+  #[arg(long, global = true)]
   pub(crate) max_rounds: Option<usize>,
   #[arg(long, global = true)]
   pub(crate) model: Option<Model>,
