@@ -79,19 +79,19 @@ impl State {
     match self.run.as_ref().and_then(|run| run.approval.as_ref()) {
       Some(_) => match action {
         Action::Edit(input) if input.key == Key::Char('y') => {
-          self.resolve_approval(ToolApproval::Approved);
+          return self.resolve_approval(ToolApproval::Approved);
         }
         Action::Edit(input) if input.key == Key::Char('Y') => {
-          self.resolve_approval(ToolApproval::Approved);
+          return self.resolve_approval(ToolApproval::Approved);
         }
         Action::Edit(input) if input.key == Key::Char('n') => {
-          self.resolve_approval(ToolApproval::Denied);
+          return self.resolve_approval(ToolApproval::Denied);
         }
         Action::Edit(input) if input.key == Key::Char('N') => {
-          self.resolve_approval(ToolApproval::Denied);
+          return self.resolve_approval(ToolApproval::Denied);
         }
         Action::Interrupt => {
-          self.resolve_approval(ToolApproval::Denied);
+          return self.resolve_approval(ToolApproval::Denied);
         }
         Action::ToggleReasoning => {
           self.reasoning_expanded = !self.reasoning_expanded;
@@ -208,10 +208,10 @@ impl State {
         };
 
         match event {
-          AgentEvent::Update(update) => {
+          AgentEvent::Update { update, .. } => {
             run.update(update);
           }
-          AgentEvent::Message(message) => {
+          AgentEvent::Message { message, .. } => {
             run.reset_message();
 
             let entries = self.session.transcript.len();
@@ -337,10 +337,17 @@ impl State {
     self.composer.clear();
   }
 
-  fn resolve_approval(&mut self, approval: ToolApproval) {
-    if let Some(run) = &mut self.run {
-      run.resolve_approval(approval);
-    }
+  fn resolve_approval(&mut self, approval: ToolApproval) -> Vec<Effect> {
+    self
+      .run
+      .as_mut()
+      .and_then(|run| run.approval.take())
+      .map(|request| Effect::ResolveApproval {
+        approval,
+        id: request.id,
+      })
+      .into_iter()
+      .collect()
   }
 
   fn run(&mut self, input: String) -> Option<Effect> {
@@ -433,6 +440,45 @@ impl State {
 mod tests {
   use super::*;
 
+  struct TestEvent;
+
+  impl TestEvent {
+    fn approval(invocation: ToolRequest) -> ApprovalRequest {
+      ApprovalRequest {
+        id: ApprovalId {
+          call: invocation.id.clone(),
+          response: Self::response(),
+        },
+        invocation,
+      }
+    }
+
+    fn message(message: Message) -> AgentEvent {
+      let response = Self::response();
+
+      AgentEvent::Message {
+        message,
+        response: Some(response),
+        run: response.run,
+      }
+    }
+
+    fn response() -> ResponseId {
+      serde_json::from_value::<ResponseId>(serde_json::json!({
+        "round": 1,
+        "run": 1,
+      }))
+      .unwrap()
+    }
+
+    fn update(update: MessageUpdate) -> AgentEvent {
+      AgentEvent::Update {
+        response: Self::response(),
+        update,
+      }
+    }
+  }
+
   #[test]
   fn agent_events_without_run_are_ignored() {
     let mut state = State::new(Session::new(
@@ -456,16 +502,14 @@ mod tests {
     );
 
     for event in [
-      AgentEvent::Message(Message::Agent(
+      TestEvent::message(Message::Agent(
         vec![AssistantContent::ToolCall(invocation)].into(),
       )),
-      AgentEvent::Message(Message::User(vec![
-        UserMessageContent::ToolResult {
-          call: CallId::new("foo"),
-          name: ToolName::new("command").unwrap(),
-          result: ToolResult::default(),
-        },
-      ])),
+      TestEvent::message(Message::User(vec![UserMessageContent::ToolResult {
+        call: CallId::new("foo"),
+        name: ToolName::new("command").unwrap(),
+        result: ToolResult::default(),
+      }])),
     ] {
       assert_eq!(
         state.handle_event(Event::Agent { event, run_id: 0 }),
@@ -486,8 +530,8 @@ mod tests {
     assert_eq!(state.session.transcript, []);
   }
 
-  #[tokio::test]
-  async fn approval_terminal_agent_tool_result_drops_pending_request() {
+  #[test]
+  fn approval_terminal_agent_tool_result_drops_pending_request() {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
@@ -500,7 +544,7 @@ mod tests {
     ))
     .unwrap();
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolRequest::new(
+    let request = TestEvent::approval(ToolRequest::new(
       CallId::new("foo"),
       ToolFunction {
         arguments: serde_json::json!({"command": "bar"}),
@@ -514,7 +558,7 @@ mod tests {
     });
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Message(Message::User(vec![
+      event: TestEvent::message(Message::User(vec![
         UserMessageContent::ToolResult {
           call: CallId::new("foo"),
           name: ToolName::new("command").unwrap(),
@@ -534,11 +578,10 @@ mod tests {
         ..Run::new(0)
       })
     );
-    assert!(response_receiver.await.is_err());
   }
 
-  #[tokio::test]
-  async fn approval_terminal_error_drops_pending_request() {
+  #[test]
+  fn approval_terminal_error_drops_pending_request() {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
@@ -551,7 +594,7 @@ mod tests {
     ))
     .unwrap();
 
-    let (request, response_receiver) = ApprovalRequest::new(ToolRequest::new(
+    let request = TestEvent::approval(ToolRequest::new(
       CallId::new("foo"),
       ToolFunction {
         arguments: serde_json::json!({"command": "bar"}),
@@ -571,7 +614,6 @@ mod tests {
     });
 
     assert_eq!(state.run, None);
-    assert!(response_receiver.await.is_err());
   }
 
   #[test]
@@ -589,7 +631,7 @@ mod tests {
     state.handle_event(Event::Action(Action::Submit));
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text {
+      event: TestEvent::update(MessageUpdate::Text {
         delta: "bar".into(),
         index: 0,
       }),
@@ -597,7 +639,7 @@ mod tests {
     });
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::ReasoningDelta {
+      event: TestEvent::update(MessageUpdate::ReasoningDelta {
         delta: "baz".into(),
         index: 1,
       }),
@@ -651,12 +693,12 @@ mod tests {
     let mut run = RunState::new(state.session.conversation.clone());
 
     for message in &messages {
-      run.apply(&AgentEvent::Message(message.clone()));
+      run.apply(&TestEvent::message(message.clone()));
     }
 
     for message in &messages[..2] {
       state.handle_event(Event::Agent {
-        event: AgentEvent::Message(message.clone()),
+        event: TestEvent::message(message.clone()),
         run_id: 0,
       });
     }
@@ -802,8 +844,8 @@ mod tests {
     );
   }
 
-  #[tokio::test]
-  async fn stale_agent_events_do_not_mutate_new_run() {
+  #[test]
+  fn stale_agent_events_do_not_mutate_new_run() {
     let mut state = State::new(Session::new(
       &Settings {
         directory: "foo".into(),
@@ -845,30 +887,28 @@ mod tests {
       },
     );
 
-    let (request, response_receiver) = ApprovalRequest::new(invocation.clone());
+    let request = TestEvent::approval(invocation.clone());
 
     for event in [
-      AgentEvent::Update(MessageUpdate::Text {
+      TestEvent::update(MessageUpdate::Text {
         delta: "stale".into(),
         index: 0,
       }),
-      AgentEvent::Update(MessageUpdate::ReasoningDelta {
+      TestEvent::update(MessageUpdate::ReasoningDelta {
         delta: "stale".into(),
         index: 0,
       }),
-      AgentEvent::Message(Message::Agent(
+      TestEvent::message(Message::Agent(
         vec![AssistantContent::ToolCall(invocation)].into(),
       )),
-      AgentEvent::Message(Message::User(vec![
-        UserMessageContent::ToolResult {
-          call: CallId::new("stale"),
-          name: ToolName::new("command").unwrap(),
-          result: ToolResult {
-            content: "stale".into(),
-            ..Default::default()
-          },
+      TestEvent::message(Message::User(vec![UserMessageContent::ToolResult {
+        call: CallId::new("stale"),
+        name: ToolName::new("command").unwrap(),
+        result: ToolResult {
+          content: "stale".into(),
+          ..Default::default()
         },
-      ])),
+      }])),
       AgentEvent::ToolApprovalRequest(request),
     ] {
       state.handle_event(Event::Agent { event, run_id: 0 });
@@ -882,11 +922,6 @@ mod tests {
     }
 
     assert_eq!(
-      response_receiver.await.unwrap_err().to_string(),
-      "channel closed"
-    );
-
-    assert_eq!(
       state.run.as_ref().and_then(|run| run.approval.as_ref()),
       None
     );
@@ -894,7 +929,7 @@ mod tests {
     assert_eq!(state.run, Some(Run::new(1)));
 
     state.handle_event(Event::Agent {
-      event: AgentEvent::Update(MessageUpdate::Text {
+      event: TestEvent::update(MessageUpdate::Text {
         delta: "current".into(),
         index: 0,
       }),

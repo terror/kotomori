@@ -67,7 +67,13 @@ impl Drop for ToolGuard {
       });
 
       if let Some(message) = message {
-        let _ = event_sender.send(AgentEvent::Message(message));
+        let response = self.context.response();
+
+        let _ = event_sender.send(AgentEvent::Message {
+          message,
+          response: Some(response),
+          run: response.run,
+        });
       }
     }
   }
