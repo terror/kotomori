@@ -63,7 +63,7 @@ impl Tool for TestTool {
         context.progress(json!("foo")).unwrap();
 
         ToolResult {
-          content: Some("foo".into()),
+          content: "foo".into(),
           outcome: ToolOutcome::Success,
           ..Default::default()
         }

@@ -540,7 +540,13 @@ mod tests {
     };
 
     assert_eq!(run.recv().await, Some(AgentEvent::ResponseStarted(id)));
-    assert_eq!(run.recv().await, Some(AgentEvent::Update(update)));
+    assert_eq!(
+      run.recv().await,
+      Some(AgentEvent::Update {
+        response: id,
+        update
+      }),
+    );
     assert_eq!(
       run.recv().await,
       Some(AgentEvent::ResponseFinished(response.clone()))
