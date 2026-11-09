@@ -172,6 +172,50 @@ fn prompt_round_trip() -> Result {
 }
 
 #[test]
+fn provider_duplicate_tool_calls_recovers() -> Result {
+  let directory = tempfile::tempdir()?;
+  let state = tempfile::tempdir()?;
+
+  Test::new()
+    .cwd(directory.path())
+    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+    .model("mock:duplicate-tool-calls")
+    .argument("--yolo")
+    .submit("foo")
+    .expect_screen_contains(indoc! {
+      "
+
+      │ foo
+
+      bar
+
+      ● Error
+        │ duplicate tool call in provider response
+
+      │
+
+      mock · duplicate-tool-calls · \
+      "
+    })
+    .submit("baz")
+    .expect_screen_contains("queued for mock:duplicate-tool-calls: baz")
+    .quit()
+    .run()?;
+
+  assert!(!directory.path().join("foo").try_exists()?);
+
+  Test::new()
+    .cwd(directory.path())
+    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+    .arguments(["resume", "--last"])
+    .expect_screen_contains("queued for mock:duplicate-tool-calls: baz")
+    .submit("qux")
+    .expect_screen_contains("queued for mock:duplicate-tool-calls: qux")
+    .quit()
+    .run()
+}
+
+#[test]
 fn provider_error_recovers() -> Result {
   Test::new()
     .model("mock:error")

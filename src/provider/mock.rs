@@ -44,6 +44,24 @@ impl Provider for Mock {
             }),
           )
         }
+        "duplicate-tool-calls" if request.messages.len() == 1 => {
+          let tool = AssistantContent::tool_call(
+            "foo",
+            ToolName::new("command")?,
+            serde_json::json!({"command": "echo bar>foo"}),
+          );
+
+          sink.update(MessageUpdate::Text {
+            delta: "bar".into(),
+            index: 0,
+          })?;
+
+          return Ok(ProviderResponse {
+            message: vec![AssistantContent::text("bar"), tool.clone(), tool]
+              .into(),
+            ..Default::default()
+          });
+        }
         "empty-reasoning" => AssistantContent::reasoning("mock", ""),
         "encrypted-reasoning" => AssistantContent::Reasoning(Reasoning::new(
           "mock",

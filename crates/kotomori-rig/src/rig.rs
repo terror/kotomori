@@ -112,8 +112,19 @@ impl Rig {
   fn decode_response(
     response: completion::CompletionResponse,
   ) -> Result<ProviderResponse> {
+    let finish_reason = response.finish_reason();
+
+    if let Some(completion::FinishReason::Other(reason)) = &finish_reason
+      && matches!(
+        reason.as_str(),
+        "ERROR" | "ERROR_TOXIC" | "cancelled" | "failed" | "incomplete"
+      )
+    {
+      bail!("provider response ended with `{reason}`");
+    }
+
     Ok(ProviderResponse {
-      finish_reason: response.finish_reason().map(|reason| match reason {
+      finish_reason: finish_reason.map(|reason| match reason {
         completion::FinishReason::ContentFilter => FinishReason::ContentFilter,
         completion::FinishReason::Length => FinishReason::Length,
         completion::FinishReason::Other(reason) => FinishReason::Other(reason),
@@ -495,6 +506,45 @@ mod tests {
         "required": ["baz"],
       }),
     }]);
+  }
+
+  #[test]
+  fn completion_response_rejects_failure_statuses() {
+    #[track_caller]
+    fn case(reason: &str, expected: Result<ProviderResponse, &str>) {
+      let response = completion::CompletionResponse::new(
+        vec![message::AssistantContent::text("bar")],
+        completion::Usage::default(),
+        "foo",
+        json!({}),
+      )
+      .with_finish_reason(completion::FinishReason::Other(reason.into()));
+
+      assert_eq!(
+        Rig::decode_response(response).map_err(|error| error.to_string()),
+        expected.map_err(str::to_owned)
+      );
+    }
+
+    case("ERROR", Err("provider response ended with `ERROR`"));
+    case(
+      "ERROR_TOXIC",
+      Err("provider response ended with `ERROR_TOXIC`"),
+    );
+    case("cancelled", Err("provider response ended with `cancelled`"));
+    case("failed", Err("provider response ended with `failed`"));
+    case(
+      "incomplete",
+      Err("provider response ended with `incomplete`"),
+    );
+    case(
+      "foo",
+      Ok(ProviderResponse {
+        finish_reason: Some(FinishReason::Other("foo".into())),
+        message: vec![AssistantContent::text("bar")].into(),
+        ..Default::default()
+      }),
+    );
   }
 
   #[test]

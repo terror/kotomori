@@ -197,7 +197,7 @@ impl Agent {
 
       let response = self.provider.stream(request, &sink).await;
 
-      guard.finish(&response);
+      let response = guard.finish(response);
 
       drop(context);
 
@@ -479,6 +479,88 @@ mod tests {
           }]),
         ],
       ],
+    );
+  }
+
+  #[tokio::test]
+  async fn duplicate_tool_calls_fail_before_execution() {
+    let tool = AssistantContent::tool_call(
+      "foo",
+      ToolName::new("foo").unwrap(),
+      json!("bar"),
+    );
+
+    let update = MessageUpdate::Text {
+      delta: "bar".into(),
+      index: 0,
+    };
+
+    let usage = Usage {
+      total_tokens: Some(5),
+      ..Default::default()
+    };
+
+    let TestAgent { agent, requests } = TestAgent::new(
+      vec![
+        TestResponse {
+          message: vec![AssistantContent::text("bar"), tool.clone(), tool]
+            .into(),
+          updates: vec![update.clone()],
+          usage,
+          ..Default::default()
+        },
+        TestResponse::default(),
+      ],
+      true,
+    );
+
+    let user = Message::User(vec![UserMessageContent::Text("foo".into())]);
+    let message = Message::Agent(vec![AssistantContent::text("bar")].into());
+    let conversation = Conversation::from(vec![user.clone(), message.clone()]);
+    let mut run = agent.spawn(vec![user.clone()].into());
+
+    let id = ResponseId {
+      round: 1,
+      run: run.id(),
+    };
+
+    let error = "duplicate tool call in provider response";
+
+    let response = ResponseResult {
+      finish_reason: None,
+      id,
+      outcome: ResponseOutcome::Failed(error.into()),
+      usage,
+    };
+
+    assert_eq!(run.recv().await, Some(AgentEvent::ResponseStarted(id)));
+    assert_eq!(run.recv().await, Some(AgentEvent::Update(update)));
+    assert_eq!(
+      run.recv().await,
+      Some(AgentEvent::ResponseFinished(response.clone()))
+    );
+    assert_eq!(run.recv().await, None);
+
+    let result = run.join().await;
+
+    assert_eq!(
+      result,
+      RunResult {
+        conversation: conversation.clone(),
+        entries: vec![RunEntry::Message(message)],
+        outcome: RunOutcome::Failed(error.into()),
+        responses: vec![response],
+        usage,
+      }
+    );
+
+    let result = agent.spawn(result.conversation).join().await;
+
+    assert_eq!(result.outcome, RunOutcome::Completed);
+    assert_eq!(result.conversation, conversation);
+    assert_eq!(
+      *requests.lock().unwrap(),
+      [vec![user], conversation.messages().to_vec()]
     );
   }
 
