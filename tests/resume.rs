@@ -299,7 +299,7 @@ fn resume_with_no_sessions_exits_successfully() -> Result {
       [],
       |row| row.get::<_, i64>(0)
     )?,
-    2,
+    1,
   );
 
   Ok(())

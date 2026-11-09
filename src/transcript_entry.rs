@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum TranscriptEntry {
   Draft(MessageBuffer),
   Error(String),

@@ -165,7 +165,7 @@ fn unsupported_database_schema() -> Result {
 
   let path = directory.path().join("kotomori.db");
 
-  Connection::open(&path)?.execute_batch("PRAGMA user_version = 3")?;
+  Connection::open(&path)?.execute_batch("PRAGMA user_version = 2")?;
 
   Test::new()
     .env("KOTOMORI_HOME", directory.path().to_str().unwrap())
@@ -175,7 +175,7 @@ fn unsupported_database_schema() -> Result {
         error: failed to open database `{path}`
 
         because:
-        - database schema version 3 is unsupported; expected 2
+        - database schema version 2 is unsupported; expected 1
         "
       },
       path = path.display(),

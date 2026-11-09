@@ -6,10 +6,7 @@ pub(crate) struct Database {
 }
 
 impl Database {
-  const MIGRATIONS: &[&str] = &[
-    include_str!("../migrations/0001_initial.sql"),
-    include_str!("../migrations/0002_session_snapshots.sql"),
-  ];
+  const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
   const SCHEMA_VERSION: usize = Self::MIGRATIONS.len();
 
   pub(crate) fn fork_session(
@@ -19,7 +16,7 @@ impl Database {
   ) -> Result<Session> {
     let transaction = self.connection.unchecked_transaction()?;
 
-    self.save_session_inner(session, now)?;
+    self.save_session(session, now)?;
 
     let session = Session {
       conversation: session.conversation.clone(),
@@ -28,7 +25,7 @@ impl Database {
       ..Session::new(&session.settings, now)
     };
 
-    let saved = self.save_session_inner(&session, now)?;
+    let saved = self.save_session(&session, now)?;
 
     transaction.commit()?;
 
@@ -81,35 +78,31 @@ impl Database {
         [id],
         |row| {
           let entries = row.get::<_, String>(6)?;
-          let snapshot = row.get::<_, Option<String>>(7)?;
 
-          let core = Self::snapshot(&entries, snapshot.as_deref())
+          let snapshot = serde_json::from_str::<SessionSnapshot>(
+            &row.get::<_, String>(7)?,
+          )
+          .map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+              7,
+              rusqlite::types::Type::Text,
+              Box::new(error),
+            )
+          })?;
+
+          let transcript = serde_json::from_str::<Vec<SessionEntry>>(&entries)
+            .map_err(Error::from)
+            .and_then(|entries| SessionEntry::restore(entries, &snapshot))
             .map_err(|error| {
               rusqlite::Error::FromSqlConversionFailure(
-                if snapshot.is_some() { 7 } else { 6 },
+                6,
                 rusqlite::types::Type::Text,
                 error.into(),
               )
             })?;
 
-          let transcript = if snapshot.is_some() {
-            serde_json::from_str::<Vec<SessionEntry>>(&entries)
-              .map_err(Error::from)
-              .and_then(|entries| SessionEntry::restore(entries, &core))
-          } else {
-            serde_json::from_str::<Vec<TranscriptEntry>>(&entries)
-              .map_err(Error::from)
-          }
-          .map_err(|error| {
-            rusqlite::Error::FromSqlConversionFailure(
-              6,
-              rusqlite::types::Type::Text,
-              error.into(),
-            )
-          })?;
-
           Ok(Session {
-            conversation: core.conversation(),
+            conversation: snapshot.conversation(),
             created_at: row.get(1)?,
             id: Some(row.get(0)?),
             settings: Settings {
@@ -143,21 +136,8 @@ impl Database {
     session: &Session,
     updated_at: u64,
   ) -> Result<SavedSession> {
-    let transaction = self.connection.unchecked_transaction()?;
-
-    let saved = self.save_session_inner(session, updated_at)?;
-
-    transaction.commit()?;
-
-    Ok(saved)
-  }
-
-  fn save_session_inner(
-    &self,
-    session: &Session,
-    updated_at: u64,
-  ) -> Result<SavedSession> {
-    let snapshot = session.snapshot()?;
+    let snapshot = serde_json::to_string(&session.snapshot()?)
+      .context("failed to serialize session snapshot")?;
 
     let directory = session
       .settings
@@ -183,14 +163,16 @@ impl Database {
            directory = ?2,
            model = ?3,
            title = ?4,
-           entries = ?5
-         WHERE id = ?6",
+           entries = ?5,
+           snapshot = ?6
+         WHERE id = ?7",
         params![
           updated_at,
           directory,
           session.settings.model.to_string(),
           title,
           entries,
+          snapshot,
           id,
         ],
       )?;
@@ -203,8 +185,8 @@ impl Database {
     } else {
       self.connection.query_row(
         "INSERT INTO sessions (
-           created_at, updated_at, directory, model, title, entries
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+           created_at, updated_at, directory, model, title, entries, snapshot
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
          RETURNING id",
         params![
           session.created_at,
@@ -213,33 +195,17 @@ impl Database {
           session.settings.model.to_string(),
           title,
           entries,
+          snapshot,
         ],
         |row| row.get(0),
       )?
     };
-
-    self.save(&id, &snapshot)?;
 
     Ok(SavedSession {
       id,
       title,
       updated_at,
     })
-  }
-
-  fn snapshot(
-    entries: &str,
-    snapshot: Option<&str>,
-  ) -> Result<SessionSnapshot> {
-    match snapshot {
-      Some(snapshot) => serde_json::from_str(snapshot).map_err(Into::into),
-      None => SessionSnapshot::new(
-        serde_json::from_str::<Vec<TranscriptEntry>>(entries)?
-          .into_iter()
-          .filter_map(TranscriptEntry::into_run_entry)
-          .collect(),
-      ),
-    }
   }
 }
 
@@ -249,22 +215,15 @@ impl SessionStore for Database {
   fn load(&self, id: &i64) -> Result<Option<SessionSnapshot>> {
     self
       .connection
-      .query_row(
-        "SELECT entries, snapshot FROM sessions WHERE id = ?1",
-        [id],
-        |row| {
-          let entries = row.get::<_, String>(0)?;
-          let snapshot = row.get::<_, Option<String>>(1)?;
-
-          Self::snapshot(&entries, snapshot.as_deref()).map_err(|error| {
-            rusqlite::Error::FromSqlConversionFailure(
-              usize::from(snapshot.is_some()),
-              rusqlite::types::Type::Text,
-              error.into(),
-            )
-          })
-        },
-      )
+      .query_row("SELECT snapshot FROM sessions WHERE id = ?1", [id], |row| {
+        serde_json::from_str(&row.get::<_, String>(0)?).map_err(|error| {
+          rusqlite::Error::FromSqlConversionFailure(
+            0,
+            rusqlite::types::Type::Text,
+            Box::new(error),
+          )
+        })
+      })
       .optional()
       .with_context(|| format!("failed to load session snapshot `{id}`"))
   }
@@ -520,9 +479,9 @@ mod tests {
     database
       .connection
       .execute(
-        "INSERT INTO sessions (
-           created_at, updated_at, directory, model, entries
-         ) VALUES (0, 0, ?1, 'foo', '[]')",
+        r#"INSERT INTO sessions (
+           created_at, updated_at, directory, model, entries, snapshot
+         ) VALUES (0, 0, ?1, 'foo', '[]', '{"version":1,"entries":[]}')"#,
         ["foo"],
       )
       .unwrap();
@@ -563,9 +522,9 @@ mod tests {
       database
         .connection
         .execute(
-          "INSERT INTO sessions (
-             created_at, updated_at, directory, model, entries
-           ) VALUES (?1, ?2, ?3, 'mock:foo', '[]')",
+          r#"INSERT INTO sessions (
+             created_at, updated_at, directory, model, entries, snapshot
+           ) VALUES (?1, ?2, ?3, 'mock:foo', '[]', '{"version":1,"entries":[]}')"#,
           params![created_at, updated_at, "foo"],
         )
         .unwrap();
