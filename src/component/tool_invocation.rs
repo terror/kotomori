@@ -93,7 +93,11 @@ impl Component for ToolInvocationComponent<'_> {
 
     let mut details = self.details();
 
-    let exit_status = self.result.and_then(|result| result.exit_status);
+    let exit_status = self.result.and_then(|result| {
+      serde_json::from_value::<CommandOutput>(result.details.clone())
+        .ok()
+        .and_then(|output| output.exit_status)
+    });
 
     if matches!(exit_status, Some(status) if status != 0) {
       details.push(("exit", exit_status.unwrap().to_string()));
@@ -159,8 +163,8 @@ mod tests {
       );
 
       let result = ToolResult {
+        content: output.into(),
         outcome: ToolOutcome::Success,
-        stdout: Some(output.into()),
         ..Default::default()
       };
 

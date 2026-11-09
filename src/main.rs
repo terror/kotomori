@@ -46,7 +46,9 @@ use {
     UserMessageContent,
   },
   kotomori_rig::{ChatGpt, GithubCopilot, Rig},
-  kotomori_tools::{CommandArguments, CommandExecutor, CommandTool},
+  kotomori_tools::{
+    CommandArguments, CommandExecutor, CommandOutput, CommandTool,
+  },
   loader::Loader,
   options::Options,
   patch::Patch,

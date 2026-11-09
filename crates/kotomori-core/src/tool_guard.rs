@@ -42,8 +42,8 @@ impl Drop for ToolGuard {
       };
 
       ToolResult {
+        content: stderr.into(),
         outcome,
-        stderr: Some(stderr.into()),
         ..Default::default()
       }
     });

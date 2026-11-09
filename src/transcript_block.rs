@@ -110,7 +110,7 @@ mod tests {
     }
 
     let result = ToolResult {
-      content: Some("baz".into()),
+      content: "baz".into(),
       outcome: ToolOutcome::Success,
       ..Default::default()
     };

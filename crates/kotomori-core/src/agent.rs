@@ -54,8 +54,8 @@ impl Agent {
           result
         }
         ToolApproval::Denied => ToolResult {
+          content: "permission denied".into(),
           outcome: ToolOutcome::Denied,
-          stderr: Some("permission denied".into()),
           ..Default::default()
         },
       },
@@ -270,12 +270,12 @@ impl Agent {
             self.execute(run, id, &tool_call, tool, decision).await?
           }
           Ok(_) => ToolResult {
+            content: "batch skipped: another tool call is invalid".into(),
             outcome: ToolOutcome::Skipped,
-            stderr: Some("batch skipped: another tool call is invalid".into()),
             ..Default::default()
           },
           Err(error) => ToolResult {
-            stderr: Some(format!("{error:#}")),
+            content: format!("{error:#}"),
             ..Default::default()
           },
         };
@@ -382,7 +382,7 @@ mod tests {
 
       Ok(ToolCall::new(ApprovalPolicy::Required, |_| async move {
         ToolResult {
-          content: Some(content),
+          content,
           outcome: ToolOutcome::Success,
           ..Default::default()
         }
@@ -454,8 +454,8 @@ mod tests {
       .await;
 
     let tool_result = ToolResult {
+      content: "permission denied".into(),
       outcome: ToolOutcome::Denied,
-      stderr: Some("permission denied".into()),
       ..Default::default()
     };
 
@@ -656,7 +656,7 @@ mod tests {
     assert_eq!(result.outcome, RunOutcome::Completed);
 
     let tool_result = ToolResult {
-      content: Some("bar".into()),
+      content: "bar".into(),
       outcome: ToolOutcome::Success,
       ..Default::default()
     };

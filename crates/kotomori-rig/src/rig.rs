@@ -413,7 +413,7 @@ mod tests {
   #[test]
   fn completion_request_uses_system_context_and_model() {
     let result = ToolResult {
-      content: Some("foo".into()),
+      content: "foo".into(),
       outcome: ToolOutcome::Success,
       ..Default::default()
     };

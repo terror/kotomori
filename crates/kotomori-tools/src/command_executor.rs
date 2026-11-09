@@ -11,7 +11,7 @@ impl CommandExecutor {
       .execute_inner(command)
       .await
       .unwrap_or_else(|error| ToolResult {
-        stderr: Some(error.to_string()),
+        content: error.to_string(),
         ..Default::default()
       })
   }
@@ -73,13 +73,14 @@ impl CommandExecutor {
       )
     };
 
-    Ok(ToolResult {
-      exit_status,
-      outcome,
-      stderr: (!stderr.is_empty()).then_some(stderr),
-      stdout: (!stdout.is_empty()).then_some(stdout),
-      ..Default::default()
-    })
+    Ok(
+      CommandOutput {
+        exit_status,
+        stderr,
+        stdout,
+      }
+      .into_result(outcome),
+    )
   }
 
   fn pipe_output(self, mut bytes: Vec<u8>) -> String {
@@ -159,11 +160,11 @@ mod tests {
 
       assert_eq!(
         CommandExecutor::default().execute(command).await,
-        ToolResult {
+        CommandOutput {
           exit_status: Some(exit_status),
-          outcome,
           ..Default::default()
-        },
+        }
+        .into_result(outcome),
       );
     }
   }
@@ -177,7 +178,7 @@ mod tests {
         .execute(AsyncCommand::new(directory.path().join("foo")))
         .await,
       ToolResult {
-        stderr: Some(io::Error::from_raw_os_error(2).to_string()),
+        content: io::Error::from_raw_os_error(2).to_string(),
         ..Default::default()
       },
     );
@@ -198,10 +199,11 @@ mod tests {
 
     assert_eq!(
       executor.execute(command).await,
-      ToolResult {
-        stderr: Some("tool timed out after 0 seconds".into()),
+      CommandOutput {
+        stderr: "tool timed out after 0 seconds".into(),
         ..Default::default()
-      },
+      }
+      .into_result(ToolOutcome::Failure),
     );
   }
 
