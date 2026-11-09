@@ -6,20 +6,28 @@ pub(super) struct ResponseGuard {
 }
 
 impl ResponseGuard {
-  pub(super) fn finish(mut self, response: &Result<ProviderResponse>) {
-    match response {
-      Ok(response) => {
-        self
-          .result
-          .finish_reason
-          .clone_from(&response.finish_reason);
-        self.result.outcome = ResponseOutcome::Completed;
-        self.result.usage = response.usage;
-      }
-      Err(error) => {
-        self.result.outcome = ResponseOutcome::Failed(format!("{error:#}"));
-      }
-    }
+  pub(super) fn finish(
+    mut self,
+    response: Result<ProviderResponse>,
+  ) -> Result<ProviderResponse> {
+    let response = response.and_then(|response| {
+      self
+        .result
+        .finish_reason
+        .clone_from(&response.finish_reason);
+      self.result.usage = response.usage;
+
+      response.validate()?;
+
+      Ok(response)
+    });
+
+    self.result.outcome = match &response {
+      Ok(_) => ResponseOutcome::Completed,
+      Err(error) => ResponseOutcome::Failed(format!("{error:#}")),
+    };
+
+    response
   }
 
   pub(super) fn new(
