@@ -4,11 +4,12 @@ use super::*;
 pub struct AllowAll;
 
 impl HostPolicy for AllowAll {
-  fn evaluate(
-    &self,
-    _invocation: &ToolRequest,
+  fn evaluate<'a>(
+    &'a self,
+    _context: &'a RunContext,
+    _invocation: &'a ToolRequest,
     _approval: ApprovalPolicy,
-  ) -> PolicyDecision {
-    PolicyDecision::Allow
+  ) -> BoxFuture<'a, Result<PolicyDecision>> {
+    Box::pin(async { Ok(PolicyDecision::Allow) })
   }
 }

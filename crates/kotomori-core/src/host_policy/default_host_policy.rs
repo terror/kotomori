@@ -4,14 +4,17 @@ use super::*;
 pub struct DefaultHostPolicy;
 
 impl HostPolicy for DefaultHostPolicy {
-  fn evaluate(
-    &self,
-    _invocation: &ToolRequest,
+  fn evaluate<'a>(
+    &'a self,
+    _context: &'a RunContext,
+    _invocation: &'a ToolRequest,
     approval: ApprovalPolicy,
-  ) -> PolicyDecision {
-    match approval {
-      ApprovalPolicy::None => PolicyDecision::Allow,
-      ApprovalPolicy::Required => PolicyDecision::Ask,
-    }
+  ) -> BoxFuture<'a, Result<PolicyDecision>> {
+    Box::pin(async move {
+      Ok(match approval {
+        ApprovalPolicy::None => PolicyDecision::Allow,
+        ApprovalPolicy::Required => PolicyDecision::Ask,
+      })
+    })
   }
 }
