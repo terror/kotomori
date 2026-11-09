@@ -74,6 +74,37 @@ fn initial_prompt_submits() -> Result {
 }
 
 #[test]
+fn max_output_tokens_reach_the_provider() -> Result {
+  fn case(config: &str, arguments: &[&str], expected: &str) -> Result {
+    Test::new()
+      .config(config)
+      .arguments(arguments.iter().copied())
+      .model("mock:generation-options")
+      .submit("foo")
+      .expect_screen_contains(&format!("\"max_output_tokens\":{expected}"))
+      .run()
+  }
+
+  case("", &[], "null")?;
+  case("max_output_tokens = 1", &[], "1")?;
+  case("max_output_tokens = 1", &["--max-output-tokens", "2"], "2")
+}
+
+#[test]
+fn max_output_tokens_rejects_zero() -> Result {
+  Test::new()
+    .arguments(["--max-output-tokens", "0"])
+    .stderr(indoc! {
+      "
+      error: invalid value '0' for '--max-output-tokens <MAX_OUTPUT_TOKENS>': number would be zero for non-zero type
+
+      For more information, try '--help'.
+      "
+    })
+    .status(2)
+}
+
+#[test]
 fn missing_config_defaults() -> Result {
   let directory = tempfile::tempdir()?;
 

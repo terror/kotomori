@@ -2,6 +2,7 @@ use super::*;
 
 #[derive(Clone, Debug)]
 pub struct AgentConfig {
+  pub generation: GenerationOptions,
   pub max_rounds: usize,
   pub model: Model,
   pub tools: ToolRegistry,

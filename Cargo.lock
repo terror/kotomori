@@ -3333,6 +3333,7 @@ dependencies = [
  "portable-pty",
  "ratatui-core",
  "ratatui-textarea",
+ "rig",
  "rusqlite",
  "serde",
  "serde_json",

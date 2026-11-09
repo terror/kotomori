@@ -79,6 +79,7 @@ fn agent() -> Agent {
 
   Agent::new(
     AgentConfig {
+      generation: Default::default(),
       max_rounds: 2,
       model: "foo:bar".parse().unwrap(),
       tools,

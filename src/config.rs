@@ -5,6 +5,7 @@ use super::*;
 pub(crate) struct Config {
   pub(crate) default_model: Option<String>,
   pub(crate) default_provider: Option<String>,
+  pub(crate) max_output_tokens: Option<NonZeroU64>,
   pub(crate) max_rounds: Option<usize>,
 }
 
@@ -45,6 +46,7 @@ mod tests {
       Config {
         default_model: Some("foo".into()),
         default_provider: Some("mock".into()),
+        max_output_tokens: None,
         max_rounds: None,
       },
     );

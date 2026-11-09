@@ -38,8 +38,8 @@ use {
   interruption::Interruption,
   kotomori_core::{
     Agent, AgentConfig, AgentEvent, AgentRun, AllowAll, ApprovalId,
-    ApprovalRequest, AssistantContent, CallId, Conversation, Message,
-    MessageBuffer, MessageDraft, MessageUpdate, Model, Provider,
+    ApprovalRequest, AssistantContent, CallId, Conversation, GenerationOptions,
+    Message, MessageBuffer, MessageDraft, MessageUpdate, Model, Provider,
     ProviderResponse, ProviderSink, Reasoning, ReasoningContent, Request,
     RunEntry, RunOutcome, RunResult, SessionSnapshot, SessionStore,
     ToolApproval, ToolFunction, ToolName, ToolOutcome, ToolRegistry,
@@ -85,6 +85,7 @@ use {
     future::pending,
     io::{self, BufWriter, Stdout, Write},
     iter::once,
+    num::NonZeroU64,
     ops::Range,
     path::{Component, Path, PathBuf},
     process, str,

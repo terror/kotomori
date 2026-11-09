@@ -114,6 +114,7 @@ mod tests {
     let mut session = Session::new(
       &Settings {
         directory: "foo".into(),
+        max_output_tokens: None,
         max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:foo".parse().unwrap(),
         prompt: None,
@@ -149,6 +150,7 @@ mod tests {
     let mut session = Session::new(
       &Settings {
         directory: "foo".into(),
+        max_output_tokens: None,
         max_rounds: AgentConfig::DEFAULT_MAX_ROUNDS,
         model: "mock:foo".parse().unwrap(),
         prompt: None,
