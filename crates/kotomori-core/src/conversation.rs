@@ -11,8 +11,7 @@ impl Conversation {
   }
 
   pub fn interrupt_pending_calls(&mut self) -> Result<Vec<Message>> {
-    let messages = self
-      .pending_calls()?
+    let messages = Self::pending_calls(&self.messages)?
       .into_iter()
       .map(|call| {
         Message::User(vec![UserMessageContent::ToolResult {
@@ -49,10 +48,12 @@ impl Conversation {
     &self.messages
   }
 
-  fn pending_calls(&self) -> Result<Vec<&ToolRequest>> {
+  pub(super) fn pending_calls(
+    messages: &[Message],
+  ) -> Result<Vec<&ToolRequest>> {
     let mut pending = Vec::<&ToolRequest>::new();
 
-    for message in &self.messages {
+    for message in messages {
       match message {
         Message::Agent(message) => {
           if !pending.is_empty() {
@@ -63,8 +64,12 @@ impl Conversation {
 
           for content in &message.content {
             if let AssistantContent::ToolCall(call) = content {
+              call.id.validate()?;
+
               ensure!(
-                !pending.iter().any(|pending| pending.id == call.id),
+                !pending.iter().any(|pending| {
+                  pending.id.correlation() == call.id.correlation()
+                }),
                 "duplicate tool call in conversation"
               );
 
@@ -80,6 +85,8 @@ impl Conversation {
                 "unfinished tool calls must be resolved before user text"
               ),
               UserMessageContent::ToolResult { call, name, .. } => {
+                call.validate()?;
+
                 let index = pending
                   .iter()
                   .position(|pending| {
@@ -105,7 +112,7 @@ impl Conversation {
   }
 
   pub fn validate(&self) -> Result {
-    self.pending_calls().map(|_| ())
+    Self::pending_calls(&self.messages).map(|_| ())
   }
 }
 
@@ -118,6 +125,77 @@ impl From<Vec<Message>> for Conversation {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn exchange_validation_is_shared_with_context() {
+    #[track_caller]
+    fn case(calls: &[CallId], expected: Option<&str>) {
+      let messages = vec![
+        Message::Agent(
+          calls
+            .iter()
+            .map(|id| {
+              AssistantContent::ToolCall(ToolRequest::new(
+                id.clone(),
+                ToolFunction {
+                  arguments: Value::Null,
+                  name: ToolName::new("foo").unwrap(),
+                },
+              ))
+            })
+            .collect::<Vec<_>>()
+            .into(),
+        ),
+        Message::User(
+          calls
+            .iter()
+            .map(|call| UserMessageContent::ToolResult {
+              call: call.clone(),
+              name: ToolName::new("foo").unwrap(),
+              result: ToolResult::default(),
+            })
+            .collect(),
+        ),
+      ];
+
+      for result in [
+        Conversation::from(messages.clone()).validate(),
+        Request {
+          generation: &GenerationOptions::default(),
+          messages: &messages,
+          model: &Model::default(),
+          system: None,
+          tools: &[],
+        }
+        .validate(),
+      ] {
+        assert_eq!(
+          result.err().map(|error| error.to_string()).as_deref(),
+          expected
+        );
+      }
+    }
+
+    case(
+      &[CallId::new("foo"), CallId::Local(Uuid::nil().to_string())],
+      None,
+    );
+    case(
+      &[CallId::new("")],
+      Some("provider tool call identity must not be empty"),
+    );
+    case(
+      &[CallId::Local("foo".into())],
+      Some("local tool call identity must be a canonical UUID"),
+    );
+    case(
+      &["bar", "baz"].map(|item_id| CallId::Provider {
+        call_id: "foo".into(),
+        item_id: Some(item_id.into()),
+      }),
+      Some("duplicate tool call in conversation"),
+    );
+  }
 
   #[test]
   fn messages_preserve_completed_content_and_boundaries() {

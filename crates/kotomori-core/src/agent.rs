@@ -224,15 +224,10 @@ impl Agent {
 
       let message = response.message;
 
-      let outcome = match response.finish_reason {
-        Some(FinishReason::Length) => {
-          Some(RunOutcome::Limited(RunLimit::OutputTokens))
-        }
-        Some(FinishReason::ContentFilter) => Some(RunOutcome::Failed(
-          "completion filtered by the provider".into(),
-        )),
-        _ => None,
-      };
+      let outcome = response
+        .finish_reason
+        .as_ref()
+        .and_then(FinishReason::outcome);
 
       if let Some(outcome) = outcome {
         let mut message = message;
@@ -368,9 +363,9 @@ mod tests {
         }
 
         Ok(ProviderResponse {
+          finish_reason: response.finish_reason,
           message: response.message,
           usage: response.usage,
-          ..Default::default()
         })
       })
     }
@@ -378,6 +373,7 @@ mod tests {
 
   #[derive(Debug, Default)]
   struct TestResponse {
+    finish_reason: Option<FinishReason>,
     message: AgentMessage,
     pending: bool,
     updates: Vec<MessageUpdate>,
@@ -503,91 +499,117 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn duplicate_tool_calls_fail_before_execution() {
-    let tool = AssistantContent::tool_call(
-      "foo",
-      ToolName::new("foo").unwrap(),
-      json!("bar"),
-    );
+  async fn duplicate_and_malformed_tool_calls_fail_before_execution() {
+    async fn case(calls: Vec<CallId>, error: &str) {
+      let update = MessageUpdate::Text {
+        delta: "bar".into(),
+        index: 0,
+      };
 
-    let update = MessageUpdate::Text {
-      delta: "bar".into(),
-      index: 0,
-    };
+      let usage = Usage {
+        total_tokens: Some(5),
+        ..Default::default()
+      };
 
-    let usage = Usage {
-      total_tokens: Some(5),
-      ..Default::default()
-    };
-
-    let TestAgent { agent, requests } = TestAgent::new(
-      vec![
-        TestResponse {
-          message: vec![AssistantContent::text("bar"), tool.clone(), tool]
+      let TestAgent { agent, requests } = TestAgent::new(
+        vec![TestResponse {
+          message: std::iter::once(AssistantContent::text("bar"))
+            .chain(calls.into_iter().map(|id| {
+              AssistantContent::ToolCall(ToolRequest::new(
+                id,
+                ToolFunction {
+                  arguments: json!("bar"),
+                  name: ToolName::new("foo").unwrap(),
+                },
+              ))
+            }))
+            .collect::<Vec<_>>()
             .into(),
           updates: vec![update.clone()],
           usage,
           ..Default::default()
-        },
-        TestResponse::default(),
-      ],
-      true,
-    );
+        }],
+        true,
+      );
 
-    let user = Message::User(vec![UserMessageContent::Text("foo".into())]);
-    let message = Message::Agent(vec![AssistantContent::text("bar")].into());
-    let conversation = Conversation::from(vec![user.clone(), message.clone()]);
-    let mut run = agent.spawn(vec![user.clone()].into());
+      let user = Message::User(vec![UserMessageContent::Text("foo".into())]);
+      let message = Message::Agent(vec![AssistantContent::text("bar")].into());
+      let conversation =
+        Conversation::from(vec![user.clone(), message.clone()]);
+      let mut run = agent.spawn(vec![user.clone()].into());
 
-    let id = ResponseId {
-      round: 1,
-      run: run.id(),
-    };
+      let id = ResponseId {
+        round: 1,
+        run: run.id(),
+      };
 
-    let error = "duplicate tool call in provider response";
-
-    let response = ResponseResult {
-      finish_reason: None,
-      id,
-      outcome: ResponseOutcome::Failed(error.into()),
-      usage,
-    };
-
-    assert_eq!(run.recv().await, Some(AgentEvent::ResponseStarted(id)));
-    assert_eq!(
-      run.recv().await,
-      Some(AgentEvent::Update {
-        response: id,
-        update,
-      })
-    );
-    assert_eq!(
-      run.recv().await,
-      Some(AgentEvent::ResponseFinished(response.clone()))
-    );
-    assert_eq!(run.recv().await, None);
-
-    let result = run.join().await;
-
-    assert_eq!(
-      result,
-      RunResult {
-        conversation: conversation.clone(),
-        entries: vec![RunEntry::Message(message)],
-        outcome: RunOutcome::Failed(error.into()),
-        responses: vec![response],
+      let response = ResponseResult {
+        finish_reason: None,
+        id,
+        outcome: ResponseOutcome::Failed(error.into()),
         usage,
-      }
-    );
+      };
 
-    let result = agent.spawn(result.conversation).join().await;
+      assert_eq!(run.recv().await, Some(AgentEvent::ResponseStarted(id)));
+      assert_eq!(
+        run.recv().await,
+        Some(AgentEvent::Update {
+          response: id,
+          update
+        }),
+      );
+      assert_eq!(
+        run.recv().await,
+        Some(AgentEvent::ResponseFinished(response.clone()))
+      );
+      assert_eq!(run.recv().await, None);
 
-    assert_eq!(result.outcome, RunOutcome::Completed);
-    assert_eq!(result.conversation, conversation);
-    assert_eq!(
-      *requests.lock().unwrap(),
-      [vec![user], conversation.messages().to_vec()]
-    );
+      let result = run.join().await;
+
+      assert_eq!(
+        result,
+        RunResult {
+          conversation: conversation.clone(),
+          entries: vec![RunEntry::Message(message)],
+          outcome: RunOutcome::Failed(error.into()),
+          responses: vec![response],
+          usage,
+        }
+      );
+
+      result.conversation.validate().unwrap();
+      assert_eq!(*requests.lock().unwrap(), [vec![user]]);
+    }
+
+    for calls in [
+      vec![CallId::new("foo"), CallId::new("foo")],
+      ["bar", "baz"]
+        .map(|item_id| CallId::Provider {
+          call_id: "foo".into(),
+          item_id: Some(item_id.into()),
+        })
+        .into(),
+      vec![
+        CallId::Local(Uuid::nil().to_string()),
+        CallId::new(Uuid::nil().to_string()),
+      ],
+    ] {
+      case(calls, "duplicate tool call in provider response").await;
+    }
+
+    case(
+      vec![CallId::new("foo"), CallId::new("")],
+      "provider tool call identity must not be empty",
+    )
+    .await;
+
+    for id in ["foo", "", "00000000000000000000000000000000"] {
+      case(
+        vec![CallId::new("foo"), CallId::Local(id.into())],
+        "local tool call identity must be a canonical UUID",
+      )
+      .await;
+    }
   }
 
   #[tokio::test]
@@ -914,5 +936,102 @@ mod tests {
         },
       ],
     );
+  }
+
+  #[tokio::test]
+  async fn terminal_responses_preserve_content_and_usage_without_executing_tools()
+   {
+    async fn case(finish_reason: FinishReason, outcome: RunOutcome) {
+      let usage = Usage {
+        input_tokens: Some(2),
+        output_tokens: Some(3),
+        total_tokens: Some(5),
+        ..Default::default()
+      };
+      let message = AgentMessage {
+        content: vec![AssistantContent::text("foo")],
+        id: Some("bar".into()),
+      };
+      let mut content = message.content.clone();
+
+      content.push(AssistantContent::tool_call(
+        "",
+        ToolName::new("foo").unwrap(),
+        json!("bar"),
+      ));
+
+      let TestAgent { agent, requests } = TestAgent::new(
+        vec![TestResponse {
+          finish_reason: Some(finish_reason.clone()),
+          message: AgentMessage {
+            content,
+            id: message.id.clone(),
+          },
+          usage,
+          ..Default::default()
+        }],
+        true,
+      );
+
+      let mut run = agent.spawn(Conversation::default());
+      let id = ResponseId {
+        round: 1,
+        run: run.id(),
+      };
+      let response = ResponseResult {
+        finish_reason: Some(finish_reason),
+        id,
+        outcome: match &outcome {
+          RunOutcome::Failed(error) => ResponseOutcome::Failed(error.clone()),
+          _ => ResponseOutcome::Completed,
+        },
+        usage,
+      };
+
+      assert_eq!(run.recv().await, Some(AgentEvent::ResponseStarted(id)));
+      assert_eq!(
+        run.recv().await,
+        Some(AgentEvent::ResponseFinished(response.clone()))
+      );
+      assert_eq!(
+        run.recv().await,
+        Some(AgentEvent::Message {
+          message: Message::Agent(message.clone()),
+          response: Some(id),
+          run: id.run,
+        })
+      );
+      assert_eq!(run.recv().await, None);
+
+      let message = Message::Agent(message);
+
+      assert_eq!(
+        run.join().await,
+        RunResult {
+          conversation: vec![message.clone()].into(),
+          entries: vec![RunEntry::Message(message)],
+          outcome,
+          responses: vec![response],
+          usage,
+        }
+      );
+      assert_eq!(*requests.lock().unwrap(), [Vec::<Message>::new()]);
+    }
+
+    case(
+      FinishReason::Error("foo".into()),
+      RunOutcome::Failed("provider response ended with `foo`".into()),
+    )
+    .await;
+    case(
+      FinishReason::ContentFilter,
+      RunOutcome::Failed("completion filtered by the provider".into()),
+    )
+    .await;
+    case(
+      FinishReason::Length,
+      RunOutcome::Limited(RunLimit::OutputTokens),
+    )
+    .await;
   }
 }

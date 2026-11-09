@@ -44,12 +44,28 @@ impl Provider for Mock {
             }),
           )
         }
-        "duplicate-tool-calls" if request.messages.len() == 1 => {
-          let tool = AssistantContent::tool_call(
-            "foo",
-            ToolName::new("command")?,
-            serde_json::json!({"command": "echo bar>foo"}),
-          );
+        model @ ("dual-id-tool-calls"
+        | "duplicate-tool-calls"
+        | "empty-tool-call"
+        | "failed-response"
+        | "invalid-local-tool-call")
+          if request.messages.len() == 1 =>
+        {
+          let calls = match model {
+            "dual-id-tool-calls" => {
+              ["bar", "baz"].map(|item_id| CallId::Provider {
+                call_id: "foo".into(),
+                item_id: Some(item_id.into()),
+              })
+            }
+            "empty-tool-call" | "failed-response" => {
+              [CallId::new("foo"), CallId::new("")]
+            }
+            "invalid-local-tool-call" => {
+              [CallId::new("foo"), CallId::Local("bar".into())]
+            }
+            _ => [CallId::new("foo"), CallId::new("foo")],
+          };
 
           sink.update(MessageUpdate::Text {
             delta: "bar".into(),
@@ -57,7 +73,19 @@ impl Provider for Mock {
           })?;
 
           return Ok(ProviderResponse {
-            message: vec![AssistantContent::text("bar"), tool.clone(), tool]
+            finish_reason: (model == "failed-response")
+              .then(|| FinishReason::Error("foo".into())),
+            message: std::iter::once(AssistantContent::text("bar"))
+              .chain(calls.into_iter().map(|id| {
+                AssistantContent::ToolCall(ToolRequest::new(
+                  id,
+                  ToolFunction {
+                    arguments: serde_json::json!({"command": "echo bar>foo"}),
+                    name: ToolName::new("command").unwrap(),
+                  },
+                ))
+              }))
+              .collect::<Vec<_>>()
               .into(),
             ..Default::default()
           });

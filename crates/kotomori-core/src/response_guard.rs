@@ -23,7 +23,14 @@ impl ResponseGuard {
     });
 
     self.result.outcome = match &response {
-      Ok(_) => ResponseOutcome::Completed,
+      Ok(response) => match response
+        .finish_reason
+        .as_ref()
+        .and_then(FinishReason::outcome)
+      {
+        Some(RunOutcome::Failed(error)) => ResponseOutcome::Failed(error),
+        _ => ResponseOutcome::Completed,
+      },
       Err(error) => ResponseOutcome::Failed(format!("{error:#}")),
     };
 

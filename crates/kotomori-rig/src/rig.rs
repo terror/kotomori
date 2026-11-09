@@ -114,19 +114,18 @@ impl Rig {
   ) -> Result<ProviderResponse> {
     let finish_reason = response.finish_reason();
 
-    if let Some(completion::FinishReason::Other(reason)) = &finish_reason
-      && matches!(
-        reason.as_str(),
-        "ERROR" | "ERROR_TOXIC" | "cancelled" | "failed" | "incomplete"
-      )
-    {
-      bail!("provider response ended with `{reason}`");
-    }
-
     Ok(ProviderResponse {
       finish_reason: finish_reason.map(|reason| match reason {
         completion::FinishReason::ContentFilter => FinishReason::ContentFilter,
         completion::FinishReason::Length => FinishReason::Length,
+        completion::FinishReason::Other(reason)
+          if matches!(
+            reason.as_str(),
+            "ERROR" | "ERROR_TOXIC" | "cancelled" | "failed" | "incomplete"
+          ) =>
+        {
+          FinishReason::Error(reason)
+        }
         completion::FinishReason::Other(reason) => FinishReason::Other(reason),
         completion::FinishReason::Stop => FinishReason::Stop,
         completion::FinishReason::ToolCalls => FinishReason::ToolCalls,
@@ -576,42 +575,48 @@ mod tests {
   }
 
   #[test]
-  fn completion_response_rejects_failure_statuses() {
+  fn completion_response_preserves_failure_metadata() {
     #[track_caller]
-    fn case(reason: &str, expected: Result<ProviderResponse, &str>) {
-      let response = completion::CompletionResponse::new(
+    fn case(reason: &str, expected: FinishReason) {
+      let usage = Usage {
+        cache_creation_input_tokens: Some(1),
+        cached_input_tokens: Some(2),
+        input_tokens: Some(3),
+        output_tokens: Some(4),
+        reasoning_tokens: Some(5),
+        tool_use_prompt_tokens: Some(6),
+        total_tokens: Some(7),
+      };
+
+      let mut response = completion::CompletionResponse::new(
         vec![message::AssistantContent::text("bar")],
-        completion::Usage::default(),
+        serde_json::from_value(serde_json::to_value(usage).unwrap()).unwrap(),
         "foo",
         json!({}),
       )
       .with_finish_reason(completion::FinishReason::Other(reason.into()));
 
+      response.message_id = Some("baz".into());
+
       assert_eq!(
-        Rig::decode_response(response).map_err(|error| error.to_string()),
-        expected.map_err(str::to_owned)
+        Rig::decode_response(response).unwrap(),
+        ProviderResponse {
+          finish_reason: Some(expected),
+          message: AgentMessage {
+            content: vec![AssistantContent::text("bar")],
+            id: Some("baz".into()),
+          },
+          usage,
+        }
       );
     }
 
-    case("ERROR", Err("provider response ended with `ERROR`"));
-    case(
-      "ERROR_TOXIC",
-      Err("provider response ended with `ERROR_TOXIC`"),
-    );
-    case("cancelled", Err("provider response ended with `cancelled`"));
-    case("failed", Err("provider response ended with `failed`"));
-    case(
-      "incomplete",
-      Err("provider response ended with `incomplete`"),
-    );
-    case(
-      "foo",
-      Ok(ProviderResponse {
-        finish_reason: Some(FinishReason::Other("foo".into())),
-        message: vec![AssistantContent::text("bar")].into(),
-        ..Default::default()
-      }),
-    );
+    for reason in ["ERROR", "ERROR_TOXIC", "cancelled", "failed", "incomplete"]
+    {
+      case(reason, FinishReason::Error(reason.into()));
+    }
+
+    case("foo", FinishReason::Other("foo".into()));
   }
 
   #[test]

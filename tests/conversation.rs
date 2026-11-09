@@ -172,47 +172,78 @@ fn prompt_round_trip() -> Result {
 }
 
 #[test]
-fn provider_duplicate_tool_calls_recovers() -> Result {
-  let directory = tempfile::tempdir()?;
-  let state = tempfile::tempdir()?;
+fn provider_bad_response_recovers() -> Result {
+  #[track_caller]
+  fn case(model: &str, error: &str) -> Result {
+    let directory = tempfile::tempdir()?;
+    let state = tempfile::tempdir()?;
 
-  Test::new()
-    .cwd(directory.path())
-    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
-    .model("mock:duplicate-tool-calls")
-    .argument("--yolo")
-    .submit("foo")
-    .expect_screen_contains(indoc! {
-      "
+    Test::new()
+      .cwd(directory.path())
+      .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+      .model(&format!("mock:{model}"))
+      .argument("--yolo")
+      .submit("foo")
+      .expect_screen_contains(&format!(
+        indoc! {
+          "
 
-      │ foo
+          │ foo
 
-      bar
+          bar
 
-      ● Error
-        │ duplicate tool call in provider response
+          ● Error
+            │ {error}
 
-      │
+          │
 
-      mock · duplicate-tool-calls · \
-      "
-    })
-    .submit("baz")
-    .expect_screen_contains("queued for mock:duplicate-tool-calls: baz")
-    .quit()
-    .run()?;
+          mock · {model} · \
+          "
+        },
+        error = error,
+        model = model,
+      ))
+      .submit("baz")
+      .expect_screen_contains(&format!("queued for mock:{model}: baz"))
+      .quit()
+      .run()?;
 
-  assert!(!directory.path().join("foo").try_exists()?);
+    assert!(!directory.path().join("foo").try_exists()?);
 
-  Test::new()
-    .cwd(directory.path())
-    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
-    .arguments(["resume", "--last"])
-    .expect_screen_contains("queued for mock:duplicate-tool-calls: baz")
-    .submit("qux")
-    .expect_screen_contains("queued for mock:duplicate-tool-calls: qux")
-    .quit()
-    .run()
+    Test::new()
+      .cwd(directory.path())
+      .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+      .arguments(["resume", "--last"])
+      .expect_screen_contains(&format!("queued for mock:{model}: baz"))
+      .submit("qux")
+      .expect_screen_contains(&format!("queued for mock:{model}: qux"))
+      .quit()
+      .run()
+  }
+
+  for (model, error) in [
+    (
+      "dual-id-tool-calls",
+      "duplicate tool call in provider response",
+    ),
+    (
+      "duplicate-tool-calls",
+      "duplicate tool call in provider response",
+    ),
+    (
+      "empty-tool-call",
+      "provider tool call identity must not be empty",
+    ),
+    ("failed-response", "provider response ended with `foo`"),
+    (
+      "invalid-local-tool-call",
+      "local tool call identity must be a canonical UUID",
+    ),
+  ] {
+    case(model, error)?;
+  }
+
+  Ok(())
 }
 
 #[test]

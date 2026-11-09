@@ -2,10 +2,10 @@ use {
   futures_util::future::BoxFuture,
   kotomori_core::{
     Agent, AgentConfig, AgentEvent, ApprovalPolicy, AssistantContent,
-    Conversation, Message, MessageUpdate, Provider, ProviderResponse,
-    ProviderSink, Request, Result, RunOutcome, Tool, ToolApproval, ToolCall,
-    ToolDefinition, ToolName, ToolOutcome, ToolRegistry, ToolResult,
-    UserMessageContent,
+    Conversation, GenerationOptions, Message, MessageUpdate, Provider,
+    ProviderResponse, ProviderSink, Request, Result, RunOutcome, Tool,
+    ToolApproval, ToolCall, ToolDefinition, ToolName, ToolOutcome,
+    ToolRegistry, ToolResult, UserMessageContent,
   },
   serde_json::{Value, json},
   std::sync::Arc,
@@ -79,7 +79,7 @@ fn agent() -> Agent {
 
   Agent::new(
     AgentConfig {
-      generation: kotomori_core::GenerationOptions::default(),
+      generation: GenerationOptions::default(),
       max_rounds: 2,
       model: "foo:bar".parse().unwrap(),
       tools,

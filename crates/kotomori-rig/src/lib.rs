@@ -2,7 +2,7 @@
 
 use {
   ::rig::providers::openai::OpenAIConfig,
-  anyhow::{Context, anyhow, bail},
+  anyhow::{Context, anyhow},
   futures_util::{StreamExt, future::BoxFuture},
   kotomori_core::{
     AgentMessage, AssistantContent, CallId, FinishReason, Message,

@@ -9,16 +9,25 @@ pub struct ProviderResponse {
 
 impl ProviderResponse {
   pub(super) fn validate(&self) -> Result {
-    let mut calls = Vec::<&CallId>::new();
+    if self
+      .finish_reason
+      .as_ref()
+      .and_then(FinishReason::outcome)
+      .is_some()
+    {
+      return Ok(());
+    }
+
+    let mut calls = BTreeSet::new();
 
     for content in &self.message.content {
       if let AssistantContent::ToolCall(call) = content {
+        call.id.validate()?;
+
         ensure!(
-          !calls.contains(&&call.id),
+          calls.insert(call.id.correlation()),
           "duplicate tool call in provider response"
         );
-
-        calls.push(&call.id);
       }
     }
 

@@ -38,12 +38,12 @@ use {
   interruption::Interruption,
   kotomori_core::{
     Agent, AgentConfig, AgentEvent, AgentRun, AllowAll, ApprovalId,
-    ApprovalRequest, AssistantContent, CallId, Conversation, GenerationOptions,
-    Message, MessageBuffer, MessageDraft, MessageUpdate, Model, Provider,
-    ProviderResponse, ProviderSink, Reasoning, ReasoningContent, Request,
-    RunEntry, RunOutcome, RunResult, SessionSnapshot, SessionStore,
-    ToolApproval, ToolFunction, ToolName, ToolOutcome, ToolRegistry,
-    ToolRequest, ToolResult, UserMessageContent,
+    ApprovalRequest, AssistantContent, CallId, Conversation, FinishReason,
+    GenerationOptions, Message, MessageBuffer, MessageDraft, MessageUpdate,
+    Model, Provider, ProviderResponse, ProviderSink, Reasoning,
+    ReasoningContent, Request, RunEntry, RunOutcome, RunResult,
+    SessionSnapshot, SessionStore, ToolApproval, ToolFunction, ToolName,
+    ToolOutcome, ToolRegistry, ToolRequest, ToolResult, UserMessageContent,
   },
   kotomori_rig::{ChatGpt, GithubCopilot, Rig},
   kotomori_tools::{

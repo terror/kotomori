@@ -33,6 +33,7 @@ use {
   },
   tokio_util::sync::CancellationToken,
   tool_guard::ToolGuard,
+  uuid::Uuid,
 };
 
 #[cfg(test)]
