@@ -35,14 +35,6 @@ impl Run {
     self.running_tool = None;
   }
 
-  pub(crate) fn resolve_approval(&mut self, approval: ToolApproval) {
-    let Some(request) = self.approval.take() else {
-      return;
-    };
-
-    request.respond(approval);
-  }
-
   pub(crate) fn tick(&mut self, elapsed: Duration) {
     self.elapsed = self.elapsed.saturating_add(elapsed);
     self.frame = self.frame.wrapping_add(1);

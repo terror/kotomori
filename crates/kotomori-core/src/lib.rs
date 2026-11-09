@@ -3,6 +3,7 @@
 use {
   anyhow::{Context, Error, bail, ensure},
   futures_util::future::BoxFuture,
+  pending_approval::PendingApproval,
   response_guard::ResponseGuard,
   run_context::RunContext,
   serde::{Deserialize, Serialize},
@@ -40,9 +41,11 @@ use std::collections::VecDeque;
 pub use {
   agent::Agent,
   agent_config::AgentConfig,
+  agent_control::AgentControl,
   agent_event::AgentEvent,
   agent_message::AgentMessage,
   agent_run::AgentRun,
+  approval_id::ApprovalId,
   approval_policy::ApprovalPolicy,
   approval_request::ApprovalRequest,
   assistant_content::AssistantContent,
@@ -93,9 +96,11 @@ pub use {
 
 mod agent;
 mod agent_config;
+mod agent_control;
 mod agent_event;
 mod agent_message;
 mod agent_run;
+mod approval_id;
 mod approval_policy;
 mod approval_request;
 mod assistant_content;
@@ -109,6 +114,7 @@ mod message_buffer;
 mod message_draft;
 mod message_update;
 mod model;
+mod pending_approval;
 mod policy_decision;
 mod provider;
 mod provider_response;

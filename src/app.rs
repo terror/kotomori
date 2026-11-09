@@ -109,6 +109,13 @@ impl App {
         vec![Event::SessionForked(result)]
       }
       Effect::InterruptAgent => self.interrupt_agent().await,
+      Effect::ResolveApproval { approval, id } => {
+        if let Some((_, run)) = &self.agent_run {
+          let _ = run.control().resolve_approval(&id, approval);
+        }
+
+        Vec::new()
+      }
       Effect::RunAgent {
         conversation,
         run_id,

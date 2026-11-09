@@ -12,11 +12,11 @@ pub struct RunState {
 impl RunState {
   pub fn apply(&mut self, event: &AgentEvent) {
     match event {
-      AgentEvent::Message(message) => {
+      AgentEvent::Message { message, .. } => {
         self.message = MessageBuffer::default();
         self.push(RunEntry::Message(message.clone()));
       }
-      AgentEvent::Update(update) => self.message.apply(update.clone()),
+      AgentEvent::Update { update, .. } => self.message.apply(update.clone()),
       AgentEvent::ResponseFinished(response) => {
         self.usage += response.usage;
         self.responses.push(response.clone());
@@ -87,10 +87,16 @@ mod tests {
   fn finish_run_saves_partial_output() {
     let mut state = RunState::default();
 
-    state.apply(&AgentEvent::Update(MessageUpdate::Text {
-      delta: "foo".into(),
-      index: 0,
-    }));
+    state.apply(&AgentEvent::Update {
+      response: ResponseId {
+        round: 1,
+        run: RunId::new(),
+      },
+      update: MessageUpdate::Text {
+        delta: "foo".into(),
+        index: 0,
+      },
+    });
 
     let message = Message::Agent(vec![AssistantContent::text("foo")].into());
 
@@ -120,6 +126,11 @@ mod tests {
 
       let mut state = RunState::default();
 
+      let response = ResponseId {
+        round: 1,
+        run: RunId::new(),
+      };
+
       for update in [
         MessageUpdate::Content {
           index: 0,
@@ -134,7 +145,7 @@ mod tests {
           index: 2,
         },
       ] {
-        state.apply(&AgentEvent::Update(update));
+        state.apply(&AgentEvent::Update { response, update });
       }
 
       let draft = state.message.clone();

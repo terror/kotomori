@@ -5,6 +5,10 @@ pub(crate) enum Effect {
   CopyToClipboard(String),
   ForkSession,
   InterruptAgent,
+  ResolveApproval {
+    approval: ToolApproval,
+    id: ApprovalId,
+  },
   RunAgent {
     conversation: Conversation,
     run_id: u64,

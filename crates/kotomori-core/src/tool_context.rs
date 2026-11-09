@@ -42,7 +42,7 @@ impl ToolContext {
   ) -> Self {
     Self {
       call: call.id.clone(),
-      cancellation: run.cancellation.child_token(),
+      cancellation: run.control.cancellation.child_token(),
       deadline: run.deadline,
       event_sender: Arc::new(Mutex::new(Some(run.event_sender.clone()))),
       name: call.function.name.clone(),

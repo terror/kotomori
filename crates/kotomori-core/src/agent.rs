@@ -12,7 +12,8 @@ pub struct Agent {
 impl Agent {
   async fn approval(
     &self,
-    event_sender: &UnboundedSender<AgentEvent>,
+    run: &RunContext,
+    response: ResponseId,
     tool_call: &ToolRequest,
     decision: PolicyDecision,
   ) -> Result<ToolApproval> {
@@ -22,9 +23,19 @@ impl Agent {
       PolicyDecision::Ask => {}
     }
 
-    let (request, response_receiver) = ApprovalRequest::new(tool_call.clone());
+    let request = ApprovalRequest {
+      id: ApprovalId {
+        call: tool_call.id.clone(),
+        response,
+      },
+      invocation: tool_call.clone(),
+    };
 
-    event_sender.send(AgentEvent::ToolApprovalRequest(request))?;
+    let response_receiver = run.control.request(request.id.clone());
+
+    run
+      .event_sender
+      .send(AgentEvent::ToolApprovalRequest(request))?;
 
     Ok(response_receiver.await.unwrap_or(ToolApproval::Denied))
   }
@@ -38,10 +49,7 @@ impl Agent {
     decision: PolicyDecision,
   ) -> Result<ToolResult> {
     Ok(
-      match self
-        .approval(&run.event_sender, tool_call, decision)
-        .await?
-      {
+      match self.approval(run, response, tool_call, decision).await? {
         ToolApproval::Approved => {
           let context = ToolContext::new(run, response, tool_call);
 
@@ -120,7 +128,7 @@ impl Agent {
 
     let run = RunContext::new(event_sender, deadline);
 
-    let cancellation = run.cancellation.clone();
+    let control = run.control.clone();
 
     let id = run.id;
 
@@ -129,8 +137,6 @@ impl Agent {
     let agent = self.clone();
 
     let task = tokio::spawn(async move {
-      let _guard = run.cancellation.clone().drop_guard();
-
       tokio::select! {
         biased;
         outcome = run.interrupted() => Ok(outcome),
@@ -139,7 +145,7 @@ impl Agent {
     });
 
     AgentRun {
-      cancellation,
+      control,
       event_receiver,
       id,
       state,
@@ -165,7 +171,7 @@ impl Agent {
     let mut rounds = 0;
 
     for message in conversation.interrupt_pending_calls()? {
-      event_sender.send(AgentEvent::Message(message))?;
+      run.send_message(None, message)?;
     }
 
     loop {
@@ -187,11 +193,11 @@ impl Agent {
         .map(|tool| tool.name.clone())
         .collect::<BTreeSet<_>>();
 
-      let sink = ProviderSink::new(event_sender.clone());
-
       rounds += 1;
 
       let id = run.response(rounds);
+
+      let sink = ProviderSink::new(event_sender.clone(), id);
 
       let guard = ResponseGuard::new(event_sender, id)?;
 
@@ -222,7 +228,7 @@ impl Agent {
           .content
           .retain(|content| !matches!(content, AssistantContent::ToolCall(_)));
 
-        event_sender.send(AgentEvent::Message(Message::Agent(message)))?;
+        run.send_message(Some(id), Message::Agent(message))?;
 
         return Ok(outcome);
       }
@@ -244,7 +250,7 @@ impl Agent {
 
       conversation.push(message.clone());
 
-      event_sender.send(AgentEvent::Message(message))?;
+      run.send_message(Some(id), message)?;
 
       if tool_calls.is_empty() {
         break;
@@ -288,7 +294,7 @@ impl Agent {
 
         conversation.push(message.clone());
 
-        event_sender.send(AgentEvent::Message(message))?;
+        run.send_message(Some(id), message)?;
       }
     }
 
@@ -617,7 +623,13 @@ mod tests {
     };
 
     assert_eq!(run.recv().await, Some(AgentEvent::ResponseStarted(id)));
-    assert_eq!(run.recv().await, Some(AgentEvent::Update(update)));
+    assert_eq!(
+      run.recv().await,
+      Some(AgentEvent::Update {
+        response: id,
+        update
+      })
+    );
 
     let message = Message::Agent(
       vec![
@@ -781,14 +793,21 @@ mod tests {
       received,
       [
         AgentEvent::ResponseStarted(first),
-        AgentEvent::Update(update("quux")),
+        AgentEvent::Update {
+          response: first,
+          update: update("quux")
+        },
         AgentEvent::ResponseFinished(ResponseResult {
           finish_reason: None,
           id: first,
           outcome: ResponseOutcome::Completed,
           usage: usage(2),
         }),
-        AgentEvent::Message(Message::Agent(message)),
+        AgentEvent::Message {
+          message: Message::Agent(message),
+          response: Some(first),
+          run: first.run
+        },
         AgentEvent::ToolStarted {
           call: call.clone(),
           name: ToolName::new("foo").unwrap(),
@@ -799,16 +818,27 @@ mod tests {
           response: first,
           result: tool_result
         },
-        AgentEvent::Message(tool_message),
+        AgentEvent::Message {
+          message: tool_message,
+          response: Some(first),
+          run: first.run
+        },
         AgentEvent::ResponseStarted(second),
-        AgentEvent::Update(update("bar")),
+        AgentEvent::Update {
+          response: second,
+          update: update("bar")
+        },
         AgentEvent::ResponseFinished(ResponseResult {
           finish_reason: None,
           id: second,
           outcome: ResponseOutcome::Completed,
           usage: usage(3),
         }),
-        AgentEvent::Message(Message::Agent(complete)),
+        AgentEvent::Message {
+          message: Message::Agent(complete),
+          response: Some(second),
+          run: second.run
+        },
       ],
     );
   }

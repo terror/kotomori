@@ -1,8 +1,13 @@
 use super::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentEvent {
-  Message(Message),
+  Message {
+    message: Message,
+    response: Option<ResponseId>,
+    run: RunId,
+  },
   ResponseFinished(ResponseResult),
   ResponseStarted(ResponseId),
   ToolApprovalRequest(ApprovalRequest),
@@ -21,5 +26,8 @@ pub enum AgentEvent {
     name: ToolName,
     response: ResponseId,
   },
-  Update(MessageUpdate),
+  Update {
+    response: ResponseId,
+    update: MessageUpdate,
+  },
 }

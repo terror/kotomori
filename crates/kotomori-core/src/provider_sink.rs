@@ -3,12 +3,19 @@ use super::*;
 #[derive(Debug)]
 pub struct ProviderSink {
   pub(super) event_sender: UnboundedSender<AgentEvent>,
+  response: ResponseId,
 }
 
 impl ProviderSink {
   #[must_use]
-  pub fn new(event_sender: UnboundedSender<AgentEvent>) -> Self {
-    Self { event_sender }
+  pub fn new(
+    event_sender: UnboundedSender<AgentEvent>,
+    response: ResponseId,
+  ) -> Self {
+    Self {
+      event_sender,
+      response,
+    }
   }
 
   pub fn update(&self, update: MessageUpdate) -> Result {
@@ -22,7 +29,10 @@ impl ProviderSink {
       return Ok(());
     }
 
-    self.event_sender.send(AgentEvent::Update(update))?;
+    self.event_sender.send(AgentEvent::Update {
+      response: self.response,
+      update,
+    })?;
 
     Ok(())
   }
@@ -45,7 +55,12 @@ mod tests {
   fn finalized_content_replaces_drafts_without_publishing_tools() {
     let (event_sender, mut events) = mpsc::unbounded_channel();
 
-    let sink = ProviderSink { event_sender };
+    let response = ResponseId {
+      round: 1,
+      run: RunId::new(),
+    };
+
+    let sink = ProviderSink::new(event_sender, response);
 
     let reasoning = AssistantContent::Reasoning(Reasoning::new(
       "qux",
@@ -89,7 +104,10 @@ mod tests {
     for update in updates {
       assert_eq!(
         events.try_recv().unwrap(),
-        AgentEvent::Update(update.clone()),
+        AgentEvent::Update {
+          response,
+          update: update.clone()
+        },
       );
 
       buffer.apply(update);

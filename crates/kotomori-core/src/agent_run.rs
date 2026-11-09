@@ -3,7 +3,7 @@ use super::*;
 #[derive(Debug)]
 #[must_use]
 pub struct AgentRun {
-  pub(super) cancellation: CancellationToken,
+  pub(super) control: AgentControl,
   pub(super) event_receiver: UnboundedReceiver<AgentEvent>,
   pub(super) id: RunId,
   pub(super) state: RunState,
@@ -12,7 +12,7 @@ pub struct AgentRun {
 
 impl AgentRun {
   pub fn cancel(&self) {
-    self.cancellation.cancel();
+    self.control.cancel();
   }
 
   pub async fn cancel_and_join(self) -> RunResult {
@@ -21,12 +21,25 @@ impl AgentRun {
   }
 
   #[must_use]
+  pub fn control(&self) -> AgentControl {
+    self.control.clone()
+  }
+
+  #[must_use]
   pub fn id(&self) -> RunId {
     self.id
   }
 
   pub async fn join(mut self) -> RunResult {
-    while self.recv().await.is_some() {}
+    self.control.deny_pending();
+
+    while let Some(event) = self.recv().await {
+      if let AgentEvent::ToolApprovalRequest(request) = event {
+        let _ = self
+          .control
+          .resolve_approval(&request.id, ToolApproval::Denied);
+      }
+    }
 
     let outcome = match (&mut self.task).await {
       Ok(Ok(outcome)) => outcome,
@@ -44,6 +57,11 @@ impl AgentRun {
     self.state.apply(&event);
 
     Some(event)
+  }
+
+  #[must_use]
+  pub fn state(&self) -> &RunState {
+    &self.state
   }
 }
 
