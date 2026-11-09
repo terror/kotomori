@@ -110,6 +110,21 @@ impl Agent {
 
     context.request(&self.config.model).validate()?;
 
+    let mut selected = BTreeSet::new();
+
+    for tool in context.tools.iter() {
+      ensure!(
+        tools.iter().any(|available| available.name == tool.name),
+        "unknown tool `{}` in context",
+        tool.name
+      );
+      ensure!(
+        selected.insert(&tool.name),
+        "duplicate tool `{}` in context",
+        tool.name
+      );
+    }
+
     Ok(context)
   }
 
@@ -573,6 +588,59 @@ mod tests {
       *requests.lock().unwrap(),
       [vec![user], conversation.messages().to_vec()]
     );
+  }
+
+  #[tokio::test]
+  async fn invalid_context_tools_fail_before_provider_requests() {
+    #[derive(Debug)]
+    struct TestContext(Vec<ToolDefinition>);
+
+    impl ContextStrategy for TestContext {
+      fn prepare<'a>(
+        &'a self,
+        _context: &'a RunContext,
+        request: Request<'a>,
+      ) -> BoxFuture<'a, Result<RequestContext<'a>>> {
+        Box::pin(async move {
+          Ok(RequestContext {
+            tools: Cow::Borrowed(&self.0),
+            ..request.into()
+          })
+        })
+      }
+    }
+
+    async fn case(names: &[&str], error: &str) {
+      let TestAgent { agent, requests } = TestAgent::new(Vec::new(), true);
+
+      let agent = agent.with_context_strategy(Arc::new(TestContext(
+        names
+          .iter()
+          .map(|name| ToolDefinition {
+            name: ToolName::new(*name).unwrap(),
+            ..TestTool.definition().unwrap()
+          })
+          .collect(),
+      )));
+
+      let mut run = agent.spawn(Conversation::default());
+
+      assert_eq!(run.recv().await, None);
+      assert_eq!(
+        run.join().await,
+        RunResult {
+          conversation: Conversation::default(),
+          entries: Vec::new(),
+          outcome: RunOutcome::Failed(error.into()),
+          responses: Vec::new(),
+          usage: Usage::default(),
+        }
+      );
+      assert_eq!(*requests.lock().unwrap(), Vec::<Vec<Message>>::new());
+    }
+
+    case(&["bar"], "unknown tool `bar` in context").await;
+    case(&["foo", "foo"], "duplicate tool `foo` in context").await;
   }
 
   #[tokio::test]
