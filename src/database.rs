@@ -6,8 +6,7 @@ pub(crate) struct Database {
 }
 
 impl Database {
-  const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
-  const SCHEMA_VERSION: usize = Self::MIGRATIONS.len();
+  const SCHEMA_VERSION: i64 = 2;
 
   pub(crate) fn fork_session(
     &self,
@@ -18,12 +17,13 @@ impl Database {
 
     self.save_session(session, now)?;
 
-    let session = Session {
-      conversation: session.conversation.clone(),
+    let mut session = Session {
+      core: session.core.fork()?,
       title: session.title.clone(),
-      transcript: session.transcript.clone(),
       ..Session::new(&session.settings, now)
     };
+
+    session.refresh();
 
     let saved = self.save_session(&session, now)?;
 
@@ -72,37 +72,23 @@ impl Database {
     self
       .connection
       .query_row(
-        "SELECT id, created_at, updated_at, directory, model, title, entries, snapshot
+        "SELECT id, created_at, updated_at, directory, model, title, snapshot
          FROM sessions
          WHERE id = ?1",
         [id],
         |row| {
-          let entries = row.get::<_, String>(6)?;
+          let snapshot =
+            serde_json::from_str::<SessionSnapshot>(&row.get::<_, String>(6)?)
+              .map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                  6,
+                  rusqlite::types::Type::Text,
+                  Box::new(error),
+                )
+              })?;
 
-          let snapshot = serde_json::from_str::<SessionSnapshot>(
-            &row.get::<_, String>(7)?,
-          )
-          .map_err(|error| {
-            rusqlite::Error::FromSqlConversionFailure(
-              7,
-              rusqlite::types::Type::Text,
-              Box::new(error),
-            )
-          })?;
-
-          let transcript = serde_json::from_str::<Vec<SessionEntry>>(&entries)
-            .map_err(Error::from)
-            .and_then(|entries| SessionEntry::restore(entries, &snapshot))
-            .map_err(|error| {
-              rusqlite::Error::FromSqlConversionFailure(
-                6,
-                rusqlite::types::Type::Text,
-                error.into(),
-              )
-            })?;
-
-          Ok(Session {
-            conversation: snapshot.conversation(),
+          let mut session = Session {
+            core: snapshot.into(),
             created_at: row.get(1)?,
             id: Some(row.get(0)?),
             settings: Settings {
@@ -111,9 +97,13 @@ impl Database {
               ..settings.clone()
             },
             title: row.get(5)?,
-            transcript,
+            transcript: Vec::new(),
             updated_at: row.get(2)?,
-          })
+          };
+
+          session.refresh();
+
+          Ok(session)
         },
       )
       .with_context(|| format!("failed to load session `{id}`"))
@@ -145,15 +135,6 @@ impl Database {
       .to_str()
       .context("session directory is not valid UTF-8")?;
 
-    let entries = serde_json::to_string(
-      &session
-        .transcript
-        .iter()
-        .map(SessionEntry::from)
-        .collect::<Vec<_>>(),
-    )
-    .context("failed to serialize session transcript")?;
-
     let title = session.title.clone().or_else(|| session.generate_title());
 
     let id = if let Some(id) = session.id {
@@ -163,15 +144,13 @@ impl Database {
            directory = ?2,
            model = ?3,
            title = ?4,
-           entries = ?5,
-           snapshot = ?6
-         WHERE id = ?7",
+           snapshot = ?5
+         WHERE id = ?6",
         params![
           updated_at,
           directory,
           session.settings.model.to_string(),
           title,
-          entries,
           snapshot,
           id,
         ],
@@ -185,8 +164,8 @@ impl Database {
     } else {
       self.connection.query_row(
         "INSERT INTO sessions (
-           created_at, updated_at, directory, model, title, entries, snapshot
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+           created_at, updated_at, directory, model, title, snapshot
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          RETURNING id",
         params![
           session.created_at,
@@ -194,7 +173,6 @@ impl Database {
           directory,
           session.settings.model.to_string(),
           title,
-          entries,
           snapshot,
         ],
         |row| row.get(0),
@@ -233,8 +211,8 @@ impl SessionStore for Database {
       .context("failed to serialize session snapshot")?;
 
     let updated = self.connection.execute(
-      "UPDATE sessions SET snapshot = ?1 WHERE id = ?2",
-      params![snapshot, id],
+      "UPDATE sessions SET snapshot = ?1, updated_at = ?2 WHERE id = ?3",
+      params![snapshot, now()?, id],
     )?;
 
     ensure!(updated != 0, "session `{id}` no longer exists");
@@ -256,34 +234,18 @@ impl TryFrom<Connection> for Database {
     let version: i64 =
       transaction.query_row("PRAGMA user_version", [], |row| row.get(0))?;
 
-    let Ok(version) = usize::try_from(version) else {
-      bail!(
+    if version == 0 {
+      transaction
+        .execute_batch(include_str!("../migrations/0002_initial.sql"))
+        .context("failed to initialize database schema")?;
+
+      transaction.pragma_update(None, "user_version", Self::SCHEMA_VERSION)?;
+    } else {
+      ensure!(
+        version == Self::SCHEMA_VERSION,
         "database schema version {version} is unsupported; expected {}",
         Self::SCHEMA_VERSION,
       );
-    };
-
-    if version > Self::SCHEMA_VERSION {
-      bail!(
-        "database schema version {version} is unsupported; expected {}",
-        Self::SCHEMA_VERSION,
-      );
-    }
-
-    for (version, migration) in
-      Self::MIGRATIONS.iter().enumerate().skip(version)
-    {
-      let version = version + 1;
-
-      transaction.execute_batch(migration).with_context(|| {
-        format!("failed to apply database migration {version}")
-      })?;
-
-      transaction.pragma_update(
-        None,
-        "user_version",
-        i64::try_from(version)?,
-      )?;
     }
 
     transaction.commit()?;
@@ -336,7 +298,7 @@ mod tests {
       (Some(1), 0, timestamp),
     ] {
       let session = Session {
-        conversation: Conversation::default(),
+        core: kotomori_core::Session::default(),
         created_at,
         id,
         settings: Settings {
@@ -374,7 +336,7 @@ mod tests {
     let timestamp = u64::try_from(i64::MAX).unwrap();
 
     let session = Session {
-      conversation: Conversation::default(),
+      core: kotomori_core::Session::default(),
       created_at: timestamp,
       id: None,
       settings: Settings {
@@ -464,6 +426,23 @@ mod tests {
         updated_at: timestamp,
       }],
     );
+
+    let snapshot =
+      SessionSnapshot::new(vec![SessionEntry::Custom(CustomEntry {
+        data: serde_json::json!({"foo": "bar"}),
+        kind: "baz".into(),
+        namespace: "qux".into(),
+        version: 42,
+      })])
+      .unwrap();
+
+    SessionStore::save(&database, &1, &snapshot).unwrap();
+
+    let loaded = database.load_session(1, &settings).unwrap();
+
+    assert_eq!(loaded.snapshot().unwrap(), snapshot);
+    assert_eq!(loaded.transcript, []);
+    assert_eq!(SessionStore::load(&database, &1).unwrap(), Some(snapshot));
   }
 
   #[test]
@@ -484,8 +463,8 @@ mod tests {
       .connection
       .execute(
         r#"INSERT INTO sessions (
-           created_at, updated_at, directory, model, entries, snapshot
-         ) VALUES (0, 0, ?1, 'foo', '[]', '{"version":1,"entries":[]}')"#,
+           created_at, updated_at, directory, model, snapshot
+         ) VALUES (0, 0, ?1, 'foo', '{"version":2,"entries":[]}')"#,
         ["foo"],
       )
       .unwrap();
@@ -528,8 +507,8 @@ mod tests {
         .connection
         .execute(
           r#"INSERT INTO sessions (
-             created_at, updated_at, directory, model, entries, snapshot
-           ) VALUES (?1, ?2, ?3, 'mock:foo', '[]', '{"version":1,"entries":[]}')"#,
+             created_at, updated_at, directory, model, snapshot
+           ) VALUES (?1, ?2, ?3, 'mock:foo', '{"version":2,"entries":[]}')"#,
           params![created_at, updated_at, "foo"],
         )
         .unwrap();

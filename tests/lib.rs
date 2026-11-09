@@ -1,6 +1,7 @@
 use {
   anyhow::{Context, Error, bail, ensure},
   indoc::indoc,
+  kotomori_core::{CustomEntry, SessionEntry, SessionSnapshot},
   portable_pty::{CommandBuilder, PtySize, native_pty_system},
   rusqlite::Connection,
   std::{

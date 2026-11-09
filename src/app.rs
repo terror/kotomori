@@ -74,20 +74,42 @@ impl App {
     Ok(())
   }
 
+  async fn finish_agent_run(&mut self, run_id: u64, run: AgentRun) -> Event {
+    let id = run.id();
+    let mut result = run.join().await;
+
+    if let Screen::Session(state) = &mut self.screen {
+      if let Err(error) = state.session.core.finish(id, &result) {
+        result.outcome = RunOutcome::Failed(format!("{error:#}"));
+      }
+
+      state.session.refresh();
+    }
+
+    Event::AgentCompleted { result, run_id }
+  }
+
   async fn handle_agent_event(&mut self, event: Option<AgentEvent>) -> Result {
-    let (run_id, _) = self.agent_run.as_ref().unwrap();
+    let (run_id, run) = self.agent_run.as_ref().unwrap();
 
     let run_id = *run_id;
 
     let event = if let Some(event) = event {
+      if let Screen::Session(state) = &mut self.screen {
+        let entries = state.session.core.entries().len();
+
+        state.session.core.observe(run)?;
+
+        if entries != state.session.core.entries().len() {
+          state.session.refresh();
+        }
+      }
+
       Event::Agent { event, run_id }
     } else {
       let (_, run) = self.agent_run.take().unwrap();
 
-      Event::AgentCompleted {
-        result: run.join().await,
-        run_id,
-      }
+      self.finish_agent_run(run_id, run).await
     };
 
     self.handle_event(event).await
@@ -120,12 +142,25 @@ impl App {
 
         Vec::new()
       }
-      Effect::RunAgent {
-        conversation,
-        run_id,
-      } => {
-        if let Some(agent) = &self.agent {
-          self.agent_run = Some((run_id, agent.spawn(conversation)));
+      Effect::RunAgent { run_id } => {
+        if let (Some(agent), Screen::Session(state)) =
+          (&self.agent, &mut self.screen)
+        {
+          match state.session.core.start(agent) {
+            Ok(run) => self.agent_run = Some((run_id, run)),
+            Err(error) => {
+              return vec![Event::AgentCompleted {
+                result: RunResult {
+                  conversation: state.session.conversation().clone(),
+                  entries: Vec::new(),
+                  outcome: RunOutcome::Failed(format!("{error:#}")),
+                  responses: Vec::new(),
+                  usage: Usage::default(),
+                },
+                run_id,
+              }];
+            }
+          }
         }
 
         Vec::new()
@@ -137,7 +172,7 @@ impl App {
 
         let session = &state.session;
 
-        if session.transcript.is_empty() && session.id.is_none() {
+        if session.core.entries().is_empty() && session.id.is_none() {
           return Vec::new();
         }
 
@@ -212,10 +247,9 @@ impl App {
       return Vec::new();
     };
 
-    vec![Event::AgentCompleted {
-      result: run.cancel_and_join().await,
-      run_id,
-    }]
+    run.cancel();
+
+    vec![self.finish_agent_run(run_id, run).await]
   }
 
   fn listen_for_input(&self) {

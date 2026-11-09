@@ -52,6 +52,7 @@ pub use {
   call_id::CallId,
   context_strategy::{ContextStrategy, FullContext},
   conversation::Conversation,
+  custom_entry::CustomEntry,
   finish_reason::FinishReason,
   generation_options::GenerationOptions,
   host_policy::{AllowAll, DefaultHostPolicy, HostPolicy, PolicyChain},
@@ -78,6 +79,8 @@ pub use {
   run_outcome::RunOutcome,
   run_result::RunResult,
   run_state::RunState,
+  session::Session,
+  session_entry::SessionEntry,
   session_snapshot::SessionSnapshot,
   session_store::SessionStore,
   text::Text,
@@ -110,6 +113,7 @@ mod assistant_content;
 mod call_id;
 mod context_strategy;
 mod conversation;
+mod custom_entry;
 mod finish_reason;
 mod generation_options;
 mod host_policy;
@@ -138,6 +142,8 @@ mod run_limit;
 mod run_outcome;
 mod run_result;
 mod run_state;
+mod session;
+mod session_entry;
 mod session_snapshot;
 mod session_store;
 mod text;

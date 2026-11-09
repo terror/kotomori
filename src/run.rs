@@ -9,7 +9,6 @@ pub(crate) struct Run {
   pub(crate) id: u64,
   pub(crate) interruption: Option<Interruption>,
   pub(crate) message: MessageBuffer,
-  pub(crate) received_entries: usize,
   pub(crate) running_tool: Option<CallId>,
 }
 
@@ -23,7 +22,6 @@ impl Run {
       id,
       interruption: None,
       message: MessageBuffer::default(),
-      received_entries: 0,
       running_tool: None,
     }
   }

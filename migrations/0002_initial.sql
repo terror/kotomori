@@ -5,7 +5,6 @@ CREATE TABLE sessions (
   directory   TEXT NOT NULL CHECK (directory <> ''),
   model       TEXT NOT NULL CHECK (model <> ''),
   title       TEXT,
-  entries     TEXT NOT NULL CHECK (JSON_VALID(entries)),
   snapshot    TEXT NOT NULL CHECK (JSON_VALID(snapshot))
 ) STRICT;
 

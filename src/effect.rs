@@ -10,7 +10,6 @@ pub(crate) enum Effect {
     id: ApprovalId,
   },
   RunAgent {
-    conversation: Conversation,
     run_id: u64,
   },
   SaveSession,

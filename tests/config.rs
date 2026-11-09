@@ -192,24 +192,38 @@ fn unknown_provider() -> Result {
 
 #[test]
 fn unsupported_database_schema() -> Result {
-  let directory = tempfile::tempdir()?;
+  for version in [1, 3] {
+    let directory = tempfile::tempdir()?;
 
-  let path = directory.path().join("kotomori.db");
+    let path = directory.path().join("kotomori.db");
 
-  Connection::open(&path)?.execute_batch("PRAGMA user_version = 2")?;
+    Connection::open(&path)?.pragma_update(None, "user_version", version)?;
 
-  Test::new()
-    .env("KOTOMORI_HOME", directory.path().to_str().unwrap())
-    .stderr(&format!(
-      indoc! {
-        "
-        error: failed to open database `{path}`
+    Test::new()
+      .env("KOTOMORI_HOME", directory.path().to_str().unwrap())
+      .stderr(&format!(
+        indoc! {
+          "
+          error: failed to open database `{path}`
 
-        because:
-        - database schema version 2 is unsupported; expected 1
-        "
-      },
-      path = path.display(),
-    ))
-    .status(1)
+          because:
+          - database schema version {version} is unsupported; expected 2
+          "
+        },
+        path = path.display(),
+        version = version,
+      ))
+      .status(1)?;
+
+    assert_eq!(
+      Connection::open(&path)?.pragma_query_value(
+        None,
+        "user_version",
+        |row| { row.get::<_, i64>(0) }
+      )?,
+      version,
+    );
+  }
+
+  Ok(())
 }

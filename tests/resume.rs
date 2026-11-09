@@ -1,6 +1,92 @@
 use super::*;
 
 #[test]
+fn resume_and_fork_preserve_unknown_extension_entries() -> Result {
+  let directory = tempfile::tempdir()?;
+  let state = tempfile::tempdir()?;
+  let home = state.path().to_str().unwrap();
+
+  Test::new()
+    .cwd(directory.path())
+    .env("KOTOMORI_HOME", home)
+    .submit("foo")
+    .expect_screen_contains("queued for mock:local: foo")
+    .quit()
+    .run()?;
+
+  let connection = Connection::open(state.path().join("kotomori.db"))?;
+  let snapshot = connection.query_row(
+    "SELECT snapshot FROM sessions WHERE id = 1",
+    [],
+    |row| row.get::<_, String>(0),
+  )?;
+  let mut entries =
+    serde_json::from_str::<SessionSnapshot>(&snapshot)?.into_entries();
+  let custom = SessionEntry::Custom(CustomEntry {
+    data: serde_json::json!({"foo": [true, "corge", null]}),
+    kind: "bar".into(),
+    namespace: "baz".into(),
+    version: 42,
+  });
+  entries.insert(1, custom.clone());
+  connection.execute(
+    "UPDATE sessions SET snapshot = ?1 WHERE id = 1",
+    [serde_json::to_string(&SessionSnapshot::new(entries)?)?],
+  )?;
+
+  Test::new()
+    .cwd(directory.path())
+    .env("KOTOMORI_HOME", home)
+    .arguments(["resume", "--last"])
+    .submit("/rename bar")
+    .expect_screen_contains("Session renamed to 'bar'.")
+    .submit("baz")
+    .expect_screen_contains("queued for mock:local: baz")
+    .submit("/fork")
+    .expect_screen_contains("Forked conversation.")
+    .submit("/rename qux")
+    .expect_screen_contains("Session renamed to 'qux'.")
+    .submit("quux")
+    .expect_screen_contains("queued for mock:local: quux")
+    .expect_screen_excludes("corge")
+    .quit()
+    .run()?;
+
+  for (title, response) in [("bar", "baz"), ("qux", "quux")] {
+    Test::new()
+      .cwd(directory.path())
+      .env("KOTOMORI_HOME", home)
+      .argument("resume")
+      .submit(title)
+      .expect_screen_contains(&format!("queued for mock:local: {response}"))
+      .expect_screen_excludes("corge")
+      .quit()
+      .run()?;
+  }
+
+  let mut statement =
+    connection.prepare("SELECT snapshot FROM sessions ORDER BY id")?;
+  let snapshots = statement
+    .query_map([], |row| row.get::<_, String>(0))?
+    .collect::<rusqlite::Result<Vec<_>>>()?;
+  assert_eq!(snapshots.len(), 2);
+
+  for snapshot in snapshots {
+    let snapshot = serde_json::from_str::<SessionSnapshot>(&snapshot)?;
+    assert_eq!(
+      snapshot
+        .entries()
+        .iter()
+        .filter(|entry| matches!(entry, SessionEntry::Custom(entry) if entry.namespace == "baz"))
+        .collect::<Vec<_>>(),
+      [&custom],
+    );
+  }
+
+  Ok(())
+}
+
+#[test]
 fn resume_filters_and_loads_session() -> Result {
   let state = tempfile::Builder::new()
     .prefix("kotomori-state")
@@ -128,7 +214,7 @@ fn resume_interrupts_pending_tool_calls() -> Result {
 }
 
 #[test]
-fn resume_lists_sessions_with_invalid_transcripts() -> Result {
+fn resume_lists_sessions_with_invalid_snapshots() -> Result {
   let directory = tempfile::tempdir()?;
 
   let state = tempfile::tempdir()?;
@@ -142,7 +228,7 @@ fn resume_lists_sessions_with_invalid_transcripts() -> Result {
     .run()?;
 
   Connection::open(state.path().join("kotomori.db"))?
-    .execute("UPDATE sessions SET entries = '{}', title = NULL", [])?;
+    .execute("UPDATE sessions SET snapshot = '{}', title = NULL", [])?;
 
   Test::new()
     .cwd(directory.path())
@@ -162,8 +248,8 @@ fn resume_lists_sessions_with_invalid_transcripts() -> Result {
       error: failed to load session `1`
 
       because:
-      - Conversion error from type Text at index: 6, invalid type: map, expected a sequence at line 1 column 0
-      - invalid type: map, expected a sequence at line 1 column 0
+      - Conversion error from type Text at index: 6, missing field `entries` at line 1 column 2
+      - missing field `entries` at line 1 column 2
       "
     })
     .status(1)
@@ -299,7 +385,7 @@ fn resume_with_no_sessions_exits_successfully() -> Result {
       [],
       |row| row.get::<_, i64>(0)
     )?,
-    1,
+    2,
   );
 
   Ok(())

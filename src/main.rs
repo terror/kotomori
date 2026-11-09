@@ -38,12 +38,13 @@ use {
   interruption::Interruption,
   kotomori_core::{
     Agent, AgentConfig, AgentEvent, AgentRun, AllowAll, ApprovalId,
-    ApprovalRequest, AssistantContent, CallId, Conversation, GenerationOptions,
-    Message, MessageBuffer, MessageDraft, MessageUpdate, Model, Provider,
-    ProviderResponse, ProviderSink, Reasoning, ReasoningContent, Request,
-    RunEntry, RunOutcome, RunResult, SessionSnapshot, SessionStore,
-    ToolApproval, ToolFunction, ToolName, ToolOutcome, ToolRegistry,
-    ToolRequest, ToolResult, UserMessageContent,
+    ApprovalRequest, AssistantContent, CallId, Conversation, CustomEntry,
+    GenerationOptions, Message, MessageBuffer, MessageDraft, MessageUpdate,
+    Model, Provider, ProviderResponse, ProviderSink, Reasoning,
+    ReasoningContent, Request, RunEntry, RunOutcome, RunResult, SessionEntry,
+    SessionSnapshot, SessionStore, ToolApproval, ToolFunction, ToolName,
+    ToolOutcome, ToolRegistry, ToolRequest, ToolResult, Usage,
+    UserMessageContent,
   },
   kotomori_rig::{ChatGpt, GithubCopilot, Rig},
   kotomori_tools::{
@@ -69,7 +70,6 @@ use {
   selection::Selection,
   serde::{Deserialize, Serialize},
   session::Session,
-  session_entry::SessionEntry,
   session_summary::SessionSummary,
   settings::Settings,
   smallvec::SmallVec,
@@ -169,7 +169,6 @@ mod screen;
 mod scroll;
 mod selection;
 mod session;
-mod session_entry;
 mod session_summary;
 mod settings;
 mod span;

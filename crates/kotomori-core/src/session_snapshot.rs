@@ -6,11 +6,11 @@ use super::*;
   into = "VersionedSessionSnapshot"
 )]
 pub struct SessionSnapshot {
-  entries: Vec<RunEntry>,
+  entries: Vec<SessionEntry>,
 }
 
 impl SessionSnapshot {
-  pub const VERSION: u32 = 1;
+  pub const VERSION: u32 = 2;
 
   #[must_use]
   pub fn conversation(&self) -> Conversation {
@@ -18,17 +18,22 @@ impl SessionSnapshot {
       .entries
       .iter()
       .cloned()
-      .filter_map(RunEntry::into_message)
+      .filter_map(SessionEntry::into_message)
       .collect::<Vec<_>>()
       .into()
   }
 
   #[must_use]
-  pub fn entries(&self) -> &[RunEntry] {
+  pub fn entries(&self) -> &[SessionEntry] {
     &self.entries
   }
 
-  pub fn new(entries: Vec<RunEntry>) -> Result<Self> {
+  #[must_use]
+  pub fn into_entries(self) -> Vec<SessionEntry> {
+    self.entries
+  }
+
+  pub fn new(entries: Vec<SessionEntry>) -> Result<Self> {
     let snapshot = Self { entries };
 
     snapshot.conversation().validate()?;
@@ -54,7 +59,7 @@ impl TryFrom<VersionedSessionSnapshot> for SessionSnapshot {
 
 #[derive(Deserialize, Serialize)]
 struct VersionedSessionSnapshot {
-  entries: Vec<RunEntry>,
+  entries: Vec<SessionEntry>,
   version: u32,
 }
 

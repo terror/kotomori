@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Session {
-  pub(crate) conversation: Conversation,
+  pub(crate) core: kotomori_core::Session,
   pub(crate) created_at: u64,
   pub(crate) id: Option<i64>,
   pub(crate) settings: Settings,
@@ -15,13 +15,17 @@ impl Session {
   const TITLE_LENGTH: usize = 80;
 
   pub(crate) fn clear(&mut self) {
-    self.conversation.clear();
+    self.core.clear();
     self.transcript.clear();
+  }
+
+  pub(crate) fn conversation(&self) -> &Conversation {
+    self.core.conversation()
   }
 
   pub(crate) fn generate_title(&self) -> Option<String> {
     self
-      .conversation
+      .conversation()
       .messages()
       .iter()
       .filter_map(Message::user_content)
@@ -38,20 +42,15 @@ impl Session {
   }
 
   pub(crate) fn interrupt_pending_calls(&mut self) -> Result {
-    self.transcript.extend(
-      self
-        .conversation
-        .interrupt_pending_calls()?
-        .into_iter()
-        .map(TranscriptEntry::Message),
-    );
+    self.core.interrupt_pending_calls()?;
+    self.refresh();
 
     Ok(())
   }
 
   pub(crate) fn new(settings: &Settings, now: u64) -> Self {
     Self {
-      conversation: Conversation::default(),
+      core: kotomori_core::Session::default(),
       created_at: now,
       id: None,
       settings: settings.clone(),
@@ -62,18 +61,8 @@ impl Session {
   }
 
   pub(crate) fn push(&mut self, entry: TranscriptEntry) {
-    let message = entry
-      .clone()
-      .into_run_entry()
-      .and_then(RunEntry::into_message);
-
-    if let Some(message) = message {
-      self.conversation.push(message);
-    } else if matches!(entry, TranscriptEntry::Message(_)) {
-      return;
-    }
-
-    self.transcript.push(entry);
+    self.core.append(entry.into_session_entry());
+    self.refresh();
   }
 
   #[cfg(test)]
@@ -86,22 +75,17 @@ impl Session {
     }
   }
 
+  pub(crate) fn refresh(&mut self) {
+    self.transcript = self
+      .core
+      .entries()
+      .iter()
+      .filter_map(TranscriptEntry::from_session_entry)
+      .collect();
+  }
+
   pub(crate) fn snapshot(&self) -> Result<SessionSnapshot> {
-    let snapshot = SessionSnapshot::new(
-      self
-        .transcript
-        .iter()
-        .cloned()
-        .filter_map(TranscriptEntry::into_run_entry)
-        .collect(),
-    )?;
-
-    ensure!(
-      snapshot.conversation() == self.conversation,
-      "session transcript does not match its conversation"
-    );
-
-    Ok(snapshot)
+    self.core.snapshot()
   }
 }
 
@@ -133,7 +117,7 @@ mod tests {
     ]);
 
     assert_eq!(
-      session.conversation.messages(),
+      session.conversation().messages(),
       [Message::User(vec![UserMessageContent::Text("foo".into())])]
     );
   }
@@ -161,6 +145,6 @@ mod tests {
 
     session.push(TranscriptEntry::Draft(buffer));
 
-    assert_eq!(session.conversation.messages(), []);
+    assert_eq!(session.conversation().messages(), []);
   }
 }
