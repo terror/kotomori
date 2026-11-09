@@ -34,13 +34,15 @@ use {
 
 pub use {
   command::CommandTool, command_arguments::CommandArguments,
-  command_executor::CommandExecutor, execution_limit::ExecutionLimit,
+  command_executor::CommandExecutor, command_output::CommandOutput,
+  execution_limit::ExecutionLimit,
 };
 
 mod command;
 mod command_arguments;
 mod command_child;
 mod command_executor;
+mod command_output;
 mod execution_limit;
 
 type AsyncCommand = tokio::process::Command;

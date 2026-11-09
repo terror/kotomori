@@ -519,7 +519,7 @@ mod tests {
           call: CallId::new("foo"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult {
-            content: Some("bar".into()),
+            content: "bar".into(),
             ..Default::default()
           },
         },
@@ -632,7 +632,7 @@ mod tests {
           call: CallId::new("bar"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult {
-            content: Some("foo".into()),
+            content: "foo".into(),
             ..Default::default()
           },
         },
@@ -640,7 +640,7 @@ mod tests {
           call: CallId::new("foo"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult {
-            content: Some("bar".into()),
+            content: "bar".into(),
             ..Default::default()
           },
         },
@@ -864,7 +864,7 @@ mod tests {
           call: CallId::new("stale"),
           name: ToolName::new("command").unwrap(),
           result: ToolResult {
-            content: Some("stale".into()),
+            content: "stale".into(),
             ..Default::default()
           },
         },

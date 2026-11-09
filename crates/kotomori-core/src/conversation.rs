@@ -19,8 +19,8 @@ impl Conversation {
           call: call.id.clone(),
           name: call.function.name.clone(),
           result: ToolResult {
+            content: "interrupted".into(),
             outcome: ToolOutcome::Interrupted,
-            stderr: Some("interrupted".into()),
             ..Default::default()
           },
         }])

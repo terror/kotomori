@@ -199,11 +199,13 @@ fn ctrl_c_interrupts_active_approval() -> Result {
 #[test]
 fn failed_command_reports_output() -> Result {
   let directory = tempfile::tempdir()?;
+  let state = tempfile::tempdir()?;
 
   fs::create_dir(directory.path().join("foo"))?;
 
   Test::new()
     .cwd(directory.path())
+    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
     .model("mock:failed-command")
     .submit("foo")
     .expect_screen_contains("Approve echo bar&&echo baz>&2&&exit 1?")
@@ -224,6 +226,21 @@ fn failed_command_reports_output() -> Result {
       │
 
       mock · failed-command · \
+      "
+    })
+    .run()?;
+
+  Test::new()
+    .cwd(directory.path())
+    .env("KOTOMORI_HOME", state.path().to_str().unwrap())
+    .arguments(["resume", "--last"])
+    .expect_screen_contains(indoc! {
+      "
+      ● Failed running echo bar&&echo baz>&2&&exit 1
+        │ cwd foo
+        │ exit 1
+        │ bar
+        │ baz
       "
     })
     .run()

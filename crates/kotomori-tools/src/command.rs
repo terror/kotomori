@@ -112,12 +112,12 @@ mod tests {
             cwd,
           })
           .await,
-        ToolResult {
+        CommandOutput {
           exit_status: Some(0),
-          outcome: ToolOutcome::Success,
-          stdout: Some(stdout.into()),
+          stdout: stdout.into(),
           ..Default::default()
-        },
+        }
+        .into_result(ToolOutcome::Success),
       );
     }
   }
