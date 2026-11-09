@@ -1,6 +1,7 @@
 use super::*;
 
-pub(super) struct RunContext {
+#[derive(Debug)]
+pub struct RunContext {
   pub(super) control: AgentControl,
   pub(super) deadline: Option<Instant>,
   pub(super) event_sender: UnboundedSender<AgentEvent>,
@@ -8,6 +9,20 @@ pub(super) struct RunContext {
 }
 
 impl RunContext {
+  pub async fn cancelled(&self) {
+    self.control.cancellation.cancelled().await;
+  }
+
+  #[must_use]
+  pub fn deadline(&self) -> Option<Instant> {
+    self.deadline
+  }
+
+  #[must_use]
+  pub fn id(&self) -> RunId {
+    self.id
+  }
+
   pub(super) async fn interrupted(&self) -> RunOutcome {
     tokio::select! {
       biased;
@@ -19,6 +34,11 @@ impl RunContext {
         }
       } => RunOutcome::Limited(RunLimit::Deadline),
     }
+  }
+
+  #[must_use]
+  pub fn is_cancelled(&self) -> bool {
+    self.control.cancellation.is_cancelled()
   }
 
   pub(super) fn new(

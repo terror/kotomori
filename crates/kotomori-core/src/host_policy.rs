@@ -2,13 +2,18 @@ use super::*;
 
 mod allow_all;
 mod default_host_policy;
+mod policy_chain;
 
-pub use {allow_all::AllowAll, default_host_policy::DefaultHostPolicy};
+pub use {
+  allow_all::AllowAll, default_host_policy::DefaultHostPolicy,
+  policy_chain::PolicyChain,
+};
 
 pub trait HostPolicy: Debug + Send + Sync {
-  fn evaluate(
-    &self,
-    invocation: &ToolRequest,
+  fn evaluate<'a>(
+    &'a self,
+    context: &'a RunContext,
+    invocation: &'a ToolRequest,
     approval: ApprovalPolicy,
-  ) -> PolicyDecision;
+  ) -> BoxFuture<'a, Result<PolicyDecision>>;
 }

@@ -11,18 +11,10 @@ pub struct Agent {
 
 impl Agent {
   async fn approval(
-    &self,
     run: &RunContext,
     response: ResponseId,
     tool_call: &ToolRequest,
-    decision: PolicyDecision,
   ) -> Result<ToolApproval> {
-    match decision {
-      PolicyDecision::Allow => return Ok(ToolApproval::Approved),
-      PolicyDecision::Deny => return Ok(ToolApproval::Denied),
-      PolicyDecision::Ask => {}
-    }
-
     let request = ApprovalRequest {
       id: ApprovalId {
         call: tool_call.id.clone(),
@@ -46,28 +38,40 @@ impl Agent {
     response: ResponseId,
     tool_call: &ToolRequest,
     tool: ToolCall,
-    decision: PolicyDecision,
   ) -> Result<ToolResult> {
-    Ok(
-      match self.approval(run, response, tool_call, decision).await? {
-        ToolApproval::Approved => {
-          let context = ToolContext::new(run, response, tool_call);
+    let decision = self
+      .host_policy
+      .evaluate(run, tool_call, tool.approval)
+      .await?;
 
-          let guard = ToolGuard::new(context.clone())?;
-
-          let result = tool.execute(context).await;
-
-          guard.finish(&result);
-
-          result
+    let denial = match decision {
+      PolicyDecision::Allow => None,
+      PolicyDecision::Ask => {
+        match Self::approval(run, response, tool_call).await? {
+          ToolApproval::Approved => None,
+          ToolApproval::Denied => Some("permission denied".into()),
         }
-        ToolApproval::Denied => ToolResult {
-          content: "permission denied".into(),
-          outcome: ToolOutcome::Denied,
-          ..Default::default()
-        },
-      },
-    )
+      }
+      PolicyDecision::Deny { reason } => Some(reason),
+    };
+
+    if let Some(reason) = denial {
+      return Ok(ToolResult {
+        content: reason,
+        outcome: ToolOutcome::Denied,
+        ..Default::default()
+      });
+    }
+
+    let context = ToolContext::new(run, response, tool_call);
+
+    let guard = ToolGuard::new(context.clone())?;
+
+    let result = tool.execute(context).await;
+
+    guard.finish(&result);
+
+    Ok(result)
   }
 
   pub fn new(
@@ -86,34 +90,27 @@ impl Agent {
 
   async fn prepare_context<'a>(
     &'a self,
+    run: &'a RunContext,
     conversation: &'a Conversation,
     tools: &'a [ToolDefinition],
   ) -> Result<RequestContext<'a>> {
     let context = self
       .context_strategy
-      .prepare(Request {
-        generation: &self.config.generation,
-        messages: conversation.messages(),
-        model: &self.config.model,
-        system: (!self.system.is_empty()).then_some(self.system.as_str()),
-        tools,
-      })
+      .prepare(
+        run,
+        Request {
+          generation: &self.config.generation,
+          messages: conversation.messages(),
+          model: &self.config.model,
+          system: (!self.system.is_empty()).then_some(self.system.as_str()),
+          tools,
+        },
+      )
       .await?;
 
     context.request(&self.config.model).validate()?;
 
     Ok(context)
-  }
-
-  fn prepare_tool(
-    &self,
-    call: &ToolRequest,
-  ) -> Result<(ToolCall, PolicyDecision)> {
-    let tool = self.config.tools.prepare(call)?;
-
-    let decision = self.host_policy.evaluate(call, tool.approval);
-
-    Ok((tool, decision))
   }
 
   pub fn spawn(&self, conversation: Conversation) -> AgentRun {
@@ -184,7 +181,7 @@ impl Agent {
 
       let tools = self.config.tools.definitions();
 
-      let context = self.prepare_context(&conversation, &tools).await?;
+      let context = self.prepare_context(run, &conversation, &tools).await?;
 
       let request = context.request(&self.config.model);
 
@@ -263,7 +260,7 @@ impl Agent {
           let tool = tools
             .get(&call.function.name)
             .with_context(|| format!("unknown tool `{}`", call.function.name))
-            .and_then(|_| self.prepare_tool(&call));
+            .and_then(|_| self.config.tools.prepare(&call));
 
           (call, tool)
         })
@@ -273,8 +270,8 @@ impl Agent {
 
       for (tool_call, tool) in tool_calls {
         let result = match tool {
-          Ok((tool, decision)) if !invalid => {
-            self.execute(run, id, &tool_call, tool, decision).await?
+          Ok(tool) if !invalid => {
+            self.execute(run, id, &tool_call, tool).await?
           }
           Ok(_) => ToolResult {
             content: "batch skipped: another tool call is invalid".into(),
@@ -546,8 +543,8 @@ mod tests {
       run.recv().await,
       Some(AgentEvent::Update {
         response: id,
-        update
-      }),
+        update,
+      })
     );
     assert_eq!(
       run.recv().await,
