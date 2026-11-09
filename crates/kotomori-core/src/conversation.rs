@@ -11,33 +11,8 @@ impl Conversation {
   }
 
   pub fn interrupt_pending_calls(&mut self) -> Result<Vec<Message>> {
-    let mut pending = Vec::<&ToolRequest>::new();
-
-    for message in &self.messages {
-      match message {
-        Message::Agent(message) => {
-          if !pending.is_empty() {
-            bail!(
-              "cannot recover unfinished tool calls from an earlier assistant turn"
-            );
-          }
-
-          pending.extend(message.content.iter().filter_map(|content| {
-            match content {
-              AssistantContent::ToolCall(call) => Some(call),
-              _ => None,
-            }
-          }));
-        }
-        Message::User(content) => pending.retain(|call| {
-          !content
-            .iter()
-            .any(|content| content.is_tool_result_for(&call.id))
-        }),
-      }
-    }
-
-    let messages = pending
+    let messages = self
+      .pending_calls()?
       .into_iter()
       .map(|call| {
         Message::User(vec![UserMessageContent::ToolResult {
@@ -74,8 +49,63 @@ impl Conversation {
     &self.messages
   }
 
+  fn pending_calls(&self) -> Result<Vec<&ToolRequest>> {
+    let mut pending = Vec::<&ToolRequest>::new();
+
+    for message in &self.messages {
+      match message {
+        Message::Agent(message) => {
+          if !pending.is_empty() {
+            bail!(
+              "cannot recover unfinished tool calls from an earlier assistant turn"
+            );
+          }
+
+          for content in &message.content {
+            if let AssistantContent::ToolCall(call) = content {
+              ensure!(
+                !pending.iter().any(|pending| pending.id == call.id),
+                "duplicate tool call in conversation"
+              );
+
+              pending.push(call);
+            }
+          }
+        }
+        Message::User(content) => {
+          for content in content {
+            match content {
+              UserMessageContent::Text(_) => ensure!(
+                pending.is_empty(),
+                "unfinished tool calls must be resolved before user text"
+              ),
+              UserMessageContent::ToolResult { call, name, .. } => {
+                let index = pending
+                  .iter()
+                  .position(|pending| {
+                    pending.id == *call && pending.function.name == *name
+                  })
+                  .context(
+                    "tool result without a matching call in conversation",
+                  )?;
+
+                pending.remove(index);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    Ok(pending)
+  }
+
   pub fn push(&mut self, message: Message) {
     self.messages.push(message);
+  }
+
+  pub fn validate(&self) -> Result {
+    self.pending_calls().map(|_| ())
   }
 }
 

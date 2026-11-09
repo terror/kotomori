@@ -1,7 +1,7 @@
 use {
   action::Action,
   agent_activity::AgentActivity,
-  anyhow::{Context, Error, bail},
+  anyhow::{Context, Error, bail, ensure},
   app::App,
   arguments::Arguments,
   changed_range::ChangedRange,
@@ -41,8 +41,9 @@ use {
     AssistantContent, CallId, Conversation, Message, MessageBuffer,
     MessageDraft, MessageUpdate, Model, Provider, ProviderResponse,
     ProviderSink, Reasoning, ReasoningContent, Request, RunEntry, RunOutcome,
-    RunResult, ToolApproval, ToolFunction, ToolName, ToolOutcome, ToolRegistry,
-    ToolRequest, ToolResult, UserMessageContent,
+    RunResult, SessionSnapshot, SessionStore, ToolApproval, ToolFunction,
+    ToolName, ToolOutcome, ToolRegistry, ToolRequest, ToolResult,
+    UserMessageContent,
   },
   kotomori_rig::{ChatGpt, GithubCopilot, Rig},
   kotomori_tools::{CommandArguments, CommandExecutor, CommandTool},
@@ -57,7 +58,7 @@ use {
   resume_picker_action::ResumePickerAction,
   run::Run,
   rusqlite::{
-    Connection, TransactionBehavior, params,
+    Connection, OptionalExtension, TransactionBehavior, params,
     types::{FromSql, FromSqlError, FromSqlResult, ValueRef},
   },
   saved_session::SavedSession,
@@ -66,6 +67,7 @@ use {
   selection::Selection,
   serde::{Deserialize, Serialize},
   session::Session,
+  session_entry::SessionEntry,
   session_summary::SessionSummary,
   settings::Settings,
   smallvec::SmallVec,
@@ -161,6 +163,7 @@ mod screen;
 mod scroll;
 mod selection;
 mod session;
+mod session_entry;
 mod session_summary;
 mod settings;
 mod span;

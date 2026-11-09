@@ -34,6 +34,13 @@ impl Request<'_> {
         }
         Message::User(content) => {
           for content in content {
+            if matches!(content, UserMessageContent::Text(_)) {
+              ensure!(
+                pending.is_empty(),
+                "incomplete tool exchange in context"
+              );
+            }
+
             if let UserMessageContent::ToolResult { call, name, .. } = content {
               let index = pending
                 .iter()

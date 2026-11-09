@@ -73,6 +73,8 @@ pub use {
   run_outcome::RunOutcome,
   run_result::RunResult,
   run_state::RunState,
+  session_snapshot::SessionSnapshot,
+  session_store::SessionStore,
   text::Text,
   tool::Tool,
   tool_approval::ToolApproval,
@@ -126,6 +128,8 @@ mod run_limit;
 mod run_outcome;
 mod run_result;
 mod run_state;
+mod session_snapshot;
+mod session_store;
 mod text;
 mod tool;
 mod tool_approval;
