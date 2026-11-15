@@ -226,26 +226,11 @@ fn provider_malformed_tool_arguments_recovers() -> Result {
 
       │ foo
 
-      ● Error
-        │ failed to decode `command` arguments
+      ● Ran echo bar>foo
 
-      │
+      command {}
 
-      mock · malformed-tool-arguments · \
-      "
-    })
-    .submit("bar")
-    .expect_screen_contains(indoc! {
-      "
-
-      │ foo
-
-      ● Error
-        │ failed to decode `command` arguments
-
-      │ bar
-
-      queued for mock:malformed-tool-arguments: bar
+      queued for mock:malformed-tool-arguments: foo
 
       │
 
@@ -254,7 +239,7 @@ fn provider_malformed_tool_arguments_recovers() -> Result {
     })
     .run()?;
 
-  assert!(!directory.path().join("foo").try_exists()?);
+  assert!(directory.path().join("foo").try_exists()?);
 
   Ok(())
 }
@@ -269,26 +254,9 @@ fn provider_unknown_tool_recovers() -> Result {
 
       │ foo
 
-      ● Error
-        │ unknown tool `unknown`
+      unknown {}
 
-      │
-
-      mock · unknown-tool · \
-      "
-    })
-    .submit("bar")
-    .expect_screen_contains(indoc! {
-      "
-
-      │ foo
-
-      ● Error
-        │ unknown tool `unknown`
-
-      │ bar
-
-      queued for mock:unknown-tool: bar
+      queued for mock:unknown-tool: foo
 
       │
 

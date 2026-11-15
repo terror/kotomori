@@ -105,12 +105,10 @@ impl Agent {
         .content
         .iter()
         .filter_map(|content| match content {
-          AssistantContent::ToolCall(call) => {
-            Some(ToolInvocationKind::decode(call.clone()))
-          }
+          AssistantContent::ToolCall(call) => Some(call.clone()),
           _ => None,
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Vec<_>>();
 
       let message = Message::Agent(message);
 
@@ -126,19 +124,25 @@ impl Agent {
       }
 
       for tool_call in tool_calls {
-        let result = match self.approval(run_id, &tool_call).await? {
-          ToolApproval::Approved => {
-            self.tool_executor.execute(&tool_call.kind).await
-          }
-          ToolApproval::Denied => ToolResult {
-            stderr: Some("permission denied".into()),
+        let result = match ToolInvocationKind::decode(tool_call.clone()) {
+          Ok(invocation) => match self.approval(run_id, &invocation).await? {
+            ToolApproval::Approved => {
+              self.tool_executor.execute(&invocation.kind).await
+            }
+            ToolApproval::Denied => ToolResult {
+              stderr: Some("permission denied".into()),
+              ..Default::default()
+            },
+          },
+          Err(error) => ToolResult {
+            stderr: Some(format!("{error:#}")),
             ..Default::default()
           },
         };
 
         let message = Message::User(vec![UserMessageContent::ToolResult {
-          call: tool_call.protocol.id,
-          name: tool_call.protocol.function.name,
+          call: tool_call.id,
+          name: tool_call.function.name,
           result,
         }]);
 
